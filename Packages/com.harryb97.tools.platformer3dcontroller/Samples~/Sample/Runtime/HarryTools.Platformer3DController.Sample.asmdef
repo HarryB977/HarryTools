@@ -1,0 +1,17 @@
+{
+    "name": "HarryTools.Platformer3DController.Sample",
+    "rootNamespace": "",
+    "references": [
+        "GUID:c1507879d0a7f2f4789e55c570f3ca04",
+        "GUID:75469ad4d38634e559750d17036d5f7c"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
