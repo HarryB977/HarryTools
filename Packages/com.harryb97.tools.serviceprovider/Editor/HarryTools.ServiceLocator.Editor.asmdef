@@ -2,7 +2,7 @@
     "name": "HarryTools.ServiceLocator.Editor",
     "rootNamespace": "HarryTools.ServiceLocator.Editor",
     "references": [
-        "HarryTools.ServiceLocator"
+        "GUID:18b547aa4e46b1b46920a384ee000f26"
     ],
     "includePlatforms": [
         "Editor"

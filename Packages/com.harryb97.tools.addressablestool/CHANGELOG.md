@@ -1,5 +1,9 @@
 # Change Log:
 
+## 1.1.1
+
+    - Los Assembly Definitions ahora referencian por GUID en vez de por nombre, así que siguen funcionando aunque se renombre un ensamblado
+
 ## 1.1.0
     
     - Se ha añadido un método de inicialización

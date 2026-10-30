@@ -2,8 +2,8 @@
     "name": "HarryTools.LocalData.Sample",
     "rootNamespace": "",
     "references": [
-        "HarryTools.LocalData",
-        "UniTask"
+        "GUID:7800b52ab87a52d49afa76850b7060be",
+        "GUID:f51ebe6a0ceec4240a699833d6309b23"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

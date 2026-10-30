@@ -2,12 +2,12 @@
     "name": "HarryTools.MultiScene",
     "rootNamespace": "",
     "references": [
-        "HarryTools.Logger",
-        "HarryUtils",
-        "HarryTools.SerializeReferences",
-        "UniTask",
-        "Unity.Addressables",
-        "Unity.ResourceManager"
+        "GUID:5a48a51724773b745ac570afd65b9606",
+        "GUID:3cbd4dbbdd8d22542bf927dec8fe2000",
+        "GUID:ce4097fb1cd381e499cd9508a42275ce",
+        "GUID:f51ebe6a0ceec4240a699833d6309b23",
+        "GUID:9e24947de15b9834991c9d8411ea37cf",
+        "GUID:84651a3751eca9349aac36a66bba901b"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

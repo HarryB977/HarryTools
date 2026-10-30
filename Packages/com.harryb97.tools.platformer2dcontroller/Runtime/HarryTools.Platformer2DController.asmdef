@@ -2,8 +2,8 @@
     "name": "HarryTools.Platformer2DController",
     "rootNamespace": "",
     "references": [
-        "HarryTools.Logger",
-        "HarryUtils"
+        "GUID:5a48a51724773b745ac570afd65b9606",
+        "GUID:3cbd4dbbdd8d22542bf927dec8fe2000"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

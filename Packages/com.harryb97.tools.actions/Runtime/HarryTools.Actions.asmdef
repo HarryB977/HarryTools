@@ -2,9 +2,9 @@
 	"name": "HarryTools.Actions",
 	"rootNamespace": "HarryTools.Actions",
 	"references": [
-		"HarryTools.SerializeReferences",
-		"HarryTools.Conditions",
-		"UniTask"
+		"GUID:ce4097fb1cd381e499cd9508a42275ce",
+		"GUID:976ab130102fdc04c9bbc3159f83ad15",
+		"GUID:f51ebe6a0ceec4240a699833d6309b23"
 	],
 	"includePlatforms": [],
 	"excludePlatforms": [],

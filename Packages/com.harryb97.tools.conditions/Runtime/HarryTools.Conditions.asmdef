@@ -2,7 +2,7 @@
 	"name": "HarryTools.Conditions",
 	"rootNamespace": "HarryTools.Conditions",
 	"references": [
-		"HarryTools.SerializeReferences"
+		"GUID:ce4097fb1cd381e499cd9508a42275ce"
 	],
 	"includePlatforms": [],
 	"excludePlatforms": [],

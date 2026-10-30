@@ -2,7 +2,7 @@
     "name": "HarryTools.DomainReload.Editor",
     "rootNamespace": "HarryTools.DomainReload.Editor",
     "references": [
-        "HarryTools.DomainReload"
+        "GUID:e9438e756332f8b49902de137df9187b"
     ],
     "includePlatforms": [
         "Editor"

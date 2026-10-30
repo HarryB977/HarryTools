@@ -2,11 +2,11 @@
     "name": "HarryTools.Overlays",
     "rootNamespace": "",
     "references": [
-        "HarryUtils",
-        "MackySoft.SerializeReferenceExtensions",
-        "HarryTools.Logger",
-        "HarryTools.UICanvas",
-        "UniTask"
+        "GUID:3cbd4dbbdd8d22542bf927dec8fe2000",
+        "GUID:49b49c76ee64f6b41bf28ef951cb0e50",
+        "GUID:5a48a51724773b745ac570afd65b9606",
+        "GUID:0c6c120d6f1051b48b83ec1e383d665a",
+        "GUID:f51ebe6a0ceec4240a699833d6309b23"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

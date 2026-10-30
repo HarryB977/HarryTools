@@ -30,6 +30,10 @@
     - Feat: Transición suave de altura al agacharse ('heightChangeSpeed')
     - Feat: Nuevo método 'AddLookOffset' para desplazar la vista, por ejemplo con el retroceso de un arma
 
+### Otros
+
+    - El Assembly Definition del Sample ahora referencia por GUID en vez de por nombre
+
 ## 1.0.0
 
     - Primera versión

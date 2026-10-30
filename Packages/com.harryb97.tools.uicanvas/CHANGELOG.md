@@ -4,6 +4,8 @@
 
     - Fix: Añadidos los archivos .meta que faltaban. Unity ignoraba esos archivos al instalar el paquete
 
+    - Los Assembly Definitions ahora referencian por GUID en vez de por nombre, así que siguen funcionando aunque se renombre un ensamblado
+
 ## 1.0.3
 
     - 'CustomCanvas' ahora tiene una propiedad para poder acceder al 'CustomParentCanvas'

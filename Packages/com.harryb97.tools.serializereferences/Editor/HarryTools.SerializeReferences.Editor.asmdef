@@ -2,7 +2,7 @@
 	"name": "HarryTools.SerializeReferences.Editor",
 	"rootNamespace": "HarryTools.SerializeReferences.Editor",
 	"references": [
-		"HarryTools.SerializeReferences"
+		"GUID:ce4097fb1cd381e499cd9508a42275ce"
 	],
 	"includePlatforms": [
 		"Editor"

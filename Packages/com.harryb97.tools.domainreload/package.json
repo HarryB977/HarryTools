@@ -1,6 +1,6 @@
 {
   "name": "com.harryb97.tools.domainreload",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "displayName": "Domain Reload",
   "description": "Atributos para limpiar campos estáticos y ejecutar métodos estáticos al entrar en el Modo Play con la recarga de dominio desactivada",
   "unity": "6000.0",

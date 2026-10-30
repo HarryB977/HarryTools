@@ -1,5 +1,9 @@
 # Change Log:
 
+## 1.3.1
+
+    - Los Assembly Definitions ahora referencian por GUID en vez de por nombre, así que siguen funcionando aunque se renombre un ensamblado
+
 ## 1.3.0
 
     - Feat: Nuevo componente 'ServiceBinding' que asigna una referencia de la escena (GameObject o componente) a un campo de un servicio marcado con '[ServiceBindable]'. Si el 'ServiceProvider' aún no está inicializado, el binding se aplica al inicializarse. Al destruir el componente, el campo vuelve a null

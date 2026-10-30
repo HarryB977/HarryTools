@@ -1,5 +1,9 @@
 # Change Log:
 
+## 1.2.1
+
+    - Los Assembly Definitions ahora referencian por GUID en vez de por nombre, así que siguen funcionando aunque se renombre un ensamblado
+
 ## 1.2.0
 
     - Feat: 'SceneReference' propio, sin dependencias externas. Guarda el GUID de la escena y sincroniza en el Editor su ruta y su dirección de Addressables

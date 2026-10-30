@@ -2,7 +2,7 @@
     "name": "HarryTools.FPS3DController.Sample",
     "rootNamespace": "",
     "references": [
-        "HarryTools.FPS3DController"
+        "GUID:c09ddd63cfd6afe479ccc0fca1fdc550"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

@@ -2,7 +2,7 @@
 	"name": "HarryTools.Conditions.Editor",
 	"rootNamespace": "HarryTools.Conditions.Editor",
 	"references": [
-		"HarryTools.Conditions"
+		"GUID:976ab130102fdc04c9bbc3159f83ad15"
 	],
 	"includePlatforms": [
 		"Editor"

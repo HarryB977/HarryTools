@@ -1,6 +1,6 @@
 {
   "name": "com.harryb97.tools.addressablestool",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "displayName": "Addressables Tool",
   "description": "Herramienta que ayuda a cargar Addressables usando los Labels",
   "unity": "6000.0",
