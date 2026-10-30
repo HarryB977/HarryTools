@@ -1,0 +1,24 @@
+{
+  "name": "com.harryb97.tools.localdata",
+  "version": "1.0.0",
+  "displayName": "Local Data",
+  "description": "Herramienta que permite guardar y cargar datos en archivos locales",
+  "unity": "6000.0",
+  "author": {
+    "name": "HarryB97",
+    "email": "36953173+HarryB977@users.noreply.github.com"
+  },
+  "hideInEditor": true,
+  "license": "MIT",
+  "dependencies": {
+    "com.cysharp.unitask": "2.5.10",
+    "com.harryb97.tools.logger": "1.0.0"
+  },
+  "samples": [
+    {
+      "displayName": "Local Data Sample",
+      "description": "Ejemplo de implementación",
+      "path": "Samples~/Sample"
+    }
+  ]
+}

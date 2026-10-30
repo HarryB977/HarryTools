@@ -1,0 +1,21 @@
+{
+  "name": "com.harryb97.tools.conditions",
+  "version": "1.0.0",
+  "displayName": "Conditions",
+  "description": "Condiciones modulares configurables desde el inspector con [SerializeReference]. Se combinan con listas (Todas / Alguna) y operadores lógicos",
+  "unity": "6000.0",
+  "keywords": [
+    "design",
+    "logic",
+    "conditions"
+  ],
+  "author": {
+    "name": "HarryB97",
+    "email": "36953173+HarryB977@users.noreply.github.com"
+  },
+  "hideInEditor": true,
+  "license": "MIT",
+  "dependencies": {
+    "com.harryb97.tools.serializereferences": "1.0.0"
+  }
+}

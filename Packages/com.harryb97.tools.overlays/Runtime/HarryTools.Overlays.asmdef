@@ -1,0 +1,20 @@
+{
+    "name": "HarryTools.Overlays",
+    "rootNamespace": "",
+    "references": [
+        "HarryUtils",
+        "MackySoft.SerializeReferenceExtensions",
+        "HarryTools.Logger",
+        "HarryTools.UICanvas",
+        "UniTask"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

@@ -1,0 +1,24 @@
+{
+  "name": "com.harryb97.tools.actions",
+  "version": "1.0.0",
+  "displayName": "Actions",
+  "description": "Acciones modulares asíncronas configurables desde el inspector con [SerializeReference]. Se ejecutan en orden, con condiciones, ramas, paralelos, esperas y cancelación",
+  "unity": "6000.0",
+  "keywords": [
+    "design",
+    "logic",
+    "actions",
+    "command"
+  ],
+  "author": {
+    "name": "HarryB97",
+    "email": "36953173+HarryB977@users.noreply.github.com"
+  },
+  "hideInEditor": true,
+  "license": "MIT",
+  "dependencies": {
+    "com.harryb97.tools.serializereferences": "1.0.0",
+    "com.harryb97.tools.conditions": "1.0.0",
+    "com.cysharp.unitask": "2.5.10"
+  }
+}

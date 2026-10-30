@@ -1,0 +1,21 @@
+{
+    "name": "HarryTools.Popups",
+    "rootNamespace": "",
+    "references": [
+        "HarryTools.Logger",
+        "HarryTools.UICanvas",
+        "HarryUtils",
+        "MackySoft.SerializeReferenceExtensions",
+        "PrimeTween.Runtime",
+        "UniTask"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

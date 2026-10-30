@@ -1,0 +1,20 @@
+{
+  "name": "com.harryb97.tools.statemachine",
+  "version": "1.0.0",
+  "displayName": "State Machine",
+  "description": "Herramienta que añade una máquina de estado con interfaces para estados, transiciones y predicados personalizados",
+  "unity": "6000.0",
+  "author": {
+    "name": "HarryB97",
+    "email": "36953173+HarryB977@users.noreply.github.com"
+  },
+  "hideInEditor": true,
+  "license": "MIT",
+  "samples": [
+    {
+      "displayName": "State Machine Sample",
+      "description": "Ejemplo de implementación",
+      "path": "Samples~/Sample"
+    }
+  ]
+}

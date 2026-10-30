@@ -1,0 +1,24 @@
+{
+  "name": "com.harryb97.tools.platformer2dcontroller",
+  "version": "1.0.0",
+  "displayName": "Platformer 2D Controller",
+  "description": "Herramienta que añade un controlador de movimiento en 2D para juegos de plataformas",
+  "unity": "6000.0",
+  "author": {
+    "name": "HarryB97",
+    "email": "36953173+HarryB977@users.noreply.github.com"
+  },
+  "hideInEditor": true,
+  "license": "MIT",
+  "dependencies": {
+    "com.harryb97.harryutils": "1.1.2",
+    "com.harryb97.tools.logger": "1.0.0"
+  },
+  "samples": [
+    {
+      "displayName": "Player Movement Sample",
+      "description": "Ejemplo de implementación",
+      "path": "Samples~/Sample"
+    }
+  ]
+}

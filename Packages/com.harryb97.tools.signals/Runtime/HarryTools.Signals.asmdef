@@ -1,0 +1,17 @@
+{
+    "name": "HarryTools.Signals",
+    "rootNamespace": "",
+    "references": [
+        "GUID:72ac1f4a8c37eb446a2bbcf010f0cec0",
+        "GUID:5a48a51724773b745ac570afd65b9606"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

@@ -1,0 +1,16 @@
+{
+    "name": "HarryTools.FPS3DController.Sample",
+    "rootNamespace": "",
+    "references": [
+        "HarryTools.FPS3DController"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

@@ -1,0 +1,17 @@
+{
+    "name": "HarryTools.LocalData.Sample",
+    "rootNamespace": "",
+    "references": [
+        "HarryTools.LocalData",
+        "UniTask"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

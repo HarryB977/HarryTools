@@ -1,0 +1,17 @@
+{
+    "name": "HarryTools.Platformer2DController.Sample",
+    "rootNamespace": "",
+    "references": [
+        "HarryTools.Platformer2DController",
+        "HarryUtils"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

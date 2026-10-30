@@ -1,0 +1,14 @@
+{
+  "name": "com.harryb97.tools.gameloop",
+  "version": "1.0.0",
+  "displayName": "Game Loop",
+  "description": "Permite crear varias ramas de loop de juego, a las que se puede suscribir cualquier clase",
+  "unity": "6000.0",
+  "author": {
+    "name": "HarryB97",
+    "email": "36953173+HarryB977@users.noreply.github.com"
+  },
+  "hideInEditor": true,
+  "license": "MIT",
+  "dependencies": { }
+}

@@ -1,0 +1,22 @@
+{
+  "name": "com.harryb97.tools.views",
+  "version": "1.0.1",
+  "displayName": "Views",
+  "description": "Herramienta que permite crear interfaces de UI por las que se pueden navegar.",
+  "unity": "6000.0",
+  "author": {
+    "name": "HarryB97",
+    "email": "36953173+HarryB977@users.noreply.github.com"
+  },
+  "hideInEditor": true,
+  "license": "MIT",
+  "dependencies": {
+    "com.jsteinhauer.unitydomainreloadhelper": "1.0.2",
+    "com.harryb97.harryutils": "1.0.1",
+    "com.mackysoft.serializereference-extensions": "1.6.1",
+    "com.kyrylokuzyk.primetween": "1.2.2",
+    "com.harryb97.tools.logger": "1.0.0",
+    "com.harryb97.tools.uicanvas": "1.0.0",
+    "com.cysharp.unitask": "2.5.10"
+  }
+}

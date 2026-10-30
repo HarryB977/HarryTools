@@ -1,0 +1,17 @@
+{
+    "name": "HarryTools.GameRules",
+    "rootNamespace": "",
+    "references": [
+        "HarryUtils",
+        "MackySoft.SerializeReferenceExtensions"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

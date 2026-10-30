@@ -1,0 +1,16 @@
+{
+	"name": "HarryTools.Conditions",
+	"rootNamespace": "HarryTools.Conditions",
+	"references": [
+		"HarryTools.SerializeReferences"
+	],
+	"includePlatforms": [],
+	"excludePlatforms": [],
+	"allowUnsafeCode": false,
+	"overrideReferences": false,
+	"precompiledReferences": [],
+	"autoReferenced": true,
+	"defineConstraints": [],
+	"versionDefines": [],
+	"noEngineReferences": false
+}

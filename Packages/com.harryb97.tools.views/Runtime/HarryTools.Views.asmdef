@@ -1,0 +1,22 @@
+{
+    "name": "HarryTools.Views",
+    "rootNamespace": "",
+    "references": [
+        "DomainReloadHelper.Runtime",
+        "HarryTools.Logger",
+        "HarryTools.UICanvas",
+        "HarryUtils",
+        "MackySoft.SerializeReferenceExtensions",
+        "PrimeTween.Runtime",
+        "UniTask"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

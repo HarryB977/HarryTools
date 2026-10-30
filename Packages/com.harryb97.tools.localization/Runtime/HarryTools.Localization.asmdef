@@ -1,0 +1,24 @@
+{
+    "name": "HarryTools.Localization",
+    "rootNamespace": "",
+    "references": [
+        "DomainReloadHelper.Runtime",
+        "HarryTools.Logger",
+        "HarryUtils",
+        "UniTask",
+        "UniTask.Addressables",
+        "Unity.Addressables",
+        "Unity.Localization",
+        "Unity.ResourceManager",
+        "Unity.TextMeshPro"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
