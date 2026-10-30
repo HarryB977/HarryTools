@@ -1,5 +1,9 @@
 # Change Log:
 
+## 1.0.4
+
+    - Fix: Añadidos los archivos .meta que faltaban. Unity ignoraba esos archivos al instalar el paquete
+
 ## 1.0.3
 
     - 'CustomCanvas' ahora tiene una propiedad para poder acceder al 'CustomParentCanvas'

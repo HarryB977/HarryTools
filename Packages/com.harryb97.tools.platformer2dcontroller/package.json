@@ -1,6 +1,6 @@
 {
   "name": "com.harryb97.tools.platformer2dcontroller",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "displayName": "Platformer 2D Controller",
   "description": "Herramienta que añade un controlador de movimiento en 2D para juegos de plataformas",
   "unity": "6000.0",

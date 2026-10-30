@@ -1,6 +1,6 @@
 {
   "name": "com.harryb97.tools.popups",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "displayName": "Popups",
   "description": "Herramienta que permite crear interfaces de UI que abren pequeñas ventanas que se stackean, perfecto para mensajes de aviso.",
   "unity": "6000.0",

@@ -1,6 +1,6 @@
 {
   "name": "com.harryb97.tools.views",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "displayName": "Views",
   "description": "Herramienta que permite crear interfaces de UI por las que se pueden navegar.",
   "unity": "6000.0",

@@ -1,5 +1,9 @@
 # Change Log:
 
+## 1.1.1
+
+    - Fix: Los archivos .meta tenían GUIDs repetidos con los de otros paquetes, lo que provocaba errores de conflicto de GUID al tener ambos paquetes instalados
+
 ## 1.1.0
 
     - Se ha añadido un check en Popup para saber si respeta o no la cola (para que un Popup pueda aparecer sobre otro)
