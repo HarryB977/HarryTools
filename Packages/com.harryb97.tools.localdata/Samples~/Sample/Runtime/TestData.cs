@@ -1,15 +1,12 @@
-using UnityEngine;
+using System;
 
-public class TestData : MonoBehaviour {
-    // ==================== VARIABLES ===================
-    #region Public Variables
-    #endregion
-    
-    #region Private Variables
-    #endregion
-    
-    // ==================== START ====================
-    
-    // ==================== METHODS ====================
-
+namespace HarryTools.LocalData.Sample {
+    // Saved as JSON by 'LocalDataSystem': only public or '[SerializeField]' fields are stored
+    [Serializable]
+    public class TestData {
+        // ==================== VARIABLES ===================
+        #region Public Variables
+        public int counter;
+        #endregion
+    }
 }
