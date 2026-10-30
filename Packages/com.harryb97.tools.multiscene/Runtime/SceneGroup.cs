@@ -3,8 +3,8 @@ using System.Linq;
 using System.Collections.Generic;
 using UnityEngine;
 
-using Eflatun.SceneReference;
 using HarryUtils;
+using HarryTools.SerializeReferences;
 
 namespace HarryTools.MultiScene {
     [Serializable]
@@ -38,7 +38,7 @@ namespace HarryTools.MultiScene {
         [SerializeField] private SceneReference activeScene;
         [Space]
         [SerializeField] private List<SceneData> scenes;
-        [SerializeReference, SubclassSelector] private ISceneAction[] sceneActions;
+        [SerializeReference, TypeSelector] private ISceneAction[] sceneActions;
         #endregion
         
         // ==================== METHODS ====================

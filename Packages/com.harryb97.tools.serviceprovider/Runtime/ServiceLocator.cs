@@ -37,6 +37,20 @@ namespace HarryTools.ServiceLocator {
             return _value;
         }
 
+        public bool TryGetByImplementation(Type _implementation, out object _service) {
+            if (_implementation == null) throw new ArgumentNullException(nameof(_implementation));
+
+            foreach (object _value in services.Values) {
+                if (!_implementation.IsInstanceOfType(_value)) continue;
+
+                _service = _value;
+                return true;
+            }
+
+            _service = null;
+            return false;
+        }
+
         public bool IsRegistered<T>() => IsRegistered(typeof(T));
         public bool IsRegistered(Type _type) {
             if(_type == null) throw new ArgumentNullException(nameof(_type));

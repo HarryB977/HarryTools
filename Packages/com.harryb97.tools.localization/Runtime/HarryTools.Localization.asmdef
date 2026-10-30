@@ -2,7 +2,7 @@
     "name": "HarryTools.Localization",
     "rootNamespace": "",
     "references": [
-        "DomainReloadHelper.Runtime",
+        "HarryTools.DomainReload",
         "HarryTools.Logger",
         "HarryUtils",
         "UniTask",

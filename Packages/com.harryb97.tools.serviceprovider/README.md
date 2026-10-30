@@ -17,5 +17,19 @@ De esta forma, una entidad dentro de la partida puede adquirir un servicio usand
 3. Pega el link de este repositorio [``https://github.com/RazgriZ77/Unity-ServiceLocator.git``]
 4. Pulsa en **"Install"**
 
+## Binding
+Permite que un objeto de la escena rellene un campo de un servicio sin que el servicio lo busque.
+
+1. Marca el campo del servicio con `[ServiceBindable]` (debe ser un `GameObject` o un componente):
+```csharp
+public class ViewsService : IViewsService {
+    [ServiceBindable] private ViewStack viewStack;
+}
+```
+2. Añade el componente **Service Binding** al objeto de la escena.
+3. En **Service Field** elige `ViewsService/viewStack (ViewStack)`. El **Target** se rellena con el componente compatible del propio objeto.
+
+El binding se aplica en `Awake` (o al inicializarse el `ServiceProvider`, si llega antes) y se retira en `OnDestroy`. El servicio puede implementar `IServiceBindingCallbacks` para reaccionar a ambos momentos.
+
 ## Sample
 El proyecto trae consigo un ejemplo de cómo inicializar Service Provider y la funcionalidad de los Scopes.

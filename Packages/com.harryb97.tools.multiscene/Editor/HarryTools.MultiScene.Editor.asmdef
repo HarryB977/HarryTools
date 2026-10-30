@@ -1,0 +1,20 @@
+{
+    "name": "HarryTools.MultiScene.Editor",
+    "rootNamespace": "HarryTools.MultiScene.Editor",
+    "references": [
+        "HarryTools.MultiScene",
+        "Unity.Addressables",
+        "Unity.Addressables.Editor"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

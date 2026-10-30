@@ -2,10 +2,9 @@
     "name": "HarryTools.MultiScene",
     "rootNamespace": "",
     "references": [
-        "Eflatun.SceneReference",
         "HarryTools.Logger",
         "HarryUtils",
-        "MackySoft.SerializeReferenceExtensions",
+        "HarryTools.SerializeReferences",
         "UniTask",
         "Unity.Addressables",
         "Unity.ResourceManager"

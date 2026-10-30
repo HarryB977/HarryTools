@@ -1,6 +1,6 @@
 {
   "name": "com.harryb97.tools.localization",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "displayName": "Localization",
   "description": "Herramientas para facilitar el uso del paquete de localización de Unity",
   "unity": "6000.0",
@@ -11,7 +11,7 @@
   "hideInEditor": true,
   "license": "MIT",
   "dependencies": {
-    "com.jsteinhauer.unitydomainreloadhelper": "1.0.2",
+    "com.harryb97.tools.domainreload": "1.0.0",
     "com.harryb97.harryutils": "1.0.1",
     "com.harryb97.tools.logger": "1.0.0",
     "com.cysharp.unitask": "2.5.10",

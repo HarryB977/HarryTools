@@ -9,6 +9,8 @@ using UnityEngine.ResourceManagement.ResourceProviders;
 
 using Cysharp.Threading.Tasks;
 
+using Logger = HarryTools.LoggerTool.Logger;
+
 namespace HarryTools.MultiScene {
     public class SceneGroupHelper {
         public readonly struct AsyncOperationGroup {
@@ -62,13 +64,17 @@ namespace HarryTools.MultiScene {
                 if (!_reloadDupScenes && _loadedScenes.Contains(_sceneData.reference.Name)) continue;
 
                 // Comprobamos tipo de escena
-                if (_sceneData.reference.State == Eflatun.SceneReference.SceneReferenceState.Regular) {
+                if (_sceneData.reference.State == SceneReferenceState.Regular) {
                     AsyncOperation _operation = SceneManager.LoadSceneAsync(_sceneData.reference.Name, LoadSceneMode.Additive);
                     _operationGroup.Operations.Add(_operation);
 
-                } else if (_sceneData.reference.State == Eflatun.SceneReference.SceneReferenceState.Addressable) {
-                    AsyncOperationHandle<SceneInstance> _sceneHandle = Addressables.LoadSceneAsync(_sceneData.reference.Path, LoadSceneMode.Additive);
+                } else if (_sceneData.reference.State == SceneReferenceState.Addressable) {
+                    AsyncOperationHandle<SceneInstance> _sceneHandle = Addressables.LoadSceneAsync(_sceneData.reference.Address, LoadSceneMode.Additive);
                     handleGroup.Handles.Add(_sceneHandle);
+
+                } else {
+                    Logger.LogWarning("SceneGroupHelper", $"La escena '{_sceneData.reference.Name}' no está en la build ni es un Addressable");
+                    continue;
                 }
 
                 OnSceneLoaded?.Invoke(_sceneData.reference.Name);

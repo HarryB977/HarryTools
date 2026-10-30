@@ -48,6 +48,7 @@ namespace HarryTools.ServiceLocator {
 
         // ==================== START ===================
         private void OnDisable() {
+            ServiceBinder.ClearScope(Scope);
             Scope.DisposeServices();
         }
 
@@ -57,6 +58,7 @@ namespace HarryTools.ServiceLocator {
             SetScope();
             
             IsInitialized = true;
+            ServiceBinder.SetScope(Scope);
             OnFinishConfigure?.Invoke();
         }
         

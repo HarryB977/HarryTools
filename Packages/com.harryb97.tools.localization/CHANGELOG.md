@@ -1,5 +1,11 @@
 # Change Log:
 
+## 1.2.1
+
+### Dependencias
+
+    - Se ha cambiado la dependencia 'com.jsteinhauer.unitydomainreloadhelper' por 'com.harryb97.tools.domainreload'
+
 ## 1.2.0
 
     - Feat: Nueva sobrecarga del método 'SetText' que permite parámetros para los strings marcados como 'smart'

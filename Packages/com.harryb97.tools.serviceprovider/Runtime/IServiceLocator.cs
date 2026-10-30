@@ -11,6 +11,8 @@ namespace HarryTools.ServiceLocator {
         T Get<T>();
         object Get(Type _type);
 
+        bool TryGetByImplementation(Type _implementation, out object _service);
+
         bool IsRegistered<T>();
         bool IsRegistered(Type _type);
 

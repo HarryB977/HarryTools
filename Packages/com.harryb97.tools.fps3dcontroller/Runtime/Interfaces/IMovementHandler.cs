@@ -5,12 +5,16 @@ namespace HarryTools.FPS3DController {
         // Inputs
         Vector2 MovementInput { get; }
 
-        bool JumpInput { get; }
-        bool CrouchInput { get; }
-        bool SprintInput { get; }
+        bool JumpHeld { get; }
+        bool CrouchHeld { get; }
+
+        // Time.time of the last press, float.NegativeInfinity if never pressed
+        float LastJumpPressTime { get; }
+        float LastDashPressTime { get; }
 
         // References
         Transform Transform { get; }
+        Transform Orientation { get; }
         Rigidbody Rigidbody { get; }
         CapsuleCollider Collider { get; }
 

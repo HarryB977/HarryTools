@@ -21,6 +21,10 @@ namespace HarryTools.FPS3DController.Sample {
         // References
         private Rigidbody rB;
         private CapsuleCollider col;
+
+        // Inputs
+        private float lastJumpPressTime = float.NegativeInfinity;
+        private float lastDashPressTime = float.NegativeInfinity;
         #endregion
 
         // ==================== START ====================
@@ -37,9 +41,17 @@ namespace HarryTools.FPS3DController.Sample {
         }
 
         private void Update() {
+            // Inputs
+            if (Input.GetKeyDown(KeyCode.Space)) lastJumpPressTime = Time.time;
+            if (Input.GetKeyDown(KeyCode.LeftShift)) lastDashPressTime = Time.time;
+
             // Controllers
-            movementController.Ticks();
-            cameraController.Ticks();
+            cameraController.Ticks(Time.deltaTime);
+        }
+
+        private void FixedUpdate() {
+            // Controllers
+            movementController.Ticks(Time.fixedDeltaTime);
         }
 
         private void OnDrawGizmos() {
@@ -50,30 +62,30 @@ namespace HarryTools.FPS3DController.Sample {
         // ==================== INTERFACES ====================
         #region IMovementHandler
         // Inputs
-        Vector2 IMovementHandler.MovementInput => new(Input.GetAxis("Horizontal"), Input.GetAxis("Vertical"));
+        Vector2 IMovementHandler.MovementInput => new(Input.GetAxisRaw("Horizontal"), Input.GetAxisRaw("Vertical"));
 
-        bool IMovementHandler.JumpInput => Input.GetKey(KeyCode.Space);
-        bool IMovementHandler.CrouchInput => Input.GetKey(KeyCode.LeftControl);
-        bool IMovementHandler.SprintInput => Input.GetKey(KeyCode.LeftShift);
+        bool IMovementHandler.JumpHeld => Input.GetKey(KeyCode.Space);
+        bool IMovementHandler.CrouchHeld => Input.GetKey(KeyCode.LeftControl);
+
+        float IMovementHandler.LastJumpPressTime => lastJumpPressTime;
+        float IMovementHandler.LastDashPressTime => lastDashPressTime;
 
         // References
         Transform IMovementHandler.Transform => transform;
+        Transform IMovementHandler.Orientation => head;
         Rigidbody IMovementHandler.Rigidbody => rB;
         CapsuleCollider IMovementHandler.Collider => col;
 
         // Data
         MovementController.Data IMovementHandler.Data => movementData;
-
         #endregion
 
         #region ICameraHandler
         // Inputs
-        Vector2 ICameraHandler.MovementInput => new(Input.GetAxis("Horizontal"), Input.GetAxis("Vertical"));
-        Vector2 ICameraHandler.LookInput => new(Input.GetAxis("Mouse X"), Input.GetAxis("Mouse Y"));
+        Vector2 ICameraHandler.MovementInput => new(Input.GetAxisRaw("Horizontal"), Input.GetAxisRaw("Vertical"));
+        Vector2 ICameraHandler.LookInput => new(Input.GetAxisRaw("Mouse X"), Input.GetAxisRaw("Mouse Y"));
 
         // References
-        Transform ICameraHandler.Transform => transform;
-        Rigidbody ICameraHandler.Rigidbody => rB;
         Transform ICameraHandler.Head => head;
         Camera ICameraHandler.Camera => headCamera;
 
@@ -81,6 +93,6 @@ namespace HarryTools.FPS3DController.Sample {
 
         // Data
         CameraController.Data ICameraHandler.Data => cameraData;
-         #endregion
+        #endregion
     }
 }

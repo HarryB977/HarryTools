@@ -1,6 +1,6 @@
 {
   "name": "com.harryb97.tools.multiscene",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "displayName": "MultiScene",
   "description": "Herramientas para facilitar la carga y descarga de escenas",
   "unity": "6000.0",
@@ -11,11 +11,10 @@
   "hideInEditor": true,
   "license": "MIT",
   "dependencies": {
-    "com.jsteinhauer.unitydomainreloadhelper": "1.0.2",
     "com.harryb97.tools.logger": "1.0.0",
+    "com.harryb97.tools.serializereferences": "1.0.0",
     "com.harryb97.harryutils": "1.0.1",
-    "com.mackysoft.serializereference-extensions": "1.6.1",
     "com.cysharp.unitask": "2.5.10",
-    "com.eflatun.scenereference": "4.1.1"
+    "com.unity.addressables": "2.9.1"
   }
 }

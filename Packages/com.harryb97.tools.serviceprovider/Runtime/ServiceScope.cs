@@ -43,6 +43,8 @@ namespace HarryTools.ServiceLocator {
             }
         }
 
+        public bool GetServiceByImplementation(Type _implementation, out object _service) => locator.TryGetByImplementation(_implementation, out _service);
+
         public void DisposeServices() {
             try {
                 locator.DisposeAll();
