@@ -22,7 +22,7 @@ namespace HarryTools.UI {
         #endregion
 
         #region Private Variables
-        [Header("Fondo")]
+        [Header("Backdrop")]
         [SerializeField] private CanvasGroup backdrop;
         [SerializeField] private float backdropFadeDuration = 0.25f;
 

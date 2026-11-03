@@ -33,7 +33,7 @@ namespace HarryTools.UI
         [Tooltip("Shared styling for elements using theme defaults. Custom element settings remain local.")]
         [SerializeField] private ThemeStyles _styles = ThemeStyles.Default;
 
-        [Header("Roles personalizados")]
+        [Header("Custom Roles")]
         [SerializeField] private List<CustomColorRole> _customRoles = new();
         [SerializeField, HideInInspector] private int _lastCustomRoleId = FirstCustomRoleId;
 

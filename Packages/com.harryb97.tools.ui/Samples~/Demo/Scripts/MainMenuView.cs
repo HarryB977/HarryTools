@@ -25,12 +25,12 @@ namespace HarryTools.UI.Demo {
 
         // ==================== METHODS ====================
         private void ShowPopup() {
-            UI.Popups.Show<ConfirmPopup>().Setup("Hola", "Esto es un popup. Haz clic fuera o en Aceptar para cerrarlo.");
+            UI.Popups.Show<ConfirmPopup>().Setup("Hello", "This is a popup. Click outside or on OK to close it.");
         }
 
         private void ShowTwoPopups() {
-            UI.Popups.Show<ConfirmPopup>().Setup("Primero", "El segundo popup está esperando en la cola.");
-            UI.Popups.Show<ConfirmPopup>().Setup("Segundo", "Este popup estaba en la cola y ha aparecido al cerrar el primero.");
+            UI.Popups.Show<ConfirmPopup>().Setup("First", "The second popup is waiting in the queue.");
+            UI.Popups.Show<ConfirmPopup>().Setup("Second", "This popup was queued and appeared when the first one closed.");
         }
 
         private void Load() {

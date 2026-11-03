@@ -135,8 +135,8 @@ Si una vista se oculta mientras está entrando, la entrada se cancela. Para una 
 Crea una paleta con **Create > HarryTools > UI > Color Palette** y asígnala al `UIRoot`. Para usar otra paleta solo en una rama de la jerarquía, añade un `PaletteProvider`. Si no hay ningún proveedor, se usa la paleta por defecto del paquete.
 
 - **Roles de serie**: Background, Surface, Accent, Success, Warning, Danger, Black, White y Muted. Cada uno tiene su color de contraste para el texto que va encima.
-- **Roles personalizados**: en *Roles personalizados* añade los que necesites, por ejemplo "Oro" o "Épico". Se guardan por id, así que puedes renombrarlos sin romper nada.
-- **Tonos**: cada `ColorInfo` tiene un **Tono** de -3 a 3 para obtener versiones más claras u oscuras de un rol sin crear roles nuevos. Se calcula en el espacio OKLab.
+- **Roles personalizados**: en *Custom Roles* añade los que necesites, por ejemplo "Oro" o "Épico". Se guardan por id, así que puedes renombrarlos sin romper nada.
+- **Tonos**: cada `ColorInfo` tiene un **Tone** de -3 a 3 para obtener versiones más claras u oscuras de un rol sin crear roles nuevos. Se calcula en el espacio OKLab.
 - **Contraste**: el inspector avisa cuando un rol y su contraste no llegan a 4.5:1, el nivel AA de WCAG.
 
 `ColoredGraphic` aplica un rol a cualquier `Graphic`. Si la paleta cambia, cambia de color con una transición.

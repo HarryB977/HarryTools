@@ -11,7 +11,7 @@ namespace HarryTools.UI
     public class IconProcessor : MonoBehaviour, ITextPreprocessor
     {
         [SerializeField] private TMP_Text _text;
-        [Tooltip("Biblioteca de sets de iconos. Si está vacía, se usa la del paquete")]
+        [Tooltip("Icon set library. If empty, the package library is used.")]
         [SerializeField] private IconLibrary _library;
 
         /// <summary> Biblioteca usada para resolver los iconos (la del paquete si no se asigna otra) </summary>

@@ -46,7 +46,7 @@ namespace HarryTools.UI.Editor
             if (ratio >= ColorContrast.AA) return;
 
             EditorGUILayout.HelpBox(
-                $"Contraste insuficiente entre '{roleName}' y su contraste: {ratio:0.0}:1 (mínimo {ColorContrast.AA:0.0}:1)",
+                $"Insufficient contrast between '{roleName}' and its contrast color: {ratio:0.0}:1 (minimum {ColorContrast.AA:0.0}:1)",
                 MessageType.Warning);
         }
 

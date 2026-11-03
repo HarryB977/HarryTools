@@ -198,7 +198,7 @@ namespace HarryTools.UI.Editor
 
             if (_outlineSize.floatValue > 0f)
             {
-                EditorGUILayout.PropertyField(_outlineGradientType, new GUIContent("Gradient", "Del color del contorno al color final"));
+                EditorGUILayout.PropertyField(_outlineGradientType, new GUIContent("Gradient", "From the outline color to the end color"));
                 if (_outlineGradientType.enumValueIndex != (int)OutlineGradientType.None)
                 {
                     EditorGUILayout.PropertyField(_outlineGradientColor, new GUIContent("Gradient End"));

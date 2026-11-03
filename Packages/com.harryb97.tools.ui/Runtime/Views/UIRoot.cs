@@ -45,16 +45,16 @@ namespace HarryTools.UI {
         [SerializeField] private List<ViewCollection> collections = new();
         [SerializeField] private View showOnStart;
 
-        [Header("Tema")]
+        [Header("Theme")]
         [SerializeField] private ColorPalette colorPalette;
 
-        [Header("Capas")]
+        [Header("Layers")]
         [SerializeField] private ViewLayer views;
         [SerializeField] private PopupLayer popups;
         [SerializeField] private OverlayLayer overlays;
 
-        [Header("Opciones")]
-        [Tooltip("Mantiene el UIRoot al cambiar de escena (si no usas MultiScene)")]
+        [Header("Options")]
+        [Tooltip("Keeps the UIRoot when loading another scene (if you don't use MultiScene).")]
         [SerializeField] private bool dontDestroyOnLoad;
 
         private readonly Dictionary<Type, View> registeredPrefabs = new();
@@ -65,7 +65,7 @@ namespace HarryTools.UI {
         // ==================== START ====================
         private void Awake() {
             if (UI.HasRoot && UI.Root != this) {
-                Logger.LogWarning("UI", $"Ya existe un UIRoot activo; se ignora '{name}'.");
+                Logger.LogWarning("UI", $"A UIRoot is already active; ignoring '{name}'.");
                 gameObject.SetActive(false);
                 return;
             }

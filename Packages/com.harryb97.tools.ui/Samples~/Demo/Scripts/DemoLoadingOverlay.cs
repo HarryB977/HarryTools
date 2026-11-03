@@ -7,7 +7,7 @@ namespace HarryTools.UI.Demo {
     public class DemoLoadingOverlay : View, IProgress<float> {
         // ==================== VARIABLES ===================
         #region Private Variables
-        [Tooltip("Relleno de la barra: se ajusta su anchorMax.x")]
+        [Tooltip("Bar fill: its anchorMax.x is adjusted.")]
         [SerializeField] private RectTransform barFill;
         [SerializeField] private TMP_Text label;
         #endregion
@@ -17,7 +17,7 @@ namespace HarryTools.UI.Demo {
             float _progress = Mathf.Clamp01(_value);
 
             barFill.anchorMax = new Vector2(_progress, barFill.anchorMax.y);
-            label.text = $"Cargando... {Mathf.RoundToInt(_progress * 100f)} %";
+            label.text = $"Loading... {Mathf.RoundToInt(_progress * 100f)} %";
         }
 
         protected override void OnShown() => Report(0f);

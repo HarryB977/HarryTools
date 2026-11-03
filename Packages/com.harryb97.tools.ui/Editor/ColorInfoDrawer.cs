@@ -46,14 +46,14 @@ namespace HarryTools.UI.Editor
 
                     EditorGUI.BeginChangeCheck();
                     EditorGUI.showMixedValue = contrastProp.hasMultipleDifferentValues;
-                    bool newContrast = EditorGUI.ToggleLeft(toggleRect, "Contraste", contrastProp.boolValue);
+                    bool newContrast = EditorGUI.ToggleLeft(toggleRect, "Contrast", contrastProp.boolValue);
                     EditorGUI.showMixedValue = false;
                     if (EditorGUI.EndChangeCheck())
                         contrastProp.boolValue = newContrast;
 
                     EditorGUI.BeginChangeCheck();
                     EditorGUI.showMixedValue = toneProp.hasMultipleDifferentValues;
-                    int tone = EditorGUI.IntSlider(toneRect, "Tono", toneProp.intValue, ColorTones.MinTone, ColorTones.MaxTone);
+                    int tone = EditorGUI.IntSlider(toneRect, "Tone", toneProp.intValue, ColorTones.MinTone, ColorTones.MaxTone);
                     EditorGUI.showMixedValue = false;
                     if (EditorGUI.EndChangeCheck())
                         toneProp.intValue = tone;
@@ -76,7 +76,7 @@ namespace HarryTools.UI.Editor
             {
                 foreach (var role in palette.CustomRoles)
                 {
-                    labels.Add("Personalizado/" + (string.IsNullOrEmpty(role.name) ? $"Rol {role.id}" : role.name));
+                    labels.Add("Custom/" + (string.IsNullOrEmpty(role.name) ? $"Role {role.id}" : role.name));
                     customIds.Add(role.id);
                 }
             }

@@ -8,7 +8,7 @@ namespace HarryTools.UI {
         [HideInInspector] public int id;
         public string name;
         public Color color = Color.white;
-        [Tooltip("Color para el texto o el contenido que va encima de este")]
+        [Tooltip("Color for text or content drawn on top of this color.")]
         public Color contrast = Color.black;
     }
 }

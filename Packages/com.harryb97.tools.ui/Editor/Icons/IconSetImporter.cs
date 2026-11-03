@@ -157,26 +157,26 @@ namespace HarryTools.UI.Editor
         bool _addToLibrary = true;
 
         [MenuItem("Window/HarryTools/UI/Icon Set Importer")]
-        static void Open() => GetWindow<IconSetImporterWindow>("Importar iconos");
+        static void Open() => GetWindow<IconSetImporterWindow>("Import Icons");
 
         void OnGUI()
         {
-            EditorGUILayout.HelpBox("Crea un set de iconos a partir de una fuente de iconos (TTF) y su fichero de metadatos. " +
-                                    "Usa solo fuentes con licencia libre (por ejemplo Material Symbols, Tabler o Phosphor).", MessageType.Info);
+            EditorGUILayout.HelpBox("Creates an icon set from an icon font (TTF) and its metadata file. " +
+                                    "Only use openly licensed fonts (for example Material Symbols, Tabler or Phosphor).", MessageType.Info);
 
-            _font = (Font)EditorGUILayout.ObjectField("Fuente (TTF)", _font, typeof(Font), false);
-            _metadata = (TextAsset)EditorGUILayout.ObjectField("Metadatos", _metadata, typeof(TextAsset), false);
-            _format = (IconSetImporter.MetadataFormat)EditorGUILayout.EnumPopup("Formato", _format);
-            _id = EditorGUILayout.TextField(new GUIContent("Id", "Prefijo en las etiquetas: <icon=id:nombre>"), _id);
-            _folder = (DefaultAsset)EditorGUILayout.ObjectField("Carpeta destino", _folder, typeof(DefaultAsset), false);
-            _addToLibrary = EditorGUILayout.Toggle("Añadir a la biblioteca", _addToLibrary);
+            _font = (Font)EditorGUILayout.ObjectField("Font (TTF)", _font, typeof(Font), false);
+            _metadata = (TextAsset)EditorGUILayout.ObjectField("Metadata", _metadata, typeof(TextAsset), false);
+            _format = (IconSetImporter.MetadataFormat)EditorGUILayout.EnumPopup("Format", _format);
+            _id = EditorGUILayout.TextField(new GUIContent("Id", "Tag prefix: <icon=id:name>"), _id);
+            _folder = (DefaultAsset)EditorGUILayout.ObjectField("Output Folder", _folder, typeof(DefaultAsset), false);
+            _addToLibrary = EditorGUILayout.Toggle("Add to Library", _addToLibrary);
 
             string folderPath = _folder ? AssetDatabase.GetAssetPath(_folder) : null;
             bool valid = _font && _metadata && !string.IsNullOrWhiteSpace(_id) && AssetDatabase.IsValidFolder(folderPath);
 
             using (new EditorGUI.DisabledScope(!valid))
             {
-                if (!GUILayout.Button("Importar"))
+                if (!GUILayout.Button("Import"))
                     return;
             }
 
@@ -188,7 +188,7 @@ namespace HarryTools.UI.Editor
                 IconSetImporter.AddToLibrary(library, set, false);
 
             EditorGUIUtility.PingObject(set);
-            ShowNotification(new GUIContent($"{glyphs.Count} iconos importados"));
+            ShowNotification(new GUIContent($"{glyphs.Count} icons imported"));
         }
     }
 }

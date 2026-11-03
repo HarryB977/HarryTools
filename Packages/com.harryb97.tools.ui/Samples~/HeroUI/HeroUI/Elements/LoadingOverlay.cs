@@ -11,9 +11,9 @@ namespace HarryTools.UI.HeroUI
     /// </summary>
     public class LoadingOverlay : View, IProgress<float>
     {
-        [Tooltip("Imagen con 'Image Type = Filled' que muestra el progreso (opcional)")]
+        [Tooltip("Image with 'Image Type = Filled' that shows the progress (optional).")]
         [SerializeField] private Image _progressBar;
-        [Tooltip("Texto con el porcentaje (opcional)")]
+        [Tooltip("Text that shows the percentage (optional).")]
         [SerializeField] private TMP_Text _progressLabel;
 
         public float Progress { get; private set; }

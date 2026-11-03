@@ -22,7 +22,7 @@ namespace HarryTools.UI.Editor
         double _lastClickTime;
 
         [MenuItem("Window/HarryTools/UI/Icon Browser")]
-        public static void Open() => GetWindow<IconBrowserWindow>("Iconos");
+        public static void Open() => GetWindow<IconBrowserWindow>("Icons");
 
         void OnEnable()
         {
@@ -35,7 +35,7 @@ namespace HarryTools.UI.Editor
             var library = IconLibrary.Instance;
             if (!library || library.Sets.Count == 0)
             {
-                EditorGUILayout.HelpBox("No hay ninguna biblioteca de iconos (Resources/HarryTools.UI/IconLibrary).", MessageType.Warning);
+                EditorGUILayout.HelpBox("No icon library found (Resources/HarryTools.UI/IconLibrary).", MessageType.Warning);
                 return;
             }
 
@@ -51,7 +51,7 @@ namespace HarryTools.UI.Editor
                 EditorGUI.BeginChangeCheck();
                 _query = EditorGUILayout.TextField(_query, EditorStyles.toolbarSearchField);
 
-                var options = new[] { "Todos" }.Concat(library.Sets.Where(s => s).Select(s => s.Id)).ToArray();
+                var options = new[] { "All" }.Concat(library.Sets.Where(s => s).Select(s => s.Id)).ToArray();
                 _setIndex = EditorGUILayout.Popup(Mathf.Clamp(_setIndex, 0, options.Length - 1), options, EditorStyles.toolbarPopup, GUILayout.Width(110));
 
                 if (EditorGUI.EndChangeCheck())
@@ -112,7 +112,7 @@ namespace HarryTools.UI.Editor
 
             string tag = TagFor(item);
             EditorGUIUtility.systemCopyBuffer = tag;
-            ShowNotification(new GUIContent($"Copiado {tag}"), 0.6f);
+            ShowNotification(new GUIContent($"Copied {tag}"), 0.6f);
 
             if (doubleClick)
                 AppendToSelectedText(tag);
@@ -136,7 +136,7 @@ namespace HarryTools.UI.Editor
                     EditorGUILayout.LabelField("Set", set.Id);
                     EditorGUILayout.LabelField("Codepoint", $"U+{glyph.codepoint:X}");
                     if (glyph.aliases is { Length: > 0 }) EditorGUILayout.LabelField("Alias", string.Join(", ", glyph.aliases));
-                    if (glyph.tags is { Length: > 0 }) EditorGUILayout.LabelField("Etiquetas", string.Join(", ", glyph.tags));
+                    if (glyph.tags is { Length: > 0 }) EditorGUILayout.LabelField("Tags", string.Join(", ", glyph.tags));
                 }
             }
         }
@@ -162,7 +162,7 @@ namespace HarryTools.UI.Editor
         {
             var parts = new List<string> { item.glyph.name };
             if (item.glyph.aliases is { Length: > 0 }) parts.Add("Alias: " + string.Join(", ", item.glyph.aliases));
-            if (item.glyph.tags is { Length: > 0 }) parts.Add("Etiquetas: " + string.Join(", ", item.glyph.tags));
+            if (item.glyph.tags is { Length: > 0 }) parts.Add("Tags: " + string.Join(", ", item.glyph.tags));
             return string.Join("\n", parts);
         }
 
@@ -171,7 +171,7 @@ namespace HarryTools.UI.Editor
             var text = Selection.activeGameObject ? Selection.activeGameObject.GetComponent<TMP_Text>() : null;
             if (!text) return;
 
-            Undo.RecordObject(text, "Añadir icono");
+            Undo.RecordObject(text, "Add Icon");
             text.text += tag;
             EditorUtility.SetDirty(text);
         }

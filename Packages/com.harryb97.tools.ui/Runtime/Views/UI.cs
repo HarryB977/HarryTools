@@ -19,7 +19,7 @@ namespace HarryTools.UI {
 
         public static UIRoot Root => root
             ? root
-            : throw new InvalidOperationException("No hay ningún UIRoot activo en la escena.");
+            : throw new InvalidOperationException("There is no active UIRoot in the scene.");
 
         public static ViewLayer Views => Root.Views;
         public static PopupLayer Popups => Root.Popups;

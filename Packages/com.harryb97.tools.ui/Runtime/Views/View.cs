@@ -46,19 +46,19 @@ namespace HarryTools.UI {
         #endregion
 
         #region Private Variables
-        [Header("Vista")]
-        [Tooltip("Cached: se crea al mostrarse la primera vez y se conserva. Preloaded: se crea al iniciar. Transient: se destruye al ocultarse.")]
+        [Header("View")]
+        [Tooltip("Cached: created the first time it is shown and kept. Preloaded: created on startup. Transient: destroyed when hidden.")]
         [SerializeField] private ViewLifetime lifetime = ViewLifetime.Cached;
-        [Tooltip("Capa donde se precarga (Preloaded) y donde se muestra con Show() si aún no pertenece a ninguna")]
+        [Tooltip("Layer it is preloaded into (Preloaded) and shown in by Show() when it does not belong to a layer yet.")]
         [SerializeField] private UILayerKind defaultLayer = UILayerKind.Views;
-        [Tooltip("Deja de dibujar las vistas de su capa que quedan detrás mientras esta es visible")]
+        [Tooltip("Stops drawing the views of its layer behind it while this one is visible.")]
         [SerializeField] private bool cullViewsBehind;
         [SerializeReference, TypeSelector] private IViewTransition transition;
 
         [Header("Popups")]
-        [Tooltip("Si ya hay un popup visible, espera su turno en la cola")]
+        [Tooltip("If a popup is already visible, waits its turn in the queue.")]
         [SerializeField] private bool respectQueue = true;
-        [Tooltip("Se oculta al hacer clic en el fondo oscurecido")]
+        [Tooltip("Hides when the dimmed backdrop is clicked.")]
         [SerializeField] private bool hideOnBackdropClick = true;
 
         private Canvas canvas;
@@ -92,7 +92,7 @@ namespace HarryTools.UI {
         public void Show() {
             if (Layer) Layer.Show(this);
             else if (UI.HasRoot) UI.Root.GetLayer(defaultLayer).Show(this);
-            else Logger.LogWarning("UI", $"La vista '{name}' no pertenece a ninguna capa y no hay ningún UIRoot activo");
+            else Logger.LogWarning("UI", $"View '{name}' does not belong to a layer and there is no active UIRoot");
         }
 
         /// <summary> Oculta esta vista. Se puede asignar al OnClick de un botón </summary>
@@ -198,7 +198,7 @@ namespace HarryTools.UI {
                 return;
             }
             catch (Exception _exception) {
-                Logger.LogError("UI", $"La transición de entrada de '{name}' ha fallado: {_exception}");
+                Logger.LogError("UI", $"Enter transition of '{name}' failed: {_exception}");
             }
 
             if (_ct.IsCancellationRequested || this == null) return;
@@ -215,7 +215,7 @@ namespace HarryTools.UI {
                 return;
             }
             catch (Exception _exception) {
-                Logger.LogError("UI", $"La transición de salida de '{name}' ha fallado: {_exception}");
+                Logger.LogError("UI", $"Exit transition of '{name}' failed: {_exception}");
             }
 
             if (_ct.IsCancellationRequested || this == null) return;

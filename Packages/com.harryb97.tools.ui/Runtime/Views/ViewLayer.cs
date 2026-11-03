@@ -336,7 +336,7 @@ namespace HarryTools.UI {
         protected virtual void OnRefreshed() { }
 
         protected void NotFound(Type _type) {
-            Logger.LogWarning("UI", $"No se ha encontrado ninguna vista de tipo '{_type.Name}'");
+            Logger.LogWarning("UI", $"No view of type '{_type.Name}' was found");
         }
     }
 }

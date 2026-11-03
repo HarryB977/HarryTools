@@ -7,9 +7,9 @@ namespace HarryTools.UI
     /// <summary> Oculta la vista padre al hacer clic sobre este objeto (por ejemplo, un fondo) </summary>
     public class HideParentView : MonoBehaviour, IPointerClickHandler
     {
-        [Tooltip("Si es falso, el clic no oculta la vista.")]
+        [Tooltip("If false, clicking does not hide the view.")]
         [SerializeField] private bool _canHide = true;
-        [Tooltip("Si es verdadero, el clic que oculta la vista también llega a lo que haya detrás.")]
+        [Tooltip("If true, the click that hides the view also reaches whatever is behind it.")]
         [SerializeField] private bool _passThrough = false;
 
         private readonly List<RaycastResult> _results = new();

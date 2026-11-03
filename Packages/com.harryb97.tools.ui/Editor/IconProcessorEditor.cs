@@ -11,9 +11,9 @@ namespace HarryTools.UI.Editor
             DrawDefaultInspector();
 
             EditorGUILayout.Space(4);
-            EditorGUILayout.HelpBox("Escribe <icon=nombre> (set por defecto) o <icon=set:nombre> en el texto.", MessageType.None);
+            EditorGUILayout.HelpBox("Write <icon=name> (default set) or <icon=set:name> in the text.", MessageType.None);
 
-            if (GUILayout.Button("Abrir buscador de iconos"))
+            if (GUILayout.Button("Open Icon Browser"))
                 IconBrowserWindow.Open();
         }
     }
