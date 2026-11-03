@@ -1,0 +1,27 @@
+{
+	"name": "HarryTools.ProBuilderExtensions.Tests.Editor",
+	"rootNamespace": "HarryTools.ProBuilderExtensions.Tests",
+	"references": [
+		"GUID:5a73c3776b7247ac8d3ac707c21f6087",
+		"GUID:c8033c6c8acf44fe9419baf8d4c3b9ae",
+		"GUID:1826c0224c0d048b88112c79bbb0cd85",
+		"GUID:03ca3ee4acaf74592bc6d299ca86aa27",
+		"UnityEngine.TestRunner",
+		"UnityEditor.TestRunner"
+	],
+	"includePlatforms": [
+		"Editor"
+	],
+	"excludePlatforms": [],
+	"allowUnsafeCode": false,
+	"overrideReferences": true,
+	"precompiledReferences": [
+		"nunit.framework.dll"
+	],
+	"autoReferenced": false,
+	"defineConstraints": [
+		"UNITY_INCLUDE_TESTS"
+	],
+	"versionDefines": [],
+	"noEngineReferences": false
+}
