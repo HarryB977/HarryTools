@@ -34,10 +34,10 @@ namespace HarryTools.ProBuilderExtensions.Generator {
             var name = recipe.name;
 
             using (var renderer = new HotspotRenderer(recipe, recipe.resolution)) {
-                recipe.baseColorMap = WriteMap(renderer, HotspotMap.BaseColor, recipe.baseColorMap, $"{folder}/{name}_BaseColor.png", true, false);
-                recipe.normalMap = WriteMap(renderer, HotspotMap.Normal, recipe.normalMap, $"{folder}/{name}_Normal.png", false, true);
-                recipe.maskMap = WriteMap(renderer, HotspotMap.Mask, recipe.maskMap, $"{folder}/{name}_Mask.png", false, false);
-                recipe.occlusionMap = WriteMap(renderer, HotspotMap.Occlusion, recipe.occlusionMap, $"{folder}/{name}_Occlusion.png", false, false);
+                recipe.baseColorMap = WriteMap(recipe, renderer, HotspotMap.BaseColor, recipe.baseColorMap, $"{folder}/{name}_BaseColor.png", true, false);
+                recipe.normalMap = WriteMap(recipe, renderer, HotspotMap.Normal, recipe.normalMap, $"{folder}/{name}_Normal.png", false, true);
+                recipe.maskMap = WriteMap(recipe, renderer, HotspotMap.Mask, recipe.maskMap, $"{folder}/{name}_Mask.png", false, false);
+                recipe.occlusionMap = WriteMap(recipe, renderer, HotspotMap.Occlusion, recipe.occlusionMap, $"{folder}/{name}_Occlusion.png", false, false);
             }
 
             recipe.material = WriteMaterial(recipe, $"{folder}/{name}.mat");
@@ -47,10 +47,29 @@ namespace HarryTools.ProBuilderExtensions.Generator {
             AssetDatabase.SaveAssets();
         }
 
-        /// <summary>The path of the existing output if it still exists, otherwise the default path.</summary>
-        private static string Resolve(Object existing, string defaultPath) {
-            var path = existing != null ? AssetDatabase.GetAssetPath(existing) : null;
-            return string.IsNullOrEmpty(path) ? defaultPath : path;
+        /// <summary>
+        /// The path of the existing output when it can be overwritten: it still exists, has the expected file type, is
+        /// a main asset and no other recipe references it (a duplicated recipe starts with the original's outputs).
+        /// Otherwise the default path.
+        /// </summary>
+        private static string Resolve(HotspotRecipe recipe, Object existing, string defaultPath) {
+            if (existing == null || !AssetDatabase.IsMainAsset(existing)) return defaultPath;
+            var path = AssetDatabase.GetAssetPath(existing);
+            if (string.IsNullOrEmpty(path) || !path.StartsWith("Assets/") ||
+                !string.Equals(Path.GetExtension(path), Path.GetExtension(defaultPath), StringComparison.OrdinalIgnoreCase))
+                return defaultPath;
+            return IsUsedByAnotherRecipe(recipe, existing) ? defaultPath : path;
+        }
+
+        private static bool IsUsedByAnotherRecipe(HotspotRecipe recipe, Object output) {
+            foreach (var guid in AssetDatabase.FindAssets("t:" + nameof(HotspotRecipe))) {
+                var other = AssetDatabase.LoadAssetAtPath<HotspotRecipe>(AssetDatabase.GUIDToAssetPath(guid));
+                if (other == null || other == recipe) continue;
+                if (other.baseColorMap == output || other.normalMap == output || other.maskMap == output ||
+                    other.occlusionMap == output || other.material == output || other.hotspotTexture == output)
+                    return true;
+            }
+            return false;
         }
 
         private static string EnsureFolder(string folder) {
@@ -61,8 +80,8 @@ namespace HarryTools.ProBuilderExtensions.Generator {
             return folder;
         }
 
-        private static Texture2D WriteMap(HotspotRenderer renderer, HotspotMap map, Texture2D existing, string defaultPath, bool sRGB, bool normal) {
-            var path = Resolve(existing, defaultPath);
+        private static Texture2D WriteMap(HotspotRecipe recipe, HotspotRenderer renderer, HotspotMap map, Texture2D existing, string defaultPath, bool sRGB, bool normal) {
+            var path = Resolve(recipe, existing, defaultPath);
             var tex = renderer.ReadBack(map, linear: !sRGB);
             try {
                 File.WriteAllBytes(path, tex.EncodeToPNG());
@@ -90,16 +109,15 @@ namespace HarryTools.ProBuilderExtensions.Generator {
                 return recipe.material;
             }
 
-            var path = Resolve(recipe.material, defaultPath);
+            var path = Resolve(recipe, recipe.material, defaultPath);
             var material = AssetDatabase.LoadAssetAtPath<Material>(path);
             if (material == null) {
                 material = new Material(shader);
                 material.SetColor("_BaseColor", Color.white);
                 material.SetFloat("_Smoothness", 1f); // the mask's alpha holds the real smoothness
                 AssetDatabase.CreateAsset(material, path);
-            } else if (material.shader != shader) {
-                material.shader = shader;
             }
+            // An existing material keeps its shader: the user may have switched to one with the same properties.
 
             material.SetTexture("_BaseMap", recipe.baseColorMap);
             material.SetTexture("_MainTex", recipe.baseColorMap);
@@ -115,7 +133,7 @@ namespace HarryTools.ProBuilderExtensions.Generator {
         }
 
         private static HotspotTexture WriteHotspotTexture(HotspotRecipe recipe, string defaultPath) {
-            var path = Resolve(recipe.hotspotTexture, defaultPath);
+            var path = Resolve(recipe, recipe.hotspotTexture, defaultPath);
             var hotspot = AssetDatabase.LoadAssetAtPath<HotspotTexture>(path);
             if (hotspot == null) {
                 hotspot = ScriptableObject.CreateInstance<HotspotTexture>();

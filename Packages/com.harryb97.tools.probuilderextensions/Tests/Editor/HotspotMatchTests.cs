@@ -150,5 +150,26 @@ namespace HarryTools.ProBuilderExtensions.Tests {
             Assert.AreEqual(0, match.index);
             Assert.IsFalse(match.outOfTolerance);
         }
+        [Test]
+        public void LegacyRectsWithDensity_KeepRandomnessAndNeverFlag() {
+            var target = new Texture2D(512, 512);
+            var hotspot = ScriptableObject.CreateInstance<HotspotTexture>();
+            hotspot.target = target;
+            hotspot.texelsPerUnit = 256;
+            hotspot.rects = new List<Rect> { new(0, 0, 64, 64), new(64, 0, 64, 64), new(128, 0, 64, 64) };
+            created.Add(target);
+            created.Add(hotspot);
+
+            Assert.AreEqual(0, hotspot.GetPatch(0).inset, "legacy rects must not gain an inset");
+            var settings = Settings();
+            settings.randomTolerance = 0.15f;
+            var seen = new HashSet<int>();
+            for (int i = 0; i < 100; i++) {
+                var m = hotspot.FindBestPatch(new Vector2(3f, 3f), settings); // far bigger than the 0.25 m rects
+                Assert.IsFalse(m.outOfTolerance);
+                seen.Add(m.index);
+            }
+            Assert.AreEqual(3, seen.Count, "re-applying should still pick among equally good rects");
+        }
     }
 }

@@ -18,7 +18,7 @@ Asigna a cada cara seleccionada el rectángulo (*patch*) de un atlas *hotspot* q
 
 - **Allow Rotation**: permite girar la cara 90° si así encaja mejor. Cada patch puede prohibirlo.
 - **Allow Mirror**: permite voltear al azar los patches que lo admiten.
-- **Scale Tolerance**: cuánto puede diferir el tamaño del patch del de la cara (0,25 = ±25%). Si ningún patch entra, se usa una franja de tiling para caras largas o, si tampoco hay, el más parecido (con un aviso en la consola).
+- **Scale Tolerance**: cuánto puede diferir el tamaño del patch del de la cara (0,25 = ±25%). Solo se aplica a los Hotspot Texture con layout. Si ningún patch entra, se usa una franja de tiling para caras largas o, si tampoco hay, el más parecido (con un aviso en la consola).
 - **Preserve Aspect**: encaja la cara dentro del rectángulo sin deformarla, en vez de estirarla.
 - **Random Tolerance**: cuánto peor que el mejor patch puede ser otro para entrar en el sorteo. Volver a aplicar elige otro al azar.
 

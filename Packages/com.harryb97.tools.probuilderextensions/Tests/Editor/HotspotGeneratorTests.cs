@@ -149,5 +149,51 @@ namespace HarryTools.ProBuilderExtensions.Tests {
                 Assert.AreEqual(a.hotspotTexture.GetUVRect(i), b.hotspotTexture.GetUVRect(i));
             Assert.AreEqual(a.hotspotTexture.EffectiveTexelsPerUnit, b.hotspotTexture.EffectiveTexelsPerUnit);
         }
+        [Test]
+        public void DuplicatedRecipe_DoesNotOverwriteTheOriginalsOutputs() {
+            var original = Recipe("Plaster");
+            HotspotGenerator.Generate(original);
+            var originalGuids = Guids(original);
+            var originalPaths = System.Array.ConvertAll(originalGuids, AssetDatabase.GUIDToAssetPath);
+            var originalBytes = System.IO.File.ReadAllBytes(originalPaths[0]);
+
+            Assert.IsTrue(AssetDatabase.CopyAsset(AssetDatabase.GetAssetPath(original), Folder + "/Plaster Old.asset"));
+            var copy = AssetDatabase.LoadAssetAtPath<HotspotRecipe>(Folder + "/Plaster Old.asset");
+            copy.wear.intensity = 1f;
+            copy.seed = 42;
+            HotspotGenerator.Generate(copy);
+
+            CollectionAssert.AreEqual(originalGuids, Guids(original));
+            CollectionAssert.AreEqual(originalBytes, System.IO.File.ReadAllBytes(originalPaths[0]), "the original base colour was overwritten");
+            Assert.AreEqual(Folder + "/Plaster Old/Plaster Old_BaseColor.png", AssetDatabase.GetAssetPath(copy.baseColorMap));
+            Assert.AreNotEqual(original.material, copy.material);
+            Assert.AreNotEqual(original.hotspotTexture, copy.hotspotTexture);
+        }
+
+        [Test]
+        public void ForeignTextureInOutputField_IsNotOverwritten() {
+            var recipe = Recipe("Plaster");
+            var path = Folder + "/Foreign.jpg";
+            var tex = new Texture2D(4, 4);
+            System.IO.File.WriteAllBytes(path, tex.EncodeToJPG());
+            Object.DestroyImmediate(tex);
+            AssetDatabase.ImportAsset(path);
+            var bytes = System.IO.File.ReadAllBytes(path);
+            recipe.baseColorMap = AssetDatabase.LoadAssetAtPath<Texture2D>(path);
+
+            HotspotGenerator.Generate(recipe);
+            CollectionAssert.AreEqual(bytes, System.IO.File.ReadAllBytes(path));
+            Assert.AreEqual(Folder + "/Plaster/Plaster_BaseColor.png", AssetDatabase.GetAssetPath(recipe.baseColorMap));
+        }
+
+        [Test]
+        public void Regenerate_KeepsTheUsersShader() {
+            var recipe = Recipe("Plaster");
+            HotspotGenerator.Generate(recipe);
+            recipe.material.shader = Shader.Find("Universal Render Pipeline/Simple Lit");
+            HotspotGenerator.Generate(recipe);
+            Assert.AreEqual("Universal Render Pipeline/Simple Lit", recipe.material.shader.name);
+            Assert.AreEqual(recipe.baseColorMap, recipe.material.GetTexture("_BaseMap"));
+        }
     }
 }

@@ -103,7 +103,7 @@ namespace HarryTools.ProBuilderExtensions.HotspotUV.Editor {
 
             AllowRotation = EditorGUILayout.Toggle(new GUIContent("Allow Rotation", "Allow rotating the face 90° to fit a rect better. Patches can also forbid it."), AllowRotation);
             AllowMirror = EditorGUILayout.Toggle(new GUIContent("Allow Mirror", "Allow randomly mirroring patches that permit it."), AllowMirror);
-            ScaleTolerance = EditorGUILayout.Slider(new GUIContent("Scale Tolerance", "How different in world size a patch can be from the face (0.25 = ±25%). Ignored when the Hotspot Texture has no texel density."), ScaleTolerance, 0f, 1f);
+            ScaleTolerance = EditorGUILayout.Slider(new GUIContent("Scale Tolerance", "How different in world size a patch can be from the face (0.25 = ±25%). Only applies to Hotspot Textures that use a layout."), ScaleTolerance, 0f, 1f);
             PreserveAspect = EditorGUILayout.Toggle(new GUIContent("Preserve Aspect", "Fit inside the rect without stretching instead of filling it."), PreserveAspect);
             RandomTolerance = EditorGUILayout.Slider(new GUIContent("Random Tolerance", "How much worse than the best match a rect can be and still be randomly chosen. 0 = always the best match."), RandomTolerance, 0f, 1f);
 

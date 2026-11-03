@@ -78,13 +78,39 @@ namespace HarryTools.ProBuilderExtensions.Generator {
             material.SetColor(prefix + "Tint", layer.tint);
 
             // Whole repetitions across the atlas, so tiling strips wrap seamlessly.
-            var tileWorld = albedo.width / Mathf.Max(1f, layer.texelsPerUnit);
-            var reps = new Vector2(Mathf.Max(1, Mathf.Round(worldSize.x / tileWorld)), Mathf.Max(1, Mathf.Round(worldSize.y / tileWorld)));
+            var tileWorld = new Vector2(albedo.width, albedo.height) / Mathf.Max(1f, layer.texelsPerUnit);
+            var reps = ComputeRepetitions(worldSize, tileWorld);
             var texelsPerAtlasPixel = albedo.width * reps.x / Size.x;
             var lod = Mathf.Log(Mathf.Max(1f, texelsPerAtlasPixel), 2f);
 
             material.SetVector(prefix + "Params", new Vector4(layer.metallic, layer.smoothness, layer.normalStrength, lod));
             material.SetVector(prefix + "Tiling", new Vector4(reps.x, reps.y, layer.normal != null ? 1 : 0, layer.metallicSmoothness != null ? 1 : 0));
+        }
+
+        /// <summary>Whole numbers of layer tiles across the atlas on each axis.</summary>
+        /// <remarks>
+        /// Both counts must be integers for the atlas to wrap seamlessly, so the tile is resized slightly; the pair is
+        /// chosen to keep the tile's proportions (no stretching) first and its size second.
+        /// </remarks>
+        public static Vector2 ComputeRepetitions(Vector2 worldSize, Vector2 tileWorld) {
+            tileWorld = Vector2.Max(tileWorld, new Vector2(1e-4f, 1e-4f));
+            var ideal = worldSize.x / tileWorld.x;
+            var ratio = (worldSize.y / tileWorld.y) / ideal; // vertical repetitions per horizontal one
+            var best = new Vector2(Mathf.Max(1, Mathf.Round(ideal)), Mathf.Max(1, Mathf.Round(worldSize.y / tileWorld.y)));
+            var bestCost = float.MaxValue;
+            var max = Mathf.Max(4, Mathf.CeilToInt(ideal * 2) + 2);
+            for (int x = 1; x <= max; x++) {
+                var y = Mathf.Max(1, Mathf.Round(x * ratio));
+                var tile = new Vector2(worldSize.x / x, worldSize.y / y);
+                var anisotropy = Mathf.Abs(Mathf.Log((tile.x / tile.y) / (tileWorld.x / tileWorld.y)));
+                var scale = Mathf.Abs(Mathf.Log(tile.x / tileWorld.x));
+                var cost = anisotropy * 4f + scale;
+                if (cost < bestCost) {
+                    bestCost = cost;
+                    best = new Vector2(x, y);
+                }
+            }
+            return best;
         }
 
         private static bool IsColor(HotspotMap map) => map == HotspotMap.BaseColor;
@@ -103,7 +129,7 @@ namespace HarryTools.ProBuilderExtensions.Generator {
             get {
                 if (data != null) return data;
                 data = Create(RenderTextureFormat.ARGBHalf, false);
-                Graphics.Blit(Texture2D.blackTexture, data, material, DataPass);
+                Blit(data, DataPass);
                 material.SetTexture(DataTexId, data);
                 return data;
             }
@@ -117,20 +143,27 @@ namespace HarryTools.ProBuilderExtensions.Generator {
                 case HotspotMap.Height:
                 case HotspotMap.Wear:
                     material.SetInt("_Channel", map == HotspotMap.Height ? 0 : 1);
-                    Graphics.Blit(Texture2D.blackTexture, rt, material, ChannelPass);
+                    Blit(rt, ChannelPass);
                     break;
                 default:
-                    Graphics.Blit(Texture2D.blackTexture, rt, material, 1 + (int)map);
+                    Blit(rt, 1 + (int)map);
                     break;
             }
             targets[map] = rt;
             return rt;
         }
 
+        /// <summary>Blits a pass without leaving <see cref="RenderTexture.active"/> changed (IMGUI draws into it).</summary>
+        private void Blit(RenderTexture target, int pass) {
+            var previous = RenderTexture.active;
+            Graphics.Blit(Texture2D.blackTexture, target, material, pass);
+            RenderTexture.active = previous;
+        }
+
         /// <summary>Returns a readable copy of the map. The caller owns (and must destroy) the texture.</summary>
         public Texture2D ReadBack(HotspotMap map, bool linear) {
-            var rt = Render(map);
             var previous = RenderTexture.active;
+            var rt = Render(map);
             RenderTexture.active = rt;
             var tex = new Texture2D(Size.x, Size.y, TextureFormat.RGBA32, false, linear);
             tex.ReadPixels(new Rect(0, 0, Size.x, Size.y), 0, 0, false);

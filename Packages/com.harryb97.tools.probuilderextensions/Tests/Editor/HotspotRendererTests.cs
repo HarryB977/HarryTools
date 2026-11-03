@@ -187,5 +187,38 @@ namespace HarryTools.ProBuilderExtensions.Tests {
             neighbours /= 63f;
             Assert.LessOrEqual(seam, neighbours * 3f + 0.5f);
         }
+        [Test]
+        public void Rendering_RestoresTheActiveRenderTexture() {
+            var mine = new RenderTexture(4, 4, 0);
+            created.Add(mine);
+            var previous = RenderTexture.active;
+            RenderTexture.active = mine;
+            try {
+                using (var renderer = new HotspotRenderer(CentredPatch(), Size)) {
+                    renderer.Render(HotspotMap.Normal);
+                    Assert.AreEqual(mine, RenderTexture.active, "after Render");
+                    var tex = renderer.ReadBack(HotspotMap.BaseColor, false);
+                    created.Add(tex);
+                    Assert.AreEqual(mine, RenderTexture.active, "after ReadBack");
+                }
+                Assert.AreEqual(mine, RenderTexture.active, "after Dispose");
+            } finally {
+                RenderTexture.active = previous;
+            }
+        }
+
+        [Test]
+        public void Repetitions_KeepTheLayerUndistorted(
+            [Values(8f, 4f)] float atlasHeight, [Values(1.5f, 0.7f, 2.3f)] float tileWidth, [Values(1f, 0.5f)] float tileAspect) {
+            var world = new Vector2(8f, atlasHeight);
+            var tile = new Vector2(tileWidth, tileWidth * tileAspect);
+            var reps = HotspotRenderer.ComputeRepetitions(world, tile);
+            Assert.AreEqual(Mathf.Round(reps.x), reps.x);
+            Assert.AreEqual(Mathf.Round(reps.y), reps.y);
+            var actual = new Vector2(world.x / reps.x, world.y / reps.y);
+            var anisotropy = Mathf.Abs(Mathf.Log((actual.x / actual.y) / (tile.x / tile.y)));
+            Assert.Less(anisotropy, Mathf.Log(1.05f), $"tile {actual} vs {tile}");
+            Assert.Less(Mathf.Abs(Mathf.Log(actual.x / tile.x)), Mathf.Log(1.35f), $"scale {actual.x} vs {tile.x}");
+        }
     }
 }

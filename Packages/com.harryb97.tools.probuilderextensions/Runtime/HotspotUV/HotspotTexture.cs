@@ -44,7 +44,9 @@ namespace HarryTools.ProBuilderExtensions.HotspotUV {
             if (layout != null) return layout.patches[index];
             var size = TextureSize;
             var r = rects[index].Normalized();
-            return HotspotPatch.Default(new Rect(r.x / size.x, r.y / size.y, r.width / size.x, r.height / size.y));
+            var patch = HotspotPatch.Default(new Rect(r.x / size.x, r.y / size.y, r.width / size.x, r.height / size.y));
+            patch.inset = 0; // pixel rects are drawn by hand and were never inset
+            return patch;
         }
 
         /// <summary>Size of the patch in texture pixels.</summary>
@@ -91,7 +93,8 @@ namespace HarryTools.ProBuilderExtensions.HotspotUV {
                 for (int o = 0; o < (canRotate ? 2 : 1); o++) {
                     var rectSize = o == 0 ? size : new Vector2(size.y, size.x);
                     var inTolerance = true;
-                    if (tpu > 0) {
+                    // The scale tolerance only applies to layouts; hand-drawn rects keep the original best-match behaviour.
+                    if (tpu > 0 && layout != null) {
                         var world = rectSize / tpu;
                         inTolerance = Mathf.Abs(Mathf.Log(faceSize.x / world.x)) <= maxLog &&
                                       Mathf.Abs(Mathf.Log(faceSize.y / world.y)) <= maxLog;

@@ -6,9 +6,11 @@
     - Bisel y desgaste procedurales con un control de intensidad: desde un bisel suave con un leve cambio de tono hasta desconchones que dejan ver la capa inferior
     - Nuevo asset Hotspot Layout con opciones por patch: Allow Rotation, Allow Mirror X/Y, Allow Tiling e Inset
     - Cinco layouts de serie para interiores (Walls, Floors, Trims, Frames, Generic) a 512 px/m
-    - Hotspot UV: tolerancia de escala (por defecto ±25%), franjas de tiling para caras largas, espejo aleatorio, inset y aviso cuando una cara no encaja en ningún patch
+    - Hotspot UV: tolerancia de escala para los Hotspot Texture con layout (por defecto ±25%), franjas de tiling para caras largas, espejo aleatorio, inset y aviso cuando una cara no encaja en ningún patch
     - El Rect Creator edita también Hotspot Layouts y las opciones de cada patch
     - Los Hotspot Texture existentes siguen funcionando sin cambios
+    - `HotspotTexture.FindBestRect` pasa a ser `FindBestPatch` y cambia la firma de `HotspotAction.HotspotFace`
+    - Una receta duplicada genera sus propias salidas en vez de sobrescribir las de la original
 
 ## 1.0.0
 
