@@ -18,5 +18,17 @@
     "com.harryb97.tools.logger": "1.0.0",
     "com.harryb97.tools.domainreload": "1.0.1",
     "com.unity.ugui": "2.0.0"
-  }
+  },
+  "samples": [
+    {
+      "displayName": "HeroUI",
+      "description": "Plantillas de controles (botones, toggles, inputs, paneles) con tema, la vista de diálogo y una pantalla de carga de ejemplo",
+      "path": "Samples~/HeroUI"
+    },
+    {
+      "displayName": "Demo",
+      "description": "Escena de ejemplo con las tres capas: vistas, popups en cola y una pantalla de carga con ShowWhile",
+      "path": "Samples~/Demo"
+    }
+  ]
 }
