@@ -25,7 +25,9 @@ namespace HarryTools.ProBuilderExtensions.HotspotUV.Editor {
 
         [OnOpenAsset(1)]
         public static bool OpenHotspotAsset(int instanceID, int line) {
+#pragma warning disable CS0618 // InstanceIDToObject is obsolete in 6000.3 but required for 6000.0 compatibility.
             var asset = EditorUtility.InstanceIDToObject(instanceID);
+#pragma warning restore CS0618
             if (asset is HotspotTexture || asset is HotspotLayout) {
                 Open(asset);
                 return true;
