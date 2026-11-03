@@ -85,6 +85,7 @@ namespace HarryTools.UI {
         /// <summary> Muestra esta vista en su capa. Si no tiene capa, en la capa de Views del UIRoot </summary>
         public void Show() {
             if (Layer) Layer.Show(this);
+            else if (UI.HasRoot) UI.Views.Show(this);
             else Logger.LogWarning("UI", $"La vista '{name}' no pertenece a ninguna capa y no hay ningún UIRoot activo");
         }
 

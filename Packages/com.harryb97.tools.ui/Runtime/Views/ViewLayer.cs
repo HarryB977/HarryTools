@@ -23,6 +23,7 @@ namespace HarryTools.UI {
         #region Properties
         public UILayerKind Kind => kind;
         public int SortingOrderBase => sortingOrderBase;
+        public UIRoot Root { get; internal set; }
 
         /// <summary> Vistas visibles, de abajo arriba </summary>
         public IReadOnlyList<View> VisibleViews => visible;
@@ -69,9 +70,14 @@ namespace HarryTools.UI {
                 return true;
             }
 
+            if (Root) return Root.TryGetPrefab(_type, out _prefab);
+
             _prefab = null;
             return false;
         }
+
+        /// <summary> Instancia el prefab oculto, si no hay ya una instancia de su tipo </summary>
+        internal View Preload(View _prefab) => GetOrCreateInstance(_prefab);
         #endregion
 
         // =================================================

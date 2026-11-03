@@ -75,6 +75,10 @@ namespace HarryTools.UI
 
         private void OnEnable()
         {
+            // Reset() solo se ejecuta en el editor; al añadir el componente en runtime hay que buscar el Graphic aquí
+            if (!_graphic)
+                _graphic = GetComponent<Graphic>();
+
             ResolveProvider();
 
             _colorsDirty = true;
