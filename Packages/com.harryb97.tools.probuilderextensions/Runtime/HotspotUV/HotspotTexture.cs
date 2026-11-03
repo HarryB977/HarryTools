@@ -6,66 +6,157 @@ namespace HarryTools.ProBuilderExtensions.HotspotUV {
     public class HotspotTexture : ScriptableObject {
         public Texture target;
 
-        [Tooltip("Texels per world unit. Used to pick the hotspot whose size best matches the face. Set to 0 to match only by aspect ratio.")]
+        [Tooltip("Optional. When set, the patches come from this layout instead of the rects below.")]
+        public HotspotLayout layout;
+
+        [Tooltip("With a layout: world width (metres) of the atlas, overriding the layout's. 0 = use the layout's.")]
+        [Min(0)] public float worldWidthOverride;
+
+        [Tooltip("Without a layout: texels per world unit, used to pick the hotspot whose size best matches the face. Set to 0 to match only by aspect ratio.")]
         public float texelsPerUnit = 256f;
 
-        // Rects are stored in texture pixels, with the origin at the top-left corner of the texture.
+        // Rects are stored in texture pixels, with the origin at the top-left corner of the texture. Ignored when a layout is set.
         public List<Rect> rects = new List<Rect>();
 
-        public bool IsValid => target != null && rects != null && rects.Count > 0;
+        private static readonly System.Random SharedRandom = new();
 
-        public Vector2 TextureSize => target != null ? new Vector2(target.width, target.height) : Vector2.one;
+        public int PatchCount => layout != null ? layout.patches.Count : rects?.Count ?? 0;
 
-        /// <summary>
-        /// Returns the rect at <paramref name="index"/> in UV space (0-1, origin at the bottom-left).
-        /// </summary>
-        public Rect GetUVRect(int index) {
+        public bool IsValid => (target != null || layout != null) && PatchCount > 0;
+
+        public Vector2 TextureSize {
+            get {
+                if (target != null) return new Vector2(target.width, target.height);
+                if (layout != null) return layout.GetTextureSize(layout.recommendedResolution);
+                return Vector2.one;
+            }
+        }
+
+        public float EffectiveTexelsPerUnit {
+            get {
+                if (layout == null) return texelsPerUnit;
+                var width = worldWidthOverride > 0 ? worldWidthOverride : layout.worldWidth;
+                return width > 0 ? TextureSize.x / width : 0f;
+            }
+        }
+
+        public HotspotPatch GetPatch(int index) {
+            if (layout != null) return layout.patches[index];
             var size = TextureSize;
             var r = rects[index].Normalized();
-            return Rect.MinMaxRect(r.xMin / size.x, 1 - r.yMax / size.y, r.xMax / size.x, 1 - r.yMin / size.y);
+            return HotspotPatch.Default(new Rect(r.x / size.x, r.y / size.y, r.width / size.x, r.height / size.y));
+        }
+
+        /// <summary>Size of the patch in texture pixels.</summary>
+        public Vector2 GetPixelSize(int index) {
+            if (layout != null) return layout.GetPixelRect(index, TextureSize).size;
+            return rects[index].Normalized().size;
+        }
+
+        public TilingAxis GetTilingAxis(int index) => layout != null ? layout.GetTilingAxis(index) : TilingAxis.None;
+
+        /// <summary>
+        /// Returns the patch at <paramref name="index"/> in UV space (0-1, origin at the bottom-left).
+        /// </summary>
+        public Rect GetUVRect(int index) {
+            var r = GetPatch(index).rect;
+            return Rect.MinMaxRect(r.xMin, 1 - r.yMax, r.xMax, 1 - r.yMin);
         }
 
         /// <summary>
-        /// Picks the hotspot that best matches a face of <paramref name="faceSize"/> (world units),
-        /// prioritising aspect ratio and then size. Among rects that score within
-        /// <paramref name="randomTolerance"/> of the best one, a random one is chosen.
+        /// Picks the patch that best matches a face of <paramref name="faceSize"/> (world units).
+        /// With a texel density, only patches whose world size is within the scale tolerance on both axes are
+        /// candidates; if none is, a tiling strip whose cross size fits is used, and failing that the closest patch
+        /// (flagged as out of tolerance). Among candidates scoring within the random tolerance of the best, one is
+        /// picked at random.
         /// </summary>
-        /// <returns>The rect index, or -1 if there is no valid rect.</returns>
-        public int FindBestRect(Vector2 faceSize, bool allowRotation, float randomTolerance, out bool rotated) {
-            rotated = false;
-            if (!IsValid || faceSize.x <= Mathf.Epsilon || faceSize.y <= Mathf.Epsilon)
-                return -1;
+        public HotspotMatch FindBestPatch(Vector2 faceSize, HotspotMatchSettings settings) {
+            if (!IsValid || !(faceSize.x > Mathf.Epsilon) || !(faceSize.y > Mathf.Epsilon) ||
+                float.IsInfinity(faceSize.x) || float.IsInfinity(faceSize.y))
+                return HotspotMatch.Invalid;
 
-            var scores = new List<(int index, bool rotated, float score)>();
-            var best = float.MaxValue;
+            var random = settings.random ?? SharedRandom;
+            var tpu = EffectiveTexelsPerUnit;
+            var maxLog = Mathf.Log(1f + Mathf.Max(0f, settings.scaleTolerance)) + 1e-5f;
 
-            for (int i = 0; i < rects.Count; i++) {
-                var r = rects[i].Normalized();
-                if (r.width <= 0 || r.height <= 0) continue;
+            var all = new List<(int index, bool rotated, float score, bool inTolerance)>();
+            var tiling = new List<(int index, bool rotated, float error)>();
 
-                for (int o = 0; o < (allowRotation ? 2 : 1); o++) {
-                    var rectSize = o == 0 ? r.size : new Vector2(r.height, r.width);
-                    var score = Score(faceSize, rectSize);
-                    scores.Add((i, o == 1, score));
-                    best = Mathf.Min(best, score);
+            for (int i = 0; i < PatchCount; i++) {
+                var size = GetPixelSize(i);
+                if (size.x <= 0 || size.y <= 0) continue;
+                var canRotate = settings.allowRotation && GetPatch(i).allowRotation;
+                var axis = GetTilingAxis(i);
+
+                for (int o = 0; o < (canRotate ? 2 : 1); o++) {
+                    var rectSize = o == 0 ? size : new Vector2(size.y, size.x);
+                    var inTolerance = true;
+                    if (tpu > 0) {
+                        var world = rectSize / tpu;
+                        inTolerance = Mathf.Abs(Mathf.Log(faceSize.x / world.x)) <= maxLog &&
+                                      Mathf.Abs(Mathf.Log(faceSize.y / world.y)) <= maxLog;
+
+                        if (axis != TilingAxis.None) {
+                            // The cross axis is the one that does not repeat, measured in face space.
+                            var repeatsAlongFaceX = (axis == TilingAxis.Horizontal) != (o == 1);
+                            var crossRatio = repeatsAlongFaceX ? faceSize.y / world.y : faceSize.x / world.x;
+                            var error = Mathf.Abs(Mathf.Log(crossRatio));
+                            if (error <= maxLog) tiling.Add((i, o == 1, error));
+                        }
+                    }
+                    all.Add((i, o == 1, Score(faceSize, rectSize, tpu), inTolerance));
                 }
             }
 
-            if (scores.Count == 0) return -1;
+            if (all.Count == 0) return HotspotMatch.Invalid;
 
-            var candidates = scores.FindAll(s => s.score <= best + randomTolerance);
-            var pick = candidates[Random.Range(0, candidates.Count)];
-            rotated = pick.rotated;
-            return pick.index;
+            var candidates = all.FindAll(c => c.inTolerance);
+            int index;
+            bool rotated, outOfTolerance = false;
+
+            if (candidates.Count > 0) {
+                var best = float.MaxValue;
+                foreach (var c in candidates) best = Mathf.Min(best, c.score);
+                candidates = candidates.FindAll(c => c.score <= best + settings.randomTolerance);
+                var pick = candidates[random.Next(candidates.Count)];
+                (index, rotated) = (pick.index, pick.rotated);
+            } else if (tiling.Count > 0) {
+                var best = tiling[0];
+                foreach (var t in tiling) if (t.error < best.error) best = t;
+                (index, rotated) = (best.index, best.rotated);
+            } else {
+                var best = all[0];
+                foreach (var c in all) if (c.score < best.score) best = c;
+                (index, rotated, outOfTolerance) = (best.index, best.rotated, true);
+            }
+
+            var chosen = GetPatch(index);
+            return new HotspotMatch {
+                index = index,
+                rotated = rotated,
+                tiling = GetTilingAxis(index),
+                outOfTolerance = outOfTolerance,
+                mirrorX = settings.allowMirror && chosen.allowMirrorX && random.Next(2) == 1,
+                mirrorY = settings.allowMirror && chosen.allowMirrorY && random.Next(2) == 1,
+            };
         }
 
-        private float Score(Vector2 faceSize, Vector2 rectSize) {
+        /// <summary>Legacy entry point, kept until Hotspot UV moves to <see cref="FindBestPatch"/>.</summary>
+        public int FindBestRect(Vector2 faceSize, bool allowRotation, float randomTolerance, out bool rotated) {
+            var match = FindBestPatch(faceSize, new HotspotMatchSettings {
+                allowRotation = allowRotation, randomTolerance = randomTolerance, scaleTolerance = 0.25f,
+            });
+            rotated = match.rotated;
+            return match.index;
+        }
+
+        private static float Score(Vector2 faceSize, Vector2 rectSize, float tpu) {
             // Logarithmic ratios so that "twice as big" and "half as big" are penalised equally.
             var aspectError = Mathf.Abs(Mathf.Log((faceSize.x / faceSize.y) / (rectSize.x / rectSize.y)));
             var score = aspectError * 2f;
 
-            if (texelsPerUnit > 0) {
-                var faceTexels = faceSize * texelsPerUnit;
+            if (tpu > 0) {
+                var faceTexels = faceSize * tpu;
                 var sizeError = Mathf.Abs(Mathf.Log((faceTexels.x * faceTexels.y) / (rectSize.x * rectSize.y)));
                 score += sizeError * 0.5f;
             }
