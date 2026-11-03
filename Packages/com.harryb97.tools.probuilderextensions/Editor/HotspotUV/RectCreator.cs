@@ -4,6 +4,7 @@ using UnityEditor.Callbacks;
 using System;
 
 namespace HarryTools.ProBuilderExtensions.HotspotUV.Editor {
+    /// <summary>Draws and edits the patches of a Hotspot Layout, or the pixel rects of a Hotspot Texture without one.</summary>
     public class RectCreator : EditorWindow {
 
         [MenuItem("Tools/HarryTools/ProBuilder Extensions/Hotspot Rect Creator")]
@@ -16,10 +17,17 @@ namespace HarryTools.ProBuilderExtensions.HotspotUV.Editor {
             return window;
         }
 
+        public static RectCreator Open(UnityEngine.Object asset) {
+            var window = ShowWindow();
+            window.SetTarget(asset);
+            return window;
+        }
+
         [OnOpenAsset(1)]
-        public static bool OpenHostspotTexture(int instanceID, int line) {
-            if (EditorUtility.InstanceIDToObject(instanceID) is HotspotTexture hotspot) {
-                ShowWindow().SetTarget(hotspot);
+        public static bool OpenHotspotAsset(int instanceID, int line) {
+            var asset = EditorUtility.InstanceIDToObject(instanceID);
+            if (asset is HotspotTexture || asset is HotspotLayout) {
+                Open(asset);
                 return true;
             }
             return false;
@@ -29,28 +37,73 @@ namespace HarryTools.ProBuilderExtensions.HotspotUV.Editor {
 
         // Serialized so the window keeps its target after a domain reload.
         [SerializeField] private HotspotTexture editingHotspotTexture;
+        [SerializeField] private HotspotLayout editingLayout;
+        [SerializeField] private Texture previewTexture;
+        [SerializeField] private int selected = -1;
         [SerializeField] private int gridLevel = 4;
         [SerializeField] private float zoomScale = 1.0f;
         [SerializeField] private Vector2 _zoomCoordsOrigin = new Vector2(-20, -20);
 
-        [NonSerialized] private Rect toolWindowRect = new Rect(10, 0, 280f, 0f);
+        [NonSerialized] private Rect toolWindowRect = new Rect(10, 0, 300f, 0f);
         [NonSerialized] private Rect _zoomArea;
         [NonSerialized] private bool isDragging;
         [NonSerialized] private Vector2 dragStart;
 
         private int GridStep => GridSizes[Mathf.Clamp(gridLevel, 0, GridSizes.Length - 1)];
 
+        /// <summary>The layout being edited: the asset itself, or the layout of the Hotspot Texture.</summary>
+        private HotspotLayout Layout => editingLayout != null ? editingLayout : editingHotspotTexture != null ? editingHotspotTexture.layout : null;
+
+        private UnityEngine.Object UndoTarget => Layout != null ? Layout : editingHotspotTexture;
+
+        private bool HasTarget => UndoTarget != null;
+
+        private Texture BackgroundTexture {
+            get {
+                if (editingHotspotTexture != null && editingHotspotTexture.target != null) return editingHotspotTexture.target;
+                return previewTexture;
+            }
+        }
+
         private Vector2 TextureSize {
             get {
                 if (editingHotspotTexture != null && editingHotspotTexture.target != null)
                     return new Vector2(editingHotspotTexture.target.width, editingHotspotTexture.target.height);
+                if (Layout != null) return Layout.GetTextureSize(Layout.recommendedResolution);
                 return new Vector2(512, 512);
             }
         }
 
-        private void SetTarget(HotspotTexture target) {
-            editingHotspotTexture = target;
+        private int Count => Layout != null ? Layout.patches.Count : editingHotspotTexture != null ? editingHotspotTexture.rects.Count : 0;
+
+        private Rect GetPixelRect(int index) =>
+            Layout != null ? Layout.GetPixelRect(index, TextureSize) : editingHotspotTexture.rects[index].Normalized();
+
+        private void AddPixelRect(Rect rect) {
+            Undo.RecordObject(UndoTarget, "Add Hotspot Rect");
+            if (Layout != null) {
+                var size = TextureSize;
+                Layout.patches.Add(HotspotPatch.Default(new Rect(rect.x / size.x, rect.y / size.y, rect.width / size.x, rect.height / size.y)));
+            } else {
+                editingHotspotTexture.rects.Add(rect);
+            }
+            selected = Count - 1;
+            EditorUtility.SetDirty(UndoTarget);
+        }
+
+        private void RemoveAt(int index) {
+            Undo.RecordObject(UndoTarget, "Delete Hotspot Rect");
+            if (Layout != null) Layout.patches.RemoveAt(index);
+            else editingHotspotTexture.rects.RemoveAt(index);
+            selected = -1;
+            EditorUtility.SetDirty(UndoTarget);
+        }
+
+        private void SetTarget(UnityEngine.Object target) {
+            editingHotspotTexture = target as HotspotTexture;
+            editingLayout = target as HotspotLayout;
             isDragging = false;
+            selected = -1;
 
             // Pick a grid that splits the texture in ~16 cells.
             var size = Mathf.Min(TextureSize.x, TextureSize.y);
@@ -74,8 +127,8 @@ namespace HarryTools.ProBuilderExtensions.HotspotUV.Editor {
             EditorZoomArea.Begin(zoomScale, _zoomArea);
             var textureSize = TextureSize;
             var drawRect = new Rect(-_zoomCoordsOrigin, textureSize);
-            if (editingHotspotTexture != null && editingHotspotTexture.target != null)
-                EditorGUI.DrawPreviewTexture(drawRect, editingHotspotTexture.target, null, ScaleMode.StretchToFill, 0);
+            if (BackgroundTexture != null)
+                EditorGUI.DrawPreviewTexture(drawRect, BackgroundTexture, null, ScaleMode.StretchToFill, 0);
             DrawGrid(drawRect);
             HandleRects(mouseOverToolWindow);
             EditorZoomArea.End();
@@ -133,6 +186,15 @@ namespace HarryTools.ProBuilderExtensions.HotspotUV.Editor {
             return c;
         }
 
+        private static string Tags(HotspotPatch patch) {
+            var tags = string.Empty;
+            if (patch.allowRotation) tags += "R";
+            if (patch.allowMirrorX) tags += "X";
+            if (patch.allowMirrorY) tags += "Y";
+            if (patch.allowTiling) tags += "T";
+            return tags;
+        }
+
         /// <summary>Mouse position (already in zoom space) converted to texture pixels, snapped and clamped.</summary>
         private Vector2 SnappedTexturePosition(Vector2 mousePosition) {
             var p = mousePosition + _zoomCoordsOrigin;
@@ -145,38 +207,38 @@ namespace HarryTools.ProBuilderExtensions.HotspotUV.Editor {
 
         private int RectUnderMouse(Vector2 mousePosition) {
             var p = mousePosition + _zoomCoordsOrigin;
-            var rects = editingHotspotTexture.rects;
             // Last drawn is on top.
-            for (int i = rects.Count - 1; i >= 0; i--)
-                if (rects[i].Normalized().Contains(p)) return i;
+            for (int i = Count - 1; i >= 0; i--)
+                if (GetPixelRect(i).Contains(p)) return i;
             return -1;
         }
 
         private void HandleRects(bool mouseOverToolWindow) {
-            if (editingHotspotTexture == null) return;
+            if (!HasTarget) return;
 
             var e = Event.current;
             int controlId = GUIUtility.GetControlID(FocusType.Passive);
-            var rects = editingHotspotTexture.rects;
             var hovered = mouseOverToolWindow || isDragging ? -1 : RectUnderMouse(e.mousePosition);
 
             if (e.type == EventType.Repaint) {
-                for (int i = 0; i < rects.Count; i++) {
-                    var drawRect = rects[i].Normalized();
+                var label = new GUIStyle(EditorStyles.miniBoldLabel) { normal = { textColor = Color.white } };
+                for (int i = 0; i < Count; i++) {
+                    var drawRect = GetPixelRect(i);
                     drawRect.position -= _zoomCoordsOrigin;
                     var c = RectColor(i);
-                    if (i == hovered) c.a = 0.55f;
+                    if (i == hovered || i == selected) c.a = 0.55f;
                     EditorGUI.DrawRect(drawRect, c);
-                    using (new HandlesColorScope(i == hovered ? Color.yellow : Color.green))
+                    using (new HandlesColorScope(i == selected ? Color.cyan : i == hovered ? Color.yellow : Color.green))
                         DrawRectOutline(drawRect);
+                    if (Layout != null)
+                        GUI.Label(new Rect(drawRect.x + 2, drawRect.y + 1, 60, 16), Tags(Layout.patches[i]), label);
                 }
 
                 if (isDragging) {
+                    var end = SnappedTexturePosition(e.mousePosition);
                     var preview = Rect.MinMaxRect(
-                        Mathf.Min(dragStart.x, SnappedTexturePosition(e.mousePosition).x),
-                        Mathf.Min(dragStart.y, SnappedTexturePosition(e.mousePosition).y),
-                        Mathf.Max(dragStart.x, SnappedTexturePosition(e.mousePosition).x),
-                        Mathf.Max(dragStart.y, SnappedTexturePosition(e.mousePosition).y));
+                        Mathf.Min(dragStart.x, end.x), Mathf.Min(dragStart.y, end.y),
+                        Mathf.Max(dragStart.x, end.x), Mathf.Max(dragStart.y, end.y));
                     preview.position -= _zoomCoordsOrigin;
                     using (new HandlesColorScope(Color.cyan))
                         DrawRectOutline(preview);
@@ -197,9 +259,7 @@ namespace HarryTools.ProBuilderExtensions.HotspotUV.Editor {
                         GUIUtility.hotControl = controlId;
                         e.Use();
                     } else if (e.button == 1 && hovered >= 0) {
-                        Undo.RecordObject(editingHotspotTexture, "Delete Hotspot Rect");
-                        rects.RemoveAt(hovered);
-                        EditorUtility.SetDirty(editingHotspotTexture);
+                        RemoveAt(hovered);
                         e.Use();
                     }
                     break;
@@ -219,11 +279,9 @@ namespace HarryTools.ProBuilderExtensions.HotspotUV.Editor {
                             Mathf.Min(dragStart.x, end.x), Mathf.Min(dragStart.y, end.y),
                             Mathf.Max(dragStart.x, end.x), Mathf.Max(dragStart.y, end.y));
 
-                        if (rect.width > 0 && rect.height > 0) {
-                            Undo.RecordObject(editingHotspotTexture, "Add Hotspot Rect");
-                            rects.Add(rect);
-                            EditorUtility.SetDirty(editingHotspotTexture);
-                        }
+                        // A click without dragging selects the patch under the mouse.
+                        if (rect.width > 0 && rect.height > 0) AddPixelRect(rect);
+                        else selected = RectUnderMouse(e.mousePosition);
                         e.Use();
                     }
                     break;
@@ -261,16 +319,23 @@ namespace HarryTools.ProBuilderExtensions.HotspotUV.Editor {
 
         private void DrawWindow(int id) {
             EditorGUI.BeginChangeCheck();
-            var newTarget = (HotspotTexture)EditorGUILayout.ObjectField("Hotspot", editingHotspotTexture, typeof(HotspotTexture), false);
-            if (EditorGUI.EndChangeCheck())
+            var current = editingLayout != null ? (UnityEngine.Object)editingLayout : editingHotspotTexture;
+            var newTarget = EditorGUILayout.ObjectField("Asset", current, typeof(ScriptableObject), false);
+            if (EditorGUI.EndChangeCheck() && (newTarget == null || newTarget is HotspotLayout || newTarget is HotspotTexture))
                 SetTarget(newTarget);
 
-            if (editingHotspotTexture == null) {
-                EditorGUILayout.HelpBox("Select or double-click a Hotspot Texture asset.", MessageType.Info);
+            if (!HasTarget) {
+                EditorGUILayout.HelpBox("Select or double-click a Hotspot Layout or Hotspot Texture asset.", MessageType.Info);
                 return;
             }
-            if (editingHotspotTexture.target == null)
+
+            if (editingHotspotTexture != null && editingHotspotTexture.layout != null)
+                EditorGUILayout.HelpBox($"This Hotspot Texture uses the layout '{editingHotspotTexture.layout.name}'; you are editing the layout.", MessageType.Info);
+            else if (editingHotspotTexture != null && editingHotspotTexture.target == null)
                 EditorGUILayout.HelpBox("The Hotspot Texture has no texture assigned.", MessageType.Warning);
+
+            if (editingLayout != null)
+                previewTexture = (Texture)EditorGUILayout.ObjectField(new GUIContent("Preview", "Background texture shown only in this window."), previewTexture, typeof(Texture), false);
 
             using (new EditorGUILayout.HorizontalScope()) {
                 EditorGUILayout.LabelField("Grid Size (px)", GridStep.ToString());
@@ -278,22 +343,48 @@ namespace HarryTools.ProBuilderExtensions.HotspotUV.Editor {
                 if (GUILayout.Button(">", GUILayout.Width(24))) gridLevel = Mathf.Min(GridSizes.Length - 1, gridLevel + 1);
             }
 
-            EditorGUILayout.LabelField("Rects", editingHotspotTexture.rects.Count.ToString());
+            EditorGUILayout.LabelField("Rects", Count.ToString());
+
+            if (Layout != null && selected >= 0 && selected < Count)
+                DrawPatchOptions();
 
             using (new EditorGUILayout.HorizontalScope()) {
                 if (GUILayout.Button("Frame"))
                     FrameTexture();
-                using (new EditorGUI.DisabledScope(editingHotspotTexture.rects.Count == 0)) {
+                using (new EditorGUI.DisabledScope(Count == 0)) {
                     if (GUILayout.Button("Clear All") &&
-                        EditorUtility.DisplayDialog("Clear Hotspot Rects", "Remove all rects from this Hotspot Texture?", "Clear", "Cancel")) {
-                        Undo.RecordObject(editingHotspotTexture, "Clear Hotspot Rects");
-                        editingHotspotTexture.rects.Clear();
-                        EditorUtility.SetDirty(editingHotspotTexture);
+                        EditorUtility.DisplayDialog("Clear Hotspot Rects", "Remove all rects?", "Clear", "Cancel")) {
+                        Undo.RecordObject(UndoTarget, "Clear Hotspot Rects");
+                        if (Layout != null) Layout.patches.Clear();
+                        else editingHotspotTexture.rects.Clear();
+                        selected = -1;
+                        EditorUtility.SetDirty(UndoTarget);
                     }
                 }
             }
 
-            EditorGUILayout.LabelField("LMB drag: create · RMB: delete · MMB: pan · Wheel: zoom", EditorStyles.miniLabel);
+            EditorGUILayout.LabelField("LMB drag: create · LMB click: select · RMB: delete · MMB: pan · Wheel: zoom", EditorStyles.miniLabel);
+        }
+
+        private void DrawPatchOptions() {
+            var patch = Layout.patches[selected];
+            var size = GetPixelRect(selected).size;
+            EditorGUILayout.LabelField($"Patch {selected}", $"{size.x:0}×{size.y:0} px", EditorStyles.boldLabel);
+
+            EditorGUI.BeginChangeCheck();
+            patch.allowRotation = EditorGUILayout.Toggle(new GUIContent("Allow Rotation", "Allow rotating the patch 90° to fit a face."), patch.allowRotation);
+            patch.allowMirrorX = EditorGUILayout.Toggle(new GUIContent("Allow Mirror X", "Allow randomly flipping the patch horizontally."), patch.allowMirrorX);
+            patch.allowMirrorY = EditorGUILayout.Toggle(new GUIContent("Allow Mirror Y", "Allow randomly flipping the patch vertically."), patch.allowMirrorY);
+            patch.allowTiling = EditorGUILayout.Toggle(new GUIContent("Allow Tiling", "Repeat instead of stretching. The patch must span the full width or height."), patch.allowTiling);
+            patch.inset = Mathf.Max(0, EditorGUILayout.IntField(new GUIContent("Inset (px)", "Pixels to shrink the patch by on each side when mapping."), patch.inset));
+            if (EditorGUI.EndChangeCheck()) {
+                Undo.RecordObject(Layout, "Edit Hotspot Patch");
+                Layout.patches[selected] = patch;
+                EditorUtility.SetDirty(Layout);
+            }
+
+            if (patch.allowTiling && Layout.GetTilingAxis(selected) == TilingAxis.None)
+                EditorGUILayout.HelpBox("Tiling only works on patches spanning the full width or height.", MessageType.Warning);
         }
     }
 
