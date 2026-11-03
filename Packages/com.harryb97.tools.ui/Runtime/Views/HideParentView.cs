@@ -25,9 +25,9 @@ namespace HarryTools.UI
         {
             if (!_canHide) return;
 
-            var view = GetComponentInParent<MonoView>();
-            if (view && view.parentStack)
-                view.CloseMe();
+            var view = GetComponentInParent<View>();
+            if (view)
+                view.Hide();
         }
 
         public void OnPointerClick(PointerEventData eventData)
@@ -35,7 +35,7 @@ namespace HarryTools.UI
             if (!_canHide)
                 return;
 
-            var view = GetComponentInParent<MonoView>();
+            var view = GetComponentInParent<View>();
 
             Hide();
 

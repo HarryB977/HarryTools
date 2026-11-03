@@ -1,27 +1,13 @@
-using System.Collections;
 using UnityEngine;
 
-namespace HarryTools.UI
+namespace HarryTools.UI.HeroUI
 {
-    public class DialogView : MonoView
+    /// <summary> Vista de diálogo de ejemplo. Su transición (fade + slide) se configura en el prefab </summary>
+    public class DialogView : View
     {
         [SerializeField] RectTransform _content;
         [SerializeField] TMPro.TMP_Text _title;
         [SerializeField] TMPro.TMP_Text _message;
-
-        protected override IEnumerator OnEnterTransition()
-        {
-            var fade = ViewTransitions.FadeIn(this);
-            var slide = ViewTransitions.SlideFromLeft(_content);
-            return ViewTransitions.Parallel(fade, slide);
-        }
-
-        protected override IEnumerator OnExitTransition()
-        {
-            var fade = ViewTransitions.FadeOut(this);
-            var slide = ViewTransitions.SlideToRight(_content);
-            return ViewTransitions.Parallel(fade, slide);
-        }
 
         public void Setup(string title, string message)
         {

@@ -231,7 +231,7 @@ MonoBehaviour:
       m_PersistentCalls:
         m_Calls:
         - m_Target: {fileID: 90264453679707508}
-          m_TargetAssemblyTypeName: HarryTools.UI.DialogView, HarryTools.UI.Samples.HeroUI
+          m_TargetAssemblyTypeName: HarryTools.UI.HeroUI.DialogView, HarryTools.UI.Samples.HeroUI
           m_MethodName: CloseMe
           m_Mode: 1
           m_Arguments:

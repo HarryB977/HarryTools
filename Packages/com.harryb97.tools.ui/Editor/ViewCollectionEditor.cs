@@ -162,7 +162,7 @@ namespace HarryTools.UI.Editor
             for (int i = 0; i < _views.arraySize; i++)
             {
                 var element = _views.GetArrayElementAtIndex(i);
-                EditorGUILayout.ObjectField(element.objectReferenceValue, typeof(MonoView), false);
+                EditorGUILayout.ObjectField(element.objectReferenceValue, typeof(View), false);
             }
         }
 
@@ -176,12 +176,12 @@ namespace HarryTools.UI.Editor
 
     public static class ViewCollectionUtility
     {
-        public static List<MonoView> FindViewsInFolders(Object[] folders)
+        public static List<View> FindViewsInFolders(Object[] folders)
         {
             var folderPaths = new List<string>();
 
             if (folders == null)
-                return new List<MonoView>();
+                return new List<View>();
 
             foreach (var obj in folders)
             {
@@ -192,10 +192,10 @@ namespace HarryTools.UI.Editor
             }
 
             if (folderPaths.Count == 0)
-                return new List<MonoView>();
+                return new List<View>();
 
             var guids = AssetDatabase.FindAssets("t:Prefab", folderPaths.ToArray());
-            var monoViews = new List<MonoView>();
+            var views = new List<View>();
 
             foreach (string guid in guids)
             {
@@ -203,15 +203,15 @@ namespace HarryTools.UI.Editor
                 var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
                 if (prefab == null) continue;
 
-                var view = prefab.GetComponent<MonoView>();
+                var view = prefab.GetComponent<View>();
                 if (view != null)
-                    monoViews.Add(view);
+                    views.Add(view);
             }
 
-            monoViews.Sort((a, b) =>
+            views.Sort((a, b) =>
                 string.Compare(a.name, b.name, System.StringComparison.Ordinal));
 
-            return monoViews;
+            return views;
         }
 
         public static void RefreshViews(ViewCollection collection)

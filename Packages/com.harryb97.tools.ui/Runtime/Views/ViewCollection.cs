@@ -12,6 +12,6 @@ namespace HarryTools.UI
         [UsedImplicitly]
         public Object[] folders;
 
-        public MonoView[] views;
+        public View[] views;
     }
 }
