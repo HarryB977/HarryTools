@@ -1,5 +1,5 @@
 fileFormatVersion: 2
-guid: 804ecd59485c47d19d137ec47330b9be
+guid: 580ee3ee7b863dc41a39c924d46798d5
 TrueTypeFontImporter:
   externalObjects: {}
   serializedVersion: 4
@@ -11,7 +11,7 @@ TrueTypeFontImporter:
   fontNames:
   - Material Design Icons
   fallbackFontReferences: []
-  customCharacters: 0xF1
+  customCharacters: 
   fontRenderingMode: 0
   ascentCalculationMode: 1
   useLegacyBoundsCalculation: 0

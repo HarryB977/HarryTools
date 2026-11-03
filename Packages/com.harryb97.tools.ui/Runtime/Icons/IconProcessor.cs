@@ -4,10 +4,26 @@ using UnityEngine;
 
 namespace HarryTools.UI
 {
+    /// <summary>
+    /// Sustituye &lt;icon=nombre&gt; o &lt;icon=set:nombre&gt; por el glifo del set de iconos en el texto TMP.
+    /// </summary>
     [ExecuteInEditMode]
     public class IconProcessor : MonoBehaviour, ITextPreprocessor
     {
         [SerializeField] private TMP_Text _text;
+        [Tooltip("Biblioteca de sets de iconos. Si está vacía, se usa la del paquete")]
+        [SerializeField] private IconLibrary _library;
+
+        /// <summary> Biblioteca usada para resolver los iconos (la del paquete si no se asigna otra) </summary>
+        public IconLibrary Library
+        {
+            get => _library ? _library : IconLibrary.Instance;
+            set
+            {
+                _library = value;
+                if (_text) _text.SetAllDirty();
+            }
+        }
 
         public TMP_Text textComponent
         {
@@ -115,9 +131,11 @@ namespace HarryTools.UI
 
                 int tagEnd = cursor + 1;
 
-                if (MaterialIcons.ICONS_MAP.TryGetValue(iconName, out string icon))
+                var library = Library;
+                if (library && library.TryResolve(iconName, out var set, out var glyph) && set.FontAsset)
                 {
-                    var processed = $"<font=\"MaterialIcons\">{icon}</font>";
+                    RegisterFont(set.FontAsset);
+                    var processed = $"<font=\"{set.FontAsset.name}\">{glyph.Character}</font>";
                     text = string.Concat(text[..start], processed, text[tagEnd..]);
                     searchFrom = start + processed.Length;
                 }
@@ -128,6 +146,13 @@ namespace HarryTools.UI
             }
 
             return text;
+        }
+    
+        /// <summary> TMP resuelve &lt;font="nombre"&gt; buscando primero en MaterialReferenceManager </summary>
+        private static void RegisterFont(TMP_FontAsset font)
+        {
+            if (!MaterialReferenceManager.TryGetFontAsset(font.hashCode, out _))
+                MaterialReferenceManager.AddFontAsset(font);
         }
     }
 }
