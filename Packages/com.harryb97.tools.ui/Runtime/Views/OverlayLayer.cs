@@ -15,6 +15,11 @@ namespace HarryTools.UI {
         public View Current => Top;
         #endregion
 
+        #region Private Variables
+        /// <summary> Overlays pedidos por las llamadas a ShowWhile en curso (el último manda) </summary>
+        private readonly System.Collections.Generic.List<View> requests = new();
+        #endregion
+
         // ==================== METHODS ====================
         #region Show & Hide
         protected override void ShowInstance(View _view) {
@@ -36,7 +41,7 @@ namespace HarryTools.UI {
         #region Show While
         /// <summary> Muestra el overlay T mientras dura la operación y lo oculta al terminar. Le pasa el progreso si implementa IProgress&lt;float&gt; </summary>
         public async UniTask ShowWhile<T>(AsyncOperation _operation, CancellationToken _ct = default) where T : View {
-            View _view = Show<T>();
+            View _view = BeginRequest<T>();
             IProgress<float> _progress = _view as IProgress<float>;
 
             try {
@@ -54,7 +59,7 @@ namespace HarryTools.UI {
 
         /// <summary> Muestra el overlay T mientras dura la tarea y lo oculta al terminar, aunque falle o se cancele </summary>
         public async UniTask ShowWhile<T>(UniTask _task, CancellationToken _ct = default) where T : View {
-            View _view = Show<T>();
+            View _view = BeginRequest<T>();
 
             try {
                 await _task.AttachExternalCancellation(_ct);
@@ -66,7 +71,7 @@ namespace HarryTools.UI {
 
         /// <summary> Igual que ShowWhile, pero devuelve el resultado de la tarea </summary>
         public async UniTask<TResult> ShowWhile<T, TResult>(UniTask<TResult> _task, CancellationToken _ct = default) where T : View {
-            View _view = Show<T>();
+            View _view = BeginRequest<T>();
 
             try {
                 return await _task.AttachExternalCancellation(_ct);
@@ -78,7 +83,7 @@ namespace HarryTools.UI {
 
         /// <summary> Muestra el overlay T mientras dura el proceso. El proceso recibe un IProgress que llega al overlay </summary>
         public async UniTask ShowWhile<T>(Func<IProgress<float>, CancellationToken, UniTask> _process, CancellationToken _ct = default) where T : View {
-            View _view = Show<T>();
+            View _view = BeginRequest<T>();
             IProgress<float> _progress = _view as IProgress<float> ?? NoProgress.Instance;
 
             try {
@@ -90,8 +95,27 @@ namespace HarryTools.UI {
             }
         }
 
+        private View BeginRequest<T>() where T : View {
+            View _view = Show<T>();
+            if (_view) requests.Add(_view);
+            return _view;
+        }
+
+        /// <summary>
+        /// Termina una petición de ShowWhile. El overlay solo se oculta si ninguna otra petición en curso lo usa;
+        /// si una petición anterior usaba otro overlay, se vuelve a mostrar ese.
+        /// </summary>
         private void HideShown(View _view) {
-            if (_view) Hide(_view);
+            if (!_view) return;
+
+            int _index = requests.LastIndexOf(_view);
+            if (_index >= 0) requests.RemoveAt(_index);
+            requests.RemoveAll(_request => !_request);
+
+            if (requests.Contains(_view)) return;
+
+            if (requests.Count > 0) Show(requests[^1]);
+            else Hide(_view);
         }
 
         private sealed class NoProgress : IProgress<float> {

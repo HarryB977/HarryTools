@@ -38,6 +38,10 @@ namespace HarryTools.UI {
         public IViewTransition Transition { get => transition; set => transition = value; }
 
         public bool IsVisible => State is ViewState.Entering or ViewState.Visible;
+        /// <summary> Popup esperando su turno en la cola </summary>
+        public bool IsQueued { get; internal set; }
+        /// <summary> Capa donde se precarga y donde se muestra con view.Show() si no tiene capa </summary>
+        public UILayerKind DefaultLayer { get => defaultLayer; internal set => defaultLayer = value; }
         public bool IsTop => Layer && Layer.Top == this;
         #endregion
 
@@ -45,6 +49,8 @@ namespace HarryTools.UI {
         [Header("Vista")]
         [Tooltip("Cached: se crea al mostrarse la primera vez y se conserva. Preloaded: se crea al iniciar. Transient: se destruye al ocultarse.")]
         [SerializeField] private ViewLifetime lifetime = ViewLifetime.Cached;
+        [Tooltip("Capa donde se precarga (Preloaded) y donde se muestra con Show() si aún no pertenece a ninguna")]
+        [SerializeField] private UILayerKind defaultLayer = UILayerKind.Views;
         [Tooltip("Deja de dibujar las vistas de su capa que quedan detrás mientras esta es visible")]
         [SerializeField] private bool cullViewsBehind;
         [SerializeReference, TypeSelector] private IViewTransition transition;
@@ -82,10 +88,10 @@ namespace HarryTools.UI {
         }
 
         // ==================== METHODS ====================
-        /// <summary> Muestra esta vista en su capa. Si no tiene capa, en la capa de Views del UIRoot </summary>
+        /// <summary> Muestra esta vista en su capa. Si no tiene capa, en su capa por defecto del UIRoot </summary>
         public void Show() {
             if (Layer) Layer.Show(this);
-            else if (UI.HasRoot) UI.Views.Show(this);
+            else if (UI.HasRoot) UI.Root.GetLayer(defaultLayer).Show(this);
             else Logger.LogWarning("UI", $"La vista '{name}' no pertenece a ninguna capa y no hay ningún UIRoot activo");
         }
 
@@ -94,13 +100,17 @@ namespace HarryTools.UI {
             if (Layer) Layer.Hide(this);
         }
 
-        /// <summary> Espera a que termine la transición de entrada </summary>
+        /// <summary>
+        /// Espera a que termine la transición de entrada. También termina si la vista se oculta
+        /// (o sale de la cola) sin llegar a mostrarse, para no esperar para siempre.
+        /// </summary>
         public UniTask WaitUntilShown(CancellationToken _ct = default) =>
-            UniTask.WaitUntil(() => this == null || State == ViewState.Visible, cancellationToken: _ct);
+            UniTask.WaitUntil(() => this == null || State == ViewState.Visible
+                || (!IsQueued && State is ViewState.Hidden or ViewState.Exiting), cancellationToken: _ct);
 
-        /// <summary> Espera a que termine de ocultarse </summary>
+        /// <summary> Espera a que termine de ocultarse. Un popup en cola cuenta como pendiente, no como oculto </summary>
         public UniTask WaitUntilHidden(CancellationToken _ct = default) =>
-            UniTask.WaitUntil(() => this == null || State == ViewState.Hidden, cancellationToken: _ct);
+            UniTask.WaitUntil(() => this == null || (State == ViewState.Hidden && !IsQueued), cancellationToken: _ct);
 
         // =================================================
 
@@ -133,9 +143,12 @@ namespace HarryTools.UI {
             SetInteractable(false);
         }
 
-        internal void SetInteractable(bool _state) {
-            canvasGroup.interactable = _state;
-            canvasGroup.blocksRaycasts = _state;
+        internal void SetInteractable(bool _state) => SetInput(_state, _state);
+
+        /// <summary> blocksRaycasts evita que los clics atraviesen la vista; interactable activa sus controles </summary>
+        internal void SetInput(bool _blocksRaycasts, bool _interactable) {
+            canvasGroup.blocksRaycasts = _blocksRaycasts;
+            canvasGroup.interactable = _interactable;
         }
 
         internal void SetCulled(bool _culled) {
@@ -156,11 +169,14 @@ namespace HarryTools.UI {
 
             State = ViewState.Entering;
             canvas.enabled = true;
-            SetInteractable(false);
+            canvasGroup.interactable = false;
 
+            if (Layer) Layer.RaiseShown(this);
             Shown?.Invoke(this);
             OnShown();
 
+            // Un manejador de Shown puede haberla ocultado ya
+            if (_ct.IsCancellationRequested || State != ViewState.Entering) return;
             RunEnter(_ct).Forget();
         }
 
@@ -181,6 +197,9 @@ namespace HarryTools.UI {
             catch (OperationCanceledException) {
                 return;
             }
+            catch (Exception _exception) {
+                Logger.LogError("UI", $"La transición de entrada de '{name}' ha fallado: {_exception}");
+            }
 
             if (_ct.IsCancellationRequested || this == null) return;
 
@@ -195,6 +214,9 @@ namespace HarryTools.UI {
             catch (OperationCanceledException) {
                 return;
             }
+            catch (Exception _exception) {
+                Logger.LogError("UI", $"La transición de salida de '{name}' ha fallado: {_exception}");
+            }
 
             if (_ct.IsCancellationRequested || this == null) return;
 
@@ -204,6 +226,8 @@ namespace HarryTools.UI {
             Hidden?.Invoke(this);
             OnHidden();
 
+            // Un manejador de Hidden puede haberla vuelto a mostrar
+            if (_ct.IsCancellationRequested || this == null || State != ViewState.Hidden) return;
             if (Layer) Layer.OnViewExited(this);
         }
 

@@ -94,6 +94,25 @@ namespace HarryTools.UI.Tests
         }
 
         [UnityTest]
+        public IEnumerator ShadowOffset_AnimatedShadowSizeFromZero_StillOffsets()
+        {
+            var graphic = CreateRectangle(Color.white);
+            graphic.shadowColor = Color.black;
+            graphic.shadowBlur = 0f;
+            graphic.shadowOffset = new Vector2(10f, -10f);
+            graphic.shadowSize = 0f;
+            yield return null;
+            render.Render();
+
+            graphic.shadowSize = 6f;
+            yield return null;
+
+            var texture = render.Render();
+            Assert.That(UIRenderTestUtility.Luminance(texture.GetPixel(110, 20)), Is.LessThan(0.5f));
+            Assert.That(UIRenderTestUtility.Luminance(texture.GetPixel(18, 110)), Is.GreaterThan(0.95f));
+        }
+
+        [UnityTest]
         public IEnumerator RectMask2DSoftness_ProducesPartialAlpha()
         {
             render = new UIRenderTestUtility(128, 128, Color.black);

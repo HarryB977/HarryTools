@@ -120,6 +120,7 @@ namespace HarryTools.UI {
 
             if (_view.RespectQueue && visible.Exists(_visible => _visible.RespectQueue)) {
                 queue.Add(_view);
+                _view.IsQueued = true;
                 return;
             }
 
@@ -127,10 +128,12 @@ namespace HarryTools.UI {
         }
 
         private void ShowNextQueued() {
+            queue.RemoveAll(_queued => !_queued);
             if (queue.Count == 0 || visible.Exists(_visible => _visible.RespectQueue)) return;
 
             View _next = queue[0];
             queue.RemoveAt(0);
+            _next.IsQueued = false;
             ShowInstance(_next);
         }
         #endregion
@@ -166,6 +169,17 @@ namespace HarryTools.UI {
             ShowNextQueued();
         }
 
+        internal override void Forget(View _view) {
+            queue.Remove(_view);
+            if (pool.TryGetValue(_view.GetType(), out Stack<View> _stack) && _stack.Contains(_view)) {
+                var _kept = new List<View>(_stack);
+                _kept.Remove(_view);
+                _kept.Reverse();
+                pool[_view.GetType()] = new Stack<View>(_kept);
+            }
+            base.Forget(_view);
+        }
+
         internal void OnBackdropClicked() {
             View _top = Top;
             if (_top && _top.HideOnBackdropClick) _top.Hide();
@@ -199,6 +213,8 @@ namespace HarryTools.UI {
 
         /// <summary> Un popup en cola que nunca llegó a mostrarse </summary>
         private void Release(View _view) {
+            _view.IsQueued = false;
+
             if (_view.Lifetime == ViewLifetime.Transient) {
                 _view.Layer = null;
                 Destroy(_view.gameObject);

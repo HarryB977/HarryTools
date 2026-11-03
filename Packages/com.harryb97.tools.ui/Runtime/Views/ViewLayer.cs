@@ -140,15 +140,20 @@ namespace HarryTools.UI {
         }
 
         protected virtual void ShowInstance(View _view) {
+            bool _alreadyShowing = _view.IsVisible && visible.Contains(_view);
+
             exiting.Remove(_view);
             visible.Remove(_view);
             visible.Add(_view);
             _view.transform.SetAsLastSibling();
 
-            _view.BeginShow();
+            // Si ya estaba visible solo se sube arriba: sin repetir la transición ni los eventos
+            if (!_alreadyShowing) _view.BeginShow();
             Refresh();
-            ViewShown?.Invoke(_view);
         }
+
+        /// <summary> Lo llama la vista al empezar a mostrarse, antes de sus propios eventos </summary>
+        internal void RaiseShown(View _view) => ViewShown?.Invoke(_view);
         #endregion
 
         // =================================================
@@ -234,12 +239,27 @@ namespace HarryTools.UI {
 
         protected async UniTask<View> InstantiateAsync(View _prefab, CancellationToken _ct) {
             AsyncInstantiateOperation<View> _operation = Object.InstantiateAsync(_prefab, transform);
-            await UniTask.WaitUntil(() => _operation.isDone, cancellationToken: _ct);
+
+            try {
+                await UniTask.WaitUntil(() => _operation.isDone, cancellationToken: _ct);
+            }
+            catch (OperationCanceledException) {
+                // No dejar una instancia suelta (visible y sin registrar) si se cancela
+                _operation.Cancel();
+                if (_operation.isDone) DestroyResults(_operation);
+                else _operation.completed += _ => DestroyResults(_operation);
+                throw;
+            }
 
             View _instance = _operation.Result[0];
             _instance.transform.SetParent(transform, false);
             Register(_instance);
             return _instance;
+        }
+
+        private static void DestroyResults(AsyncInstantiateOperation<View> _operation) {
+            if (_operation.Result == null) return;
+            foreach (View _view in _operation.Result) if (_view) Destroy(_view.gameObject);
         }
 
         protected void Register(View _view) {
@@ -250,7 +270,7 @@ namespace HarryTools.UI {
             if (_view.Lifetime != ViewLifetime.Transient) instances[_view.GetType()] = _view;
         }
 
-        internal void Forget(View _view) {
+        internal virtual void Forget(View _view) {
             visible.Remove(_view);
             exiting.Remove(_view);
             if (instances.TryGetValue(_view.GetType(), out View _cached) && _cached == _view) instances.Remove(_view.GetType());
@@ -295,7 +315,8 @@ namespace HarryTools.UI {
                 View _view = visible[i];
                 _view.SetSortingOrder(SortingOrderFor(i));
                 _view.SetCulled(i < _cullBelow);
-                _view.SetInteractable(_view == _top && _view.State == ViewState.Visible);
+                // La vista de arriba bloquea los clics desde que empieza a entrar; sus controles se activan al terminar
+                _view.SetInput(_view == _top, _view == _top && _view.State == ViewState.Visible);
             }
 
             if (_top != lastTop) {

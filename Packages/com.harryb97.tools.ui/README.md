@@ -90,7 +90,9 @@ Ocultar una vista **desactiva su `Canvas`**, no el GameObject. No reconstruye el
 | **Preloaded** | Al iniciar el `UIRoot`, o con `await UI.PreloadAsync<T>()` | Se conserva |
 | **Transient** | Cada vez que se muestra | Se destruye |
 
-Usa **Preloaded** para las vistas pesadas o muy usadas. `ShowAsync` y `PreloadAsync` instancian con `InstantiateAsync`, que reparte el coste entre varios frames.
+Usa **Preloaded** para las vistas pesadas o muy usadas. Se precargan en su **Default Layer**, que también es la capa donde se muestra la vista con `view.Show()` cuando todavía no pertenece a ninguna. Así, una pantalla de carga precargada debe tener *Default Layer = Overlays*.
+
+`ShowAsync` y `PreloadAsync` instancian con `InstantiateAsync`, que reparte el coste entre varios frames. Si se cancelan, no dejan instancias sueltas.
 
 ### Popups
 

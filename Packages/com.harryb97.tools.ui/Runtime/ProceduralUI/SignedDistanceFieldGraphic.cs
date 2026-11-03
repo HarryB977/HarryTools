@@ -171,7 +171,7 @@ namespace HarryTools.UI
         public float outlineSize
         {
             get => _outlineSize;
-            set { if (Mathf.Approximately(_outlineSize, value)) return; _outlineSize = value; SetVerticesDirty(); }
+            set { if (Mathf.Approximately(_outlineSize, value)) return; bool wasExtended = usesExtendedFeatures; _outlineSize = value; SetVerticesDirtyAndMaterialIf(wasExtended); }
         }
 
         public Color outlineColor
@@ -234,13 +234,13 @@ namespace HarryTools.UI
         public float shadowSize
         {
             get => _shadowSize;
-            set { if (Mathf.Approximately(_shadowSize, value)) return; _shadowSize = value; SetVerticesDirty(); }
+            set { if (Mathf.Approximately(_shadowSize, value)) return; bool wasExtended = usesExtendedFeatures; _shadowSize = value; SetVerticesDirtyAndMaterialIf(wasExtended); }
         }
 
         public float shadowBlur
         {
             get => _shadowBlur;
-            set { if (Mathf.Approximately(_shadowBlur, value)) return; _shadowBlur = value; SetVerticesDirty(); }
+            set { if (Mathf.Approximately(_shadowBlur, value)) return; bool wasExtended = usesExtendedFeatures; _shadowBlur = value; SetVerticesDirtyAndMaterialIf(wasExtended); }
         }
 
         public float shadowPower
@@ -318,6 +318,14 @@ namespace HarryTools.UI
 
         /// <summary> Margen que necesita el desplazamiento de la sombra (el shader lo recibe en _ShadowOffset.z) </summary>
         float ExtendedPadding => usesExtendedFeatures ? Mathf.Max(Mathf.Abs(_shadowOffset.x), Mathf.Abs(_shadowOffset.y)) : 0f;
+
+        /// <summary> Si el cambio activa o desactiva las opciones extendidas, el material también tiene que cambiar </summary>
+        void SetVerticesDirtyAndMaterialIf(bool wasExtended)
+        {
+            SetVerticesDirty();
+            if (wasExtended != usesExtendedFeatures)
+                SetMaterialDirty();
+        }
 
         public override Material GetModifiedMaterial(Material baseMaterial)
         {

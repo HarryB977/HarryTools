@@ -169,7 +169,7 @@ namespace HarryTools.UI {
                 if (!_collection || _collection.views == null) continue;
 
                 foreach (View _prefab in _collection.views) {
-                    if (_prefab && _prefab.Lifetime == ViewLifetime.Preloaded) views.Preload(_prefab);
+                    if (_prefab && _prefab.Lifetime == ViewLifetime.Preloaded) GetLayer(_prefab.DefaultLayer).Preload(_prefab);
                 }
             }
         }
