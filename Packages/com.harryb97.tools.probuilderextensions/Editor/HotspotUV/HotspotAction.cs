@@ -14,6 +14,8 @@ namespace HarryTools.ProBuilderExtensions.HotspotUV.Editor {
         private const string AllowRotationPref = "HotspotUV.AllowRotation";
         private const string PreserveAspectPref = "HotspotUV.PreserveAspect";
         private const string RandomTolerancePref = "HotspotUV.RandomTolerance";
+        private const string ScaleTolerancePref = "HotspotUV.ScaleTolerance";
+        private const string AllowMirrorPref = "HotspotUV.AllowMirror";
 
         public HotspotTexture target;
 
@@ -59,6 +61,16 @@ namespace HarryTools.ProBuilderExtensions.HotspotUV.Editor {
             set => EditorPrefs.SetFloat(RandomTolerancePref, value);
         }
 
+        private static float ScaleTolerance {
+            get => EditorPrefs.GetFloat(ScaleTolerancePref, 0.25f);
+            set => EditorPrefs.SetFloat(ScaleTolerancePref, value);
+        }
+
+        private static bool AllowMirror {
+            get => EditorPrefs.GetBool(AllowMirrorPref, true);
+            set => EditorPrefs.SetBool(AllowMirrorPref, value);
+        }
+
         protected override void OnSettingsEnable() {
             CheckForSettings();
         }
@@ -89,7 +101,9 @@ namespace HarryTools.ProBuilderExtensions.HotspotUV.Editor {
             if (target != null && !target.IsValid)
                 EditorGUILayout.HelpBox("The Hotspot Texture needs a texture and at least one rect.", MessageType.Warning);
 
-            AllowRotation = EditorGUILayout.Toggle(new GUIContent("Allow Rotation", "Allow rotating the face 90° to fit a rect better."), AllowRotation);
+            AllowRotation = EditorGUILayout.Toggle(new GUIContent("Allow Rotation", "Allow rotating the face 90° to fit a rect better. Patches can also forbid it."), AllowRotation);
+            AllowMirror = EditorGUILayout.Toggle(new GUIContent("Allow Mirror", "Allow randomly mirroring patches that permit it."), AllowMirror);
+            ScaleTolerance = EditorGUILayout.Slider(new GUIContent("Scale Tolerance", "How different in world size a patch can be from the face (0.25 = ±25%). Ignored when the Hotspot Texture has no texel density."), ScaleTolerance, 0f, 1f);
             PreserveAspect = EditorGUILayout.Toggle(new GUIContent("Preserve Aspect", "Fit inside the rect without stretching instead of filling it."), PreserveAspect);
             RandomTolerance = EditorGUILayout.Slider(new GUIContent("Random Tolerance", "How much worse than the best match a rect can be and still be randomly chosen. 0 = always the best match."), RandomTolerance, 0f, 1f);
 
@@ -199,12 +213,23 @@ namespace HarryTools.ProBuilderExtensions.HotspotUV.Editor {
             }
 
             var hotspot = target;
-            var allowRotation = AllowRotation;
             var preserveAspect = PreserveAspect;
-            var tolerance = RandomTolerance;
+            var settings = new HotspotMatchSettings {
+                allowRotation = AllowRotation,
+                allowMirror = AllowMirror,
+                randomTolerance = RandomTolerance,
+                scaleTolerance = ScaleTolerance,
+            };
 
-            var count = ModifySelectedFaces("Hotspot UV", (mesh, face, uvs) =>
-                HotspotFace(mesh, face, uvs, hotspot, allowRotation, preserveAspect, tolerance));
+            var outOfTolerance = 0;
+            var count = ModifySelectedFaces("Hotspot UV", (mesh, face, uvs) => {
+                if (!HotspotFace(mesh, face, uvs, hotspot, settings, preserveAspect, out var match)) return false;
+                if (match.outOfTolerance) outOfTolerance++;
+                return true;
+            });
+
+            if (outOfTolerance > 0)
+                Debug.LogWarning($"Hotspot UV: {outOfTolerance} face(s) had no patch within the scale tolerance and used the closest one.");
 
             return count > 0
                 ? new ActionResult(ActionResult.Status.Success, "Hotspot UV")
@@ -216,7 +241,8 @@ namespace HarryTools.ProBuilderExtensions.HotspotUV.Editor {
         /// tightest bounding rectangle, picks the best matching hotspot and fits the face into it.
         /// </summary>
         public static bool HotspotFace(ProBuilderMesh mesh, Face face, List<Vector4> uvs, HotspotTexture hotspot,
-            bool allowRotation, bool preserveAspect, float tolerance) {
+            HotspotMatchSettings settings, bool preserveAspect, out HotspotMatch match) {
+            match = HotspotMatch.Invalid;
             var indexes = face.distinctIndexes;
             if (indexes.Count < 3) return false;
 
@@ -261,30 +287,15 @@ namespace HarryTools.ProBuilderExtensions.HotspotUV.Editor {
             }
             Rotate(projected, bestAngle);
 
-            GetBounds(projected, out var min, out var size);
-            var rectIndex = hotspot.FindBestRect(size, allowRotation, tolerance, out var rotated);
-            if (rectIndex < 0) return false;
+            GetBounds(projected, out _, out var size);
+            match = hotspot.FindBestPatch(size, settings);
+            if (!match.IsValid) return false;
 
-            if (rotated) {
-                for (int i = 0; i < projected.Length; i++)
-                    projected[i] = new Vector2(-projected[i].y, projected[i].x);
-                GetBounds(projected, out min, out size);
-            }
-
-            var uvRect = hotspot.GetUVRect(rectIndex);
-            var scale = new Vector2(uvRect.width / size.x, uvRect.height / size.y);
-            var offset = Vector2.zero;
-
-            if (preserveAspect) {
-                // Uniform scale in texel space, centered inside the rect.
-                var texSize = hotspot.TextureSize;
-                var texelScale = Mathf.Min(scale.x * texSize.x, scale.y * texSize.y);
-                scale = new Vector2(texelScale / texSize.x, texelScale / texSize.y);
-                offset = (uvRect.size - Vector2.Scale(size, scale)) * 0.5f;
-            }
+            var mapped = new Vector2[projected.Length];
+            if (!HotspotMapper.Map(projected, hotspot, match, preserveAspect, mapped)) return false;
 
             for (int i = 0; i < indexes.Count; i++)
-                uvs[indexes[i]] = uvRect.min + offset + Vector2.Scale(projected[i] - min, scale);
+                uvs[indexes[i]] = mapped[i];
 
             return true;
         }

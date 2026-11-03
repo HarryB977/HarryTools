@@ -141,15 +141,6 @@ namespace HarryTools.ProBuilderExtensions.HotspotUV {
             };
         }
 
-        /// <summary>Legacy entry point, kept until Hotspot UV moves to <see cref="FindBestPatch"/>.</summary>
-        public int FindBestRect(Vector2 faceSize, bool allowRotation, float randomTolerance, out bool rotated) {
-            var match = FindBestPatch(faceSize, new HotspotMatchSettings {
-                allowRotation = allowRotation, randomTolerance = randomTolerance, scaleTolerance = 0.25f,
-            });
-            rotated = match.rotated;
-            return match.index;
-        }
-
         private static float Score(Vector2 faceSize, Vector2 rectSize, float tpu) {
             // Logarithmic ratios so that "twice as big" and "half as big" are penalised equally.
             var aspectError = Mathf.Abs(Mathf.Log((faceSize.x / faceSize.y) / (rectSize.x / rectSize.y)));
