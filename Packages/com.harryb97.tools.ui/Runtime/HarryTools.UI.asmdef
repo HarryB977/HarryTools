@@ -1,0 +1,22 @@
+{
+    "name": "HarryTools.UI",
+    "rootNamespace": "HarryTools.UI",
+    "references": [
+        "GUID:6055be8ebefd69e48b49212b09b47b2f",
+        "GUID:2bafac87e7f4b9b418d9448d219b01ab",
+        "GUID:f51ebe6a0ceec4240a699833d6309b23",
+        "GUID:3cbd4dbbdd8d22542bf927dec8fe2000",
+        "GUID:5a48a51724773b745ac570afd65b9606",
+        "GUID:ce4097fb1cd381e499cd9508a42275ce",
+        "GUID:e9438e756332f8b49902de137df9187b"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
