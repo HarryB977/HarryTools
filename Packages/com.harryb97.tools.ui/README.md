@@ -14,7 +14,7 @@ Sustituye a los antiguos paquetes `popups`, `views`, `overlays` y `uicanvas`.
 Añade al `Packages/manifest.json` del proyecto el paquete y sus dependencias. Unity no resuelve las dependencias de un paquete instalado por git, así que hay que añadirlas también.
 
 ```json
-"com.harryb97.tools.ui": "https://github.com/RazgriZ77/HarryTools.git?path=/Packages/com.harryb97.tools.ui#ui/1.0.0",
+"com.harryb97.tools.ui": "https://github.com/RazgriZ77/HarryTools.git?path=/Packages/com.harryb97.tools.ui#ui/1.0.1",
 "com.harryb97.tools.logger": "https://github.com/RazgriZ77/HarryTools.git?path=/Packages/com.harryb97.tools.logger#logger/1.0.0",
 "com.harryb97.tools.domainreload": "https://github.com/RazgriZ77/HarryTools.git?path=/Packages/com.harryb97.tools.domainreload#domainreload/1.0.1",
 "com.harryb97.tools.serializereferences": "https://github.com/RazgriZ77/HarryTools.git?path=/Packages/com.harryb97.tools.serializereferences#serializereferences/1.0.1",

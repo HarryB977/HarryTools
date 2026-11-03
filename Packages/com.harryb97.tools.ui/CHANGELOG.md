@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.0.1] - 2026-11-03
+### Cambiado
+- Textos del inspector, tooltips, ventanas del editor, mensajes de consola y samples en inglés.
+- README: cómo instalar PrimeTween desde el Asset Store (pulsar Install en `PrimeTweenInstaller.asset`) y que la versión de la dependencia es la mínima.
+
 ## [1.0.0] - 2026-11-03
 ### Añadido
 - Primera versión, basada en PurrUI 1.6.1-beta.1 (MIT). Sustituye a los paquetes `popups`, `views`, `overlays` y `uicanvas`.
