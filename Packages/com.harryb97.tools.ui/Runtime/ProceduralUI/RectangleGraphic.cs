@@ -140,7 +140,7 @@ namespace HarryTools.UI
                 ResolveProviderInternal(false);
             // Queries on inactive prefab contents may resolve a theme without subscribing to it.
             var provider = isActiveAndEnabled ? _paletteProvider : GetComponentInParent<IPaletteProvider>(true);
-            var theme = provider?.palette;
+            var theme = ColorPalette.Resolve(provider);
             if (!theme)
                 return false;
 

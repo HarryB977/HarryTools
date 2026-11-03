@@ -10,6 +10,7 @@ namespace HarryTools.UI
         Background,
         Black,
         White,
-        Muted
+        Muted,
+        Custom = 100
     }
 }

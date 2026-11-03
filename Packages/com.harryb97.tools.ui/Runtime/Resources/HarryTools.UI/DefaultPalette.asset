@@ -1,0 +1,50 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 125e4e25c08e46979168af4420481aca, type: 3}
+  m_Name: DefaultPalette
+  m_EditorClassIdentifier: HarryTools.UI::HarryTools.UI.ColorPalette
+  _black: {r: 0, g: 0, b: 0, a: 1}
+  _white: {r: 1, g: 1, b: 1, a: 1}
+  _muted: {r: 0.5, g: 0.5, b: 0.5, a: 1}
+  _background: {r: 0, g: 0, b: 0, a: 1}
+  _foreground: {r: 1, g: 1, b: 1, a: 1}
+  _surface: {r: 0.1, g: 0.1, b: 0.1, a: 1}
+  _surfaceForeground: {r: 1, g: 1, b: 1, a: 1}
+  _accent: {r: 0.1176471, g: 0.5647059, b: 1, a: 1}
+  _accentForeground: {r: 1, g: 1, b: 1, a: 1}
+  _success: {r: 0.2352941, g: 0.7019608, b: 0.4431373, a: 1}
+  _successForeground: {r: 0.1, g: 0.1, b: 0.1, a: 1}
+  _warning: {r: 0.854902, g: 0.6470588, b: 0.1254902, a: 1}
+  _warningForeground: {r: 0.1, g: 0.1, b: 0.1, a: 1}
+  _danger: {r: 0.6470588, g: 0.1647059, b: 0.1647059, a: 1}
+  _dangerForeground: {r: 1, g: 1, b: 1, a: 1}
+  _styles:
+    buttonRoundness:
+      full: 1
+      pixels: 0
+    panelRoundness:
+      full: 0
+      pixels: 16
+    inputRoundness:
+      full: 0
+      pixels: 10
+    itemRoundness:
+      full: 0
+      pixels: 16
+    buttonTransitionDuration: 0.2
+    buttonDisabledOpacity: 0.5
+    buttonPressedScale: 0.99
+    toggleTransitionDuration: 0.1
+    inputTransitionDuration: 0.15
+    inputFocusWidth: 2
+  _customRoles: []
+  _lastCustomRoleId: 1000

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using PrimeTween;
 using UnityEngine.UI;
 
 namespace HarryTools.UI
@@ -28,8 +29,7 @@ namespace HarryTools.UI
         private Color[] _start;
         private Color[] _target;
         private bool[] _wasEnabled;
-        private float _transitionStartTime;
-        private bool _isTransitioning;
+        private Tween _transitionTween;
 
         public float transitionDuration
         {
@@ -87,6 +87,8 @@ namespace HarryTools.UI
 
         private void OnDisable()
         {
+            if (_transitionTween.isAlive)
+                _transitionTween.Complete();
             if (_paletteProvider != null)
                 _paletteProvider.onColorChange -= ColorsUpdated;
             _paletteProvider = null;
@@ -115,7 +117,7 @@ namespace HarryTools.UI
             if (_colorsDirty && _paletteProvider == null)
                 ResolveProvider();
 
-            if (_paletteProvider == null || !_paletteProvider.palette)
+            if (!ActivePalette)
             {
                 return;
             }
@@ -125,31 +127,31 @@ namespace HarryTools.UI
                 RefreshTargets(snap: _transitionDuration <= 0f || !Application.isPlaying);
                 _colorsDirty = false;
             }
+        }
 
-            if (_isTransitioning)
+        private ColorPalette ActivePalette => ColorPalette.Resolve(_paletteProvider);
+
+        private void ApplyBlend(float t)
+        {
+            if (!_graphic || _current == null) return;
+
+            var colored = _graphic as IColored;
+            int slotCount = _current.Length;
+
+            for (int i = 0; i < slotCount; i++)
             {
-                int slotCount = _current.Length;
-                float t = Mathf.Clamp01((Time.time - _transitionStartTime) / _transitionDuration);
-                var colored = _graphic as IColored;
-
-                for (int i = 0; i < slotCount; i++)
-                {
-                    if (!IsSlotEnabled(colored, i)) continue;
-                    _current[i] = Color.Lerp(_start[i], _target[i], t);
-                }
-
-                WriteCurrent(colored, slotCount);
-
-                if (t >= 1f)
-                    _isTransitioning = false;
+                if (!IsSlotEnabled(colored, i)) continue;
+                _current[i] = Color.Lerp(_start[i], _target[i], t);
             }
+
+            WriteCurrent(colored, slotCount);
         }
 
         private void ApplyImmediate()
         {
             ResolveProvider();
 
-            if (!_graphic || _paletteProvider?.palette == null)
+            if (!_graphic || !ActivePalette)
                 return;
 
             RefreshTargets(snap: true);
@@ -167,7 +169,7 @@ namespace HarryTools.UI
             int slotCount = ResolveSlotCount(out var colored);
             EnsureBuffers(slotCount);
 
-            var palette = _paletteProvider.palette;
+            var palette = ActivePalette;
 
             for (int i = 0; i < slotCount; i++)
             {
@@ -193,15 +195,11 @@ namespace HarryTools.UI
 
             WriteCurrent(colored, slotCount);
 
-            if (snap)
-            {
-                _isTransitioning = false;
-            }
-            else
-            {
-                _transitionStartTime = Time.time;
-                _isTransitioning = true;
-            }
+            if (_transitionTween.isAlive)
+                _transitionTween.Stop();
+
+            if (!snap)
+                _transitionTween = Tween.Custom(this, 0f, 1f, _transitionDuration, (target, t) => target.ApplyBlend(t), useUnscaledTime: true);
         }
 
         private int ResolveSlotCount(out IColored colored)

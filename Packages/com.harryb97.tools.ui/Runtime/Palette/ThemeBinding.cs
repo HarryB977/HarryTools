@@ -8,7 +8,7 @@ namespace HarryTools.UI
         private IPaletteProvider _provider;
         private bool _dirty;
 
-        protected ColorPalette palette => _provider?.palette;
+        protected ColorPalette palette => ColorPalette.Resolve(_provider);
 
         protected virtual void OnEnable()
         {

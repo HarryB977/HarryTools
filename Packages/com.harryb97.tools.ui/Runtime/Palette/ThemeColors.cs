@@ -17,7 +17,7 @@ namespace HarryTools.UI
             }
 
             // Custom entry prefabs can still resolve their colors without a binding.
-            var palette = graphic.GetComponentInParent<IPaletteProvider>(true)?.palette;
+            var palette = ColorPalette.Resolve(graphic.GetComponentInParent<IPaletteProvider>(true));
             if (!color.enabled || !palette)
                 return;
 

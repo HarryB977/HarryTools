@@ -24,7 +24,7 @@ namespace HarryTools.UI.Tests
         [Test]
         public void SetColor_GetColor_RoundTripsForAllTypes()
         {
-            var types = (ColorType[])Enum.GetValues(typeof(ColorType));
+            var types = System.Array.FindAll((ColorType[])Enum.GetValues(typeof(ColorType)), t => t != ColorType.Custom);
 
             for (int i = 0; i < types.Length; i++)
             {

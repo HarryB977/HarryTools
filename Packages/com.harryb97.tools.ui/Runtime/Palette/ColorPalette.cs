@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace HarryTools.UI
@@ -32,12 +33,88 @@ namespace HarryTools.UI
         [Tooltip("Shared styling for elements using theme defaults. Custom element settings remain local.")]
         [SerializeField] private ThemeStyles _styles = ThemeStyles.Default;
 
+        [Header("Roles personalizados")]
+        [SerializeField] private List<CustomColorRole> _customRoles = new();
+        [SerializeField, HideInInspector] private int _lastCustomRoleId = FirstCustomRoleId;
+
         public ThemeStyles styles => _styles;
+
+
+        public IReadOnlyList<CustomColorRole> CustomRoles => _customRoles;
+
+        /// <summary> Paleta incluida en el paquete, usada cuando no hay ningún proveedor de paleta </summary>
+        public static ColorPalette Default => _default ? _default : _default = Resources.Load<ColorPalette>(DefaultResourcePath);
+
+        public const string DefaultResourcePath = "HarryTools.UI/DefaultPalette";
+        private const int FirstCustomRoleId = 1000;
+        private static ColorPalette _default;
+
+        /// <summary> Paleta del proveedor o, si no hay proveedor o no tiene paleta, la paleta por defecto </summary>
+        public static ColorPalette Resolve(IPaletteProvider provider)
+        {
+            var palette = provider?.palette;
+            return palette ? palette : Default;
+        }
+
+        /// <summary> Añade un rol con nombre libre. Su id es estable y no se reutiliza aunque se borre </summary>
+        public CustomColorRole AddCustomRole(string name, Color color, Color contrast)
+        {
+            var role = new CustomColorRole { id = NextCustomRoleId(), name = name, color = color, contrast = contrast };
+            _customRoles.Add(role);
+            onChange?.Invoke();
+            return role;
+        }
+
+        public bool RemoveCustomRole(int id)
+        {
+            int removed = _customRoles.RemoveAll(role => role.id == id);
+            if (removed > 0)
+                onChange?.Invoke();
+            return removed > 0;
+        }
+
+        public bool TryGetCustomRole(int id, out CustomColorRole role)
+        {
+            for (int i = 0; i < _customRoles.Count; i++)
+            {
+                if (_customRoles[i].id != id) continue;
+                role = _customRoles[i];
+                return true;
+            }
+
+            role = null;
+            return false;
+        }
+
+        private int NextCustomRoleId()
+        {
+            _lastCustomRoleId = Mathf.Max(_lastCustomRoleId, FirstCustomRoleId);
+            for (int i = 0; i < _customRoles.Count; i++)
+                _lastCustomRoleId = Mathf.Max(_lastCustomRoleId, _customRoles[i].id);
+            return ++_lastCustomRoleId;
+        }
+
+        /// <summary> Da id a los roles creados desde el inspector (que llegan con id 0) </summary>
+        private void AssignMissingRoleIds()
+        {
+            var seen = new HashSet<int>();
+            for (int i = 0; i < _customRoles.Count; i++)
+            {
+                var role = _customRoles[i];
+                if (role == null) continue;
+                if (role.id <= FirstCustomRoleId || !seen.Add(role.id))
+                {
+                    role.id = NextCustomRoleId();
+                    seen.Add(role.id);
+                }
+            }
+        }
 
         public event Action onChange;
 
         private void OnValidate()
         {
+            AssignMissingRoleIds();
             _styles = _styles.Sanitize();
             onChange?.Invoke();
         }

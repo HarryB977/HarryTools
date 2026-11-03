@@ -15,12 +15,39 @@ namespace HarryTools.UI.Editor
             if (targets.Length != 1)
                 return;
 
+            DrawContrastWarnings((ColorPalette)target);
+
             EditorGUILayout.Space();
             EditorGUILayout.LabelField("Preview", EditorStyles.boldLabel);
 
             var palette = (ColorPalette)target;
             var rect = GUILayoutUtility.GetRect(100f, 180f, GUILayout.ExpandWidth(true));
             DrawPreview(rect, palette);
+        }
+
+        static readonly ColorType[] ContrastPairs =
+        {
+            ColorType.Background, ColorType.Surface, ColorType.Accent, ColorType.Success, ColorType.Warning, ColorType.Danger
+        };
+
+        /// <summary> Avisa de los pares rol/contraste que no llegan al nivel AA de WCAG (4.5:1) </summary>
+        static void DrawContrastWarnings(ColorPalette palette)
+        {
+            foreach (var type in ContrastPairs)
+                WarnIfLow(type.ToString(), palette.GetColor(type), palette.GetContrast(type));
+
+            foreach (var role in palette.CustomRoles)
+                WarnIfLow(role.name, role.color, role.contrast);
+        }
+
+        static void WarnIfLow(string roleName, Color color, Color contrast)
+        {
+            float ratio = ColorContrast.Ratio(color, contrast);
+            if (ratio >= ColorContrast.AA) return;
+
+            EditorGUILayout.HelpBox(
+                $"Contraste insuficiente entre '{roleName}' y su contraste: {ratio:0.0}:1 (mínimo {ColorContrast.AA:0.0}:1)",
+                MessageType.Warning);
         }
 
         static void DrawPreview(Rect rect, ColorPalette palette)
