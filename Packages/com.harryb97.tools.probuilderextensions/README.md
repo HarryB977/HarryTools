@@ -58,10 +58,12 @@ Crea un atlas hotspot a partir de dos texturas tileables y un layout: una **capa
 - **Layout**: los patches. Todas las recetas con el mismo layout producen los mismos rectángulos, así que una habitación mapeada una vez puede pasar de cuidada a vieja cambiando solo el material.
 - **Top / Bottom**: Albedo (obligatorio, tileable), Normal y Metallic/Smoothness (opcionales; R = metálico, A = suavidad), tinte, y **Texels Per Unit** (píxeles del albedo por metro: lo grande que se ve la capa).
 - **Wear**:
-  - **Intensity**: 0 = solo un bisel suave con un leve cambio de tono (siempre hay algo de distinción en los bordes); 1 = desconchones grandes que dejan ver la capa inferior.
+  - **Intensity**: ancho del daño que crece desde los bordes hacia dentro. 0 = solo un bisel suave (siempre hay algo de distinción en los bordes); 1 = bordes muy rotos que dejan ver la capa inferior. El daño siempre parte de la junta, nunca aparecen manchas sueltas.
   - **Bevel Width**: ancho del bisel en metros.
-  - **Edge Tone**: cuánto se aclaran los bordes gastados.
-  - **Chip Size / Chip Density**: tamaño de los desconchones (metros) y cuánto se adentran en el patch.
+  - **Chip Size**: longitud típica de cada mordisco a lo largo del borde (metros). Pequeño = borde muy recortado; grande = mordiscos largos y suaves.
+  - **Chip Density**: cuánto se adentra el daño en el patch.
+  - **Cavity**: cuánto se oscurecen juntas, desconchones y el pie del bisel. Hace que los bordes se lean aunque las dos capas sean el mismo material.
+  - **Edge Tone**: cuánto se aclara el borde gastado de la capa superior.
   - **Gap Depth**: profundidad de juntas y desconchones respecto al bisel.
 - **Resolution**: ancho de las texturas (el alto sigue la proporción del layout).
 - **World Width Override**: cambia los metros que cubre el atlas sin tocar el layout.

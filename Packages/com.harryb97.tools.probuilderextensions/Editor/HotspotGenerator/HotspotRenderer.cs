@@ -64,6 +64,7 @@ namespace HarryTools.ProBuilderExtensions.Generator {
             material.SetFloat("_ChipSize", Mathf.Max(0.005f, wear.chipSize));
             material.SetFloat("_ChipDensity", wear.chipDensity);
             material.SetFloat("_GapDepth", wear.gapDepth);
+            material.SetFloat("_Cavity", wear.cavity);
             material.SetFloat("_Seed", recipe.seed);
 
             SetLayer("_Top", recipe.top, worldSize);

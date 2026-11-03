@@ -30,18 +30,28 @@ namespace HarryTools.ProBuilderExtensions.Generator {
             if (!recipe.layout.Validate(errors))
                 Debug.LogWarning($"Hotspot Generator: layout '{recipe.layout.name}' has problems:\n{string.Join("\n", errors)}");
 
-            var folder = EnsureFolder(GetOutputFolder(recipe));
+            var folder = GetOutputFolder(recipe);
             var name = recipe.name;
+            var baseColorPath = Resolve(recipe, recipe.baseColorMap, $"{folder}/{name}_BaseColor.png");
+            var normalPath = Resolve(recipe, recipe.normalMap, $"{folder}/{name}_Normal.png");
+            var maskPath = Resolve(recipe, recipe.maskMap, $"{folder}/{name}_Mask.png");
+            var occlusionPath = Resolve(recipe, recipe.occlusionMap, $"{folder}/{name}_Occlusion.png");
+            var materialPath = Resolve(recipe, recipe.material, $"{folder}/{name}.mat");
+            var hotspotPath = Resolve(recipe, recipe.hotspotTexture, $"{folder}/{name} Hotspot.asset");
+
+            // Only create the default folder if an output actually goes there (they may have been moved elsewhere).
+            foreach (var path in new[] { baseColorPath, normalPath, maskPath, occlusionPath, materialPath, hotspotPath })
+                if (path.StartsWith(folder + "/")) { EnsureFolder(folder); break; }
 
             using (var renderer = new HotspotRenderer(recipe, recipe.resolution)) {
-                recipe.baseColorMap = WriteMap(recipe, renderer, HotspotMap.BaseColor, recipe.baseColorMap, $"{folder}/{name}_BaseColor.png", true, false);
-                recipe.normalMap = WriteMap(recipe, renderer, HotspotMap.Normal, recipe.normalMap, $"{folder}/{name}_Normal.png", false, true);
-                recipe.maskMap = WriteMap(recipe, renderer, HotspotMap.Mask, recipe.maskMap, $"{folder}/{name}_Mask.png", false, false);
-                recipe.occlusionMap = WriteMap(recipe, renderer, HotspotMap.Occlusion, recipe.occlusionMap, $"{folder}/{name}_Occlusion.png", false, false);
+                recipe.baseColorMap = WriteMap(renderer, HotspotMap.BaseColor, baseColorPath, true, false);
+                recipe.normalMap = WriteMap(renderer, HotspotMap.Normal, normalPath, false, true);
+                recipe.maskMap = WriteMap(renderer, HotspotMap.Mask, maskPath, false, false);
+                recipe.occlusionMap = WriteMap(renderer, HotspotMap.Occlusion, occlusionPath, false, false);
             }
 
-            recipe.material = WriteMaterial(recipe, $"{folder}/{name}.mat");
-            recipe.hotspotTexture = WriteHotspotTexture(recipe, $"{folder}/{name} Hotspot.asset");
+            recipe.material = WriteMaterial(recipe, materialPath);
+            recipe.hotspotTexture = WriteHotspotTexture(recipe, hotspotPath);
 
             EditorUtility.SetDirty(recipe);
             AssetDatabase.SaveAssets();
@@ -80,8 +90,7 @@ namespace HarryTools.ProBuilderExtensions.Generator {
             return folder;
         }
 
-        private static Texture2D WriteMap(HotspotRecipe recipe, HotspotRenderer renderer, HotspotMap map, Texture2D existing, string defaultPath, bool sRGB, bool normal) {
-            var path = Resolve(recipe, existing, defaultPath);
+        private static Texture2D WriteMap(HotspotRenderer renderer, HotspotMap map, string path, bool sRGB, bool normal) {
             var tex = renderer.ReadBack(map, linear: !sRGB);
             try {
                 File.WriteAllBytes(path, tex.EncodeToPNG());
@@ -102,14 +111,13 @@ namespace HarryTools.ProBuilderExtensions.Generator {
             return AssetDatabase.LoadAssetAtPath<Texture2D>(path);
         }
 
-        private static Material WriteMaterial(HotspotRecipe recipe, string defaultPath) {
+        private static Material WriteMaterial(HotspotRecipe recipe, string path) {
             var shader = Shader.Find(LitShader);
             if (shader == null) {
                 Debug.LogError($"Hotspot Generator: shader '{LitShader}' not found; the material was not created. Is URP installed?");
                 return recipe.material;
             }
 
-            var path = Resolve(recipe, recipe.material, defaultPath);
             var material = AssetDatabase.LoadAssetAtPath<Material>(path);
             if (material == null) {
                 material = new Material(shader);
@@ -132,8 +140,7 @@ namespace HarryTools.ProBuilderExtensions.Generator {
             return material;
         }
 
-        private static HotspotTexture WriteHotspotTexture(HotspotRecipe recipe, string defaultPath) {
-            var path = Resolve(recipe, recipe.hotspotTexture, defaultPath);
+        private static HotspotTexture WriteHotspotTexture(HotspotRecipe recipe, string path) {
             var hotspot = AssetDatabase.LoadAssetAtPath<HotspotTexture>(path);
             if (hotspot == null) {
                 hotspot = ScriptableObject.CreateInstance<HotspotTexture>();

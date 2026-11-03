@@ -195,5 +195,16 @@ namespace HarryTools.ProBuilderExtensions.Tests {
             Assert.AreEqual("Universal Render Pipeline/Simple Lit", recipe.material.shader.name);
             Assert.AreEqual(recipe.baseColorMap, recipe.material.GetTexture("_BaseMap"));
         }
+        [Test]
+        public void Regenerate_AfterMovingTheOutputFolder_DoesNotRecreateIt() {
+            var recipe = Recipe("Plaster");
+            HotspotGenerator.Generate(recipe);
+            AssetDatabase.CreateFolder(Folder, "Elsewhere");
+            Assert.IsEmpty(AssetDatabase.MoveAsset(Folder + "/Plaster", Folder + "/Elsewhere/Plaster"));
+
+            HotspotGenerator.Generate(recipe);
+            Assert.IsFalse(AssetDatabase.IsValidFolder(Folder + "/Plaster"), "an empty default folder was created");
+            StringAssert.StartsWith(Folder + "/Elsewhere/Plaster/", AssetDatabase.GetAssetPath(recipe.baseColorMap));
+        }
     }
 }

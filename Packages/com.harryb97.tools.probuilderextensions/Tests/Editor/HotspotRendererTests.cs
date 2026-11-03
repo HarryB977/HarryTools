@@ -220,5 +220,55 @@ namespace HarryTools.ProBuilderExtensions.Tests {
             Assert.Less(anisotropy, Mathf.Log(1.05f), $"tile {actual} vs {tile}");
             Assert.Less(Mathf.Abs(Mathf.Log(actual.x / tile.x)), Mathf.Log(1.35f), $"scale {actual.x} vs {tile.x}");
         }
+        /// <summary>Worn pixels inside the centred patch that cannot reach the patch border through other worn pixels.</summary>
+        private static int IsolatedWear(Texture2D wear) {
+            const int min = 8, max = 55;
+            bool Worn(int x, int y) => wear.GetPixel(x, y).r > 0.5f;
+            var reached = new bool[Size, Size];
+            var queue = new Queue<Vector2Int>();
+            for (int i = min; i <= max; i++)
+                foreach (var p in new[] { new Vector2Int(min, i), new Vector2Int(max, i), new Vector2Int(i, min), new Vector2Int(i, max) })
+                    if (Worn(p.x, p.y) && !reached[p.x, p.y]) { reached[p.x, p.y] = true; queue.Enqueue(p); }
+            while (queue.Count > 0) {
+                var p = queue.Dequeue();
+                foreach (var d in new[] { Vector2Int.left, Vector2Int.right, Vector2Int.up, Vector2Int.down }) {
+                    var q = p + d;
+                    if (q.x < min || q.x > max || q.y < min || q.y > max || reached[q.x, q.y] || !Worn(q.x, q.y)) continue;
+                    reached[q.x, q.y] = true;
+                    queue.Enqueue(q);
+                }
+            }
+            var isolated = 0;
+            for (int y = min; y <= max; y++)
+                for (int x = min; x <= max; x++)
+                    if (Worn(x, y) && !reached[x, y]) isolated++;
+            return isolated;
+        }
+
+        [Test]
+        public void Wear_IsAlwaysConnectedToTheEdge([Values(0.3f, 0.6f, 1f)] float intensity, [Values(0, 7)] int seed) {
+            var recipe = CentredPatch();
+            recipe.wear.intensity = intensity;
+            recipe.wear.chipSize = 0.05f;
+            recipe.wear.chipDensity = 1f;
+            recipe.seed = seed;
+            var wear = Read(recipe, HotspotMap.Wear);
+            Assert.Greater(Coverage(recipe), 0f);
+            Assert.AreEqual(0, IsolatedWear(wear), "chips must grow from the patch border");
+        }
+
+        [Test]
+        public void Cavity_DarkensGapsEvenWithIdenticalLayers() {
+            var recipe = CentredPatch();
+            recipe.bottom.albedo = recipe.top.albedo = Solid(new Color(0.5f, 0.5f, 0.5f));
+            recipe.wear.edgeTone = 0f;
+            recipe.wear.cavity = 0.5f;
+            var color = Read(recipe, HotspotMap.BaseColor, linear: false);
+            Assert.Greater(color.GetPixel(32, 32).r - color.GetPixel(2, 32).r, 0.1f, "gap should be visibly darker");
+
+            recipe.wear.cavity = 0f;
+            var flat = Read(recipe, HotspotMap.BaseColor, linear: false);
+            Assert.AreEqual(flat.GetPixel(32, 32).r, flat.GetPixel(2, 32).r, 0.01f);
+        }
     }
 }

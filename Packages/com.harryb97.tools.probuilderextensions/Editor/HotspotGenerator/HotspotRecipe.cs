@@ -60,7 +60,7 @@ namespace HarryTools.ProBuilderExtensions.Generator {
 
     [Serializable]
     public class HotspotWear {
-        [Tooltip("0 = only a soft bevel and a slight edge tone; 1 = large chips revealing the bottom layer.")]
+        [Tooltip("Width of the damage growing in from the edges. 0 = only a soft bevel and a slight edge tone; 1 = deep chips revealing the bottom layer.")]
         [Range(0, 1)] public float intensity = 0.2f;
 
         [Tooltip("Width of the bevel around each patch, in metres.")]
@@ -69,11 +69,14 @@ namespace HarryTools.ProBuilderExtensions.Generator {
         [Tooltip("How much lighter worn edges look.")]
         [Range(0, 1)] public float edgeTone = 0.15f;
 
-        [Tooltip("Typical size of a chip, in metres.")]
+        [Tooltip("Typical length (metres) of a bite along the edge. Bites reach at most about twice as deep.")]
         [Min(0.005f)] public float chipSize = 0.05f;
 
-        [Tooltip("How far into the patch chips reach.")]
+        [Tooltip("How far into the patch the wear can reach.")]
         [Range(0, 1)] public float chipDensity = 0.5f;
+
+        [Tooltip("How much darker gaps, chips and the foot of the bevel look, so edges read even when both layers are the same material.")]
+        [Range(0, 1)] public float cavity = 0.5f;
 
         [Tooltip("Depth of the gaps and chips relative to the bevel.")]
         [Range(0.05f, 1)] public float gapDepth = 0.5f;

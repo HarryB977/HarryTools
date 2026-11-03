@@ -19,7 +19,7 @@ Shader "Hidden/HarryTools/HotspotGenerator" {
         float4 _Patches[MAX_PATCHES];    // xMin, yMin, xMax, yMax (normalized, top-left origin)
         float4 _PatchFlags[MAX_PATCHES]; // tiling axis (0 none, 1 horizontal, 2 vertical), rotate layers, random, random
 
-        float _Intensity, _BevelWidth, _EdgeTone, _ChipSize, _ChipDensity, _GapDepth, _Seed;
+        float _Intensity, _BevelWidth, _EdgeTone, _ChipSize, _ChipDensity, _GapDepth, _Cavity, _Seed;
         int _Channel;
 
         sampler2D _TopAlbedo, _TopNormal, _TopMS;
@@ -34,6 +34,7 @@ Shader "Hidden/HarryTools/HotspotGenerator" {
         struct PatchInfo {
             int index;
             float dist;   // metres to the nearest border that does not repeat
+            float2 edgeUV; // that border's closest point (UV space), where the wear width is sampled
             float tiling;
             float rotate;
             float2 rnd;
@@ -41,7 +42,7 @@ Shader "Hidden/HarryTools/HotspotGenerator" {
 
         PatchInfo FindPatch(float2 uv) {
             PatchInfo p;
-            p.index = -1; p.dist = 0; p.tiling = 0; p.rotate = 0; p.rnd = 0;
+            p.index = -1; p.dist = 0; p.edgeUV = uv; p.tiling = 0; p.rotate = 0; p.rnd = 0;
             float2 n = float2(uv.x, 1 - uv.y);
             [loop]
             for (int i = 0; i < _PatchCount; i++) {
@@ -52,7 +53,9 @@ Shader "Hidden/HarryTools/HotspotGenerator" {
                     float2 b = (r.zw - n) * _AtlasWorld.xy;
                     float dx = f.x == 1 ? 1e5 : min(a.x, b.x);
                     float dy = f.x == 2 ? 1e5 : min(a.y, b.y);
-                    p.index = i; p.dist = min(dx, dy); p.tiling = f.x; p.rotate = f.y; p.rnd = f.zw;
+                    float2 edge = dx < dy ? float2(a.x < b.x ? r.x : r.z, n.y) : float2(n.x, a.y < b.y ? r.y : r.w);
+                    p.index = i; p.dist = min(dx, dy); p.edgeUV = float2(edge.x, 1 - edge.y);
+                    p.tiling = f.x; p.rotate = f.y; p.rnd = f.zw;
                     return p;
                 }
             }
@@ -92,6 +95,14 @@ Shader "Hidden/HarryTools/HotspotGenerator" {
             return sum / norm;
         }
 
+        // Smooth two-octave noise for the wear width along an edge: rounded bites instead of needles.
+        float WearNoise(float2 uv, float seed) {
+            float2 cells = max(1, round(_AtlasWorld.xy / (_ChipSize * 1.5)));
+            float2 x = float2(uv.x, 1 - uv.y) * cells;
+            float v = 0.7 * ValueNoise(x, (int2)cells, seed) + 0.3 * ValueNoise(x * 2, (int2)(cells * 2), seed + 0.017);
+            return saturate((v - 0.5) * 1.8 + 0.5);
+        }
+
         float BottomLevel() { return 1 - saturate(_GapDepth); }
 
         float4 ComputeData(float2 uv) {
@@ -103,13 +114,15 @@ Shader "Hidden/HarryTools/HotspotGenerator" {
             float profile = sqrt(1 - (1 - t) * (1 - t)); // rounded bevel
             float height = lerp(bottom, 1, profile);
 
+            // Wear grows inwards from the border: a band whose width varies along the border. The width is sampled at
+            // the closest border point, so every worn pixel is connected to the edge (no floating chips).
             float wear = 0;
             if (_Intensity > 0) {
-                // Contrasted noise so chips are blobs with irregular outlines rather than a uniform band.
-                float n = saturate((Fbm(uv, _Seed * 0.001 + p.index * 0.0731) - 0.5) * 2.2 + 0.5);
-                float reach = saturate(1 - p.dist / (_ChipSize * (1 + 3 * _ChipDensity)));
-                float threshold = 1 - _Intensity * 0.8 * reach;
-                wear = smoothstep(threshold, threshold + 0.04, n);
+                float n = WearNoise(p.edgeUV, _Seed * 0.001 + p.index * 0.0731);
+                // Chip Size is the length of a bite along the edge; its depth stays in proportion (at most ~2x).
+                float width = _Intensity * _ChipSize * (0.5 + 1.5 * _ChipDensity) * n;
+                float pixel = _AtlasWorld.z;
+                wear = width > pixel * 0.5 ? 1 - smoothstep(width - pixel, width, p.dist) : 0;
             }
             height = lerp(height, bottom, wear);
             float edge = 1 - saturate(p.dist / (_BevelWidth * 2));
@@ -177,7 +190,9 @@ Shader "Hidden/HarryTools/HotspotGenerator" {
             float3 bottom = SampleLayer(_BottomAlbedo, l.bottomUV, _BottomParams.w).rgb * _BottomTint.rgb;
             float amount = BottomAmount(l);
             float3 worn = lerp(top, saturate(top + 0.25), _EdgeTone * l.data.b * (1 - amount));
-            return float4(lerp(worn, bottom, amount), 1);
+            float3 color = lerp(worn, bottom, amount);
+            float depth = saturate((1 - l.data.r) / max(1e-3, 1 - BottomLevel())); // 0 on top, 1 in gaps and chips
+            return float4(color * (1 - _Cavity * depth), 1);
         }
 
         float Height(float2 uv) { return tex2Dlod(_DataTex, float4(uv, 0, 0)).r; }
