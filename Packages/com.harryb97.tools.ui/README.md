@@ -24,8 +24,8 @@ Añade al `Packages/manifest.json` del proyecto el paquete y sus dependencias. U
 ```
 
 - **UniTask** se instala desde OpenUPM: scope `com.cysharp.unitask` en el registro `https://package.openupm.com`.
-- **PrimeTween** se instala de una de estas dos formas:
-  - Con el `.tgz` del Asset Store (`"file:../Packages/com.kyrylokuzyk.primetween.tgz"`).
+- **PrimeTween** se instala de una de estas dos formas. La versión de la dependencia es la mínima: cualquier versión igual o superior a 1.5.0 vale.
+  - Desde el Asset Store: tras importarlo, selecciona `Assets/Plugins/PrimeTween/PrimeTweenInstaller.asset` y pulsa **Install**. Eso añade `"com.kyrylokuzyk.primetween": "file:../Assets/Plugins/PrimeTween/internal/com.kyrylokuzyk.primetween-<versión>.tgz"` al `manifest.json`. Solo importar el asset no basta.
   - Desde el registro npm del autor: scope `com.kyrylokuzyk`, URL `https://registry.npmjs.org`.
 
 ## Vistas
