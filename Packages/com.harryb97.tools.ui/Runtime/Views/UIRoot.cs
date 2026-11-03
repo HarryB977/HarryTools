@@ -218,6 +218,7 @@ namespace HarryTools.UI {
             _root.collections = new List<ViewCollection>(_collections ?? Array.Empty<ViewCollection>());
             _root.views = CreateLayer<ViewLayer>(_go.transform, UILayerKind.Views, ViewsSortingOrder);
             _root.popups = CreateLayer<PopupLayer>(_go.transform, UILayerKind.Popups, PopupsSortingOrder);
+            _root.popups.SetBackdrop(PopupLayer.CreateDefaultBackdrop(_root.popups.transform));
             _root.overlays = CreateLayer<OverlayLayer>(_go.transform, UILayerKind.Overlays, OverlaysSortingOrder);
 
             EnsureEventSystem();

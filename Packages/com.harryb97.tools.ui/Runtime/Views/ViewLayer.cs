@@ -213,7 +213,7 @@ namespace HarryTools.UI {
         /// <summary> Busca primero una instancia del tipo exacto y, si no hay, una de un tipo derivado </summary>
         protected View FindInstance(Type _type) => FindInstance(_type, true) ?? FindInstance(_type, false);
 
-        private View FindInstance(Type _type, bool _exact) {
+        protected View FindInstance(Type _type, bool _exact) {
             bool Matches(View _view) => _view && (_exact ? _view.GetType() == _type : _type.IsInstanceOfType(_view));
 
             for (int i = visible.Count - 1; i >= 0; i--) if (Matches(visible[i])) return visible[i];
@@ -293,21 +293,28 @@ namespace HarryTools.UI {
 
             for (int i = 0; i < visible.Count; i++) {
                 View _view = visible[i];
-                _view.SetSortingOrder(sortingOrderBase + i);
+                _view.SetSortingOrder(SortingOrderFor(i));
                 _view.SetCulled(i < _cullBelow);
                 _view.SetInteractable(_view == _top && _view.State == ViewState.Visible);
             }
 
-            if (_top == lastTop) return;
+            if (_top != lastTop) {
+                View _previous = lastTop;
+                lastTop = _top;
 
-            View _previous = lastTop;
-            lastTop = _top;
+                if (_previous && _previous.IsVisible) _previous.NotifyBackground();
+                if (_top) _top.NotifyForeground();
+            }
 
-            if (_previous && _previous.IsVisible) _previous.NotifyBackground();
-            if (_top) _top.NotifyForeground();
+            OnRefreshed();
         }
 
-        private void NotFound(Type _type) {
+        /// <summary> Orden de dibujado de la vista en la posición indicada (deja un hueco libre debajo de cada una) </summary>
+        protected int SortingOrderFor(int _index) => sortingOrderBase + _index * 2 + 1;
+
+        protected virtual void OnRefreshed() { }
+
+        protected void NotFound(Type _type) {
             Logger.LogWarning("UI", $"No se ha encontrado ninguna vista de tipo '{_type.Name}'");
         }
     }
