@@ -1,6 +1,5 @@
 # HarryTools
 Herramientas que uso generalmente en mis proyectos de Unity
-
 Cada paquete está en `Packages/<nombre-del-paquete>/` con su propio `package.json` y `CHANGELOG.md`.
 
 ## Instalar un paquete en un proyecto
@@ -11,7 +10,6 @@ Se añade al `Packages/manifest.json` del proyecto con la URL de git, la ruta de
 ```
 
 Unity no resuelve las dependencias de un paquete instalado por git: las dependencias `com.harryb97.*` que aparecen en el `package.json` del paquete también hay que añadirlas al manifest del proyecto.
-
 Al ser un repositorio privado, Unity usa las credenciales de git del sistema (Git Credential Manager).
 
 ## Editar un paquete desde un proyecto
