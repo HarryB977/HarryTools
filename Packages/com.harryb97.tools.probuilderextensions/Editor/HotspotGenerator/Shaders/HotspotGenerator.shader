@@ -19,7 +19,8 @@ Shader "Hidden/HarryTools/HotspotGenerator" {
         float4 _Patches[MAX_PATCHES];    // xMin, yMin, xMax, yMax (normalized, top-left origin)
         float4 _PatchFlags[MAX_PATCHES]; // tiling axis (0 none, 1 horizontal, 2 vertical), rotate layers, random, random
 
-        float _Intensity, _BevelWidth, _EdgeTone, _ChipSize, _ChipDensity, _GapDepth, _Cavity, _Seed;
+        float _Intensity, _BevelWidth, _EdgeTone, _ChipSize, _ChipDensity, _GapDepth, _Cavity, _Seed, _Variation;
+        float _TopAlign, _BottomAlign;
         int _Channel;
 
         sampler2D _TopAlbedo, _TopNormal, _TopMS;
@@ -35,6 +36,7 @@ Shader "Hidden/HarryTools/HotspotGenerator" {
             int index;
             float dist;   // metres to the nearest border that does not repeat
             float2 edgeUV; // that border's closest point (UV space), where the wear width is sampled
+            float2 cornerUV; // bottom-left corner of the patch (UV space)
             float tiling;
             float rotate;
             float2 rnd;
@@ -42,7 +44,7 @@ Shader "Hidden/HarryTools/HotspotGenerator" {
 
         PatchInfo FindPatch(float2 uv) {
             PatchInfo p;
-            p.index = -1; p.dist = 0; p.edgeUV = uv; p.tiling = 0; p.rotate = 0; p.rnd = 0;
+            p.index = -1; p.dist = 0; p.edgeUV = uv; p.cornerUV = 0; p.tiling = 0; p.rotate = 0; p.rnd = 0;
             float2 n = float2(uv.x, 1 - uv.y);
             [loop]
             for (int i = 0; i < _PatchCount; i++) {
@@ -54,7 +56,7 @@ Shader "Hidden/HarryTools/HotspotGenerator" {
                     float dx = f.x == 1 ? 1e5 : min(a.x, b.x);
                     float dy = f.x == 2 ? 1e5 : min(a.y, b.y);
                     float2 edge = dx < dy ? float2(a.x < b.x ? r.x : r.z, n.y) : float2(n.x, a.y < b.y ? r.y : r.w);
-                    p.index = i; p.dist = min(dx, dy); p.edgeUV = float2(edge.x, 1 - edge.y);
+                    p.index = i; p.dist = min(dx, dy); p.edgeUV = float2(edge.x, 1 - edge.y); p.cornerUV = float2(r.x, 1 - r.w);
                     p.tiling = f.x; p.rotate = f.y; p.rnd = f.zw;
                     return p;
                 }
@@ -129,16 +131,17 @@ Shader "Hidden/HarryTools/HotspotGenerator" {
             return float4(height, wear, edge, p.index + 1);
         }
 
-        // Layer coordinates in repetitions, with a per-patch offset (and a 90° turn when allowed) for variety.
-        float2 LayerUV(PatchInfo p, float2 uv, float4 tiling, out float rotated) {
-            float2 t = uv * tiling.xy;
+        // Layer coordinates in repetitions. Aligned layers start at each patch's bottom-left corner; the others get a
+        // per-patch offset (and a 90° turn when allowed) scaled by _Variation.
+        float2 LayerUV(PatchInfo p, float2 uv, float4 tiling, float align, out float rotated) {
             rotated = 0;
-            if (p.index >= 0) {
-                t += floor(p.rnd * 16) + p.rnd;
-                if (p.rotate > 0.5 && p.tiling == 0 && p.rnd.x > 0.5) {
-                    t = float2(t.y, -t.x);
-                    rotated = 1;
-                }
+            if (p.index < 0) return uv * tiling.xy;
+            if (align > 0.5) return (uv - p.cornerUV) * tiling.xy;
+
+            float2 t = uv * tiling.xy + (floor(p.rnd * 16) + p.rnd) * _Variation;
+            if (p.rotate > 0.5 && p.tiling == 0 && p.rnd.x > 1 - 0.5 * _Variation) {
+                t = float2(t.y, -t.x);
+                rotated = 1;
             }
             return t;
         }
@@ -174,8 +177,8 @@ Shader "Hidden/HarryTools/HotspotGenerator" {
             Layers l;
             l.patch = FindPatch(uv);
             l.data = tex2D(_DataTex, uv);
-            l.topUV = LayerUV(l.patch, uv, _TopTiling, l.topRotated);
-            l.bottomUV = LayerUV(l.patch, uv, _BottomTiling, l.bottomRotated);
+            l.topUV = LayerUV(l.patch, uv, _TopTiling, _TopAlign, l.topRotated);
+            l.bottomUV = LayerUV(l.patch, uv, _BottomTiling, _BottomAlign, l.bottomRotated);
             return l;
         }
 

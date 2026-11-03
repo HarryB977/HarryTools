@@ -4,6 +4,8 @@
 
     - Nuevo generador de texturas hotspot (Tools > HarryTools > ProBuilder Extensions > Hotspot Texture Generator): a partir de una capa superior, una inferior y un layout genera Base Color, Normal, máscara Metallic/Smoothness y Occlusion para URP Lit, un material y un Hotspot Texture
     - Bisel y desgaste procedurales: el daño crece desde los bordes con un contorno irregular y su ancho se controla con Intensity; Cavity oscurece juntas y desconchones
+    - Cada capa se escala con Tile Size (metros reales que cubre la textura) y puede alinearse a la esquina de cada patch (Align To Patches) para que ladrillos y tablones empiecen enteros
+    - Variation controla cuánto cambia la capa de un patch a otro
     - Nuevo asset Hotspot Layout con opciones por patch: Allow Rotation, Allow Mirror X/Y, Allow Tiling e Inset
     - Cinco layouts de serie para interiores (Walls, Floors, Trims, Frames, Generic) a 512 px/m
     - Hotspot UV: tolerancia de escala para los Hotspot Texture con layout (por defecto ±25%), franjas de tiling para caras largas, espejo aleatorio, inset y aviso cuando una cara no encaja en ningún patch

@@ -38,7 +38,7 @@ namespace HarryTools.ProBuilderExtensions.Tests {
             recipe.layout = layout;
             recipe.top.albedo = Solid(Color.green);
             recipe.bottom.albedo = Solid(Color.red);
-            recipe.top.texelsPerUnit = recipe.bottom.texelsPerUnit = 64f;
+            recipe.top.tileSize = recipe.bottom.tileSize = 0.125f; // 8 px texture at 64 px/m
             recipe.wear.bevelWidth = 0.05f;
             recipe.wear.intensity = 0f;
             created.Add(layout);
@@ -269,6 +269,79 @@ namespace HarryTools.ProBuilderExtensions.Tests {
             recipe.wear.cavity = 0f;
             var flat = Read(recipe, HotspotMap.BaseColor, linear: false);
             Assert.AreEqual(flat.GetPixel(32, 32).r, flat.GetPixel(2, 32).r, 0.01f);
+        }
+        /// <summary>A non-readable 8×8 texture where every texel has a different colour.</summary>
+        private Texture2D Gradient() {
+            var tex = new Texture2D(8, 8, TextureFormat.RGBA32, false) { filterMode = FilterMode.Point };
+            var pixels = new Color[64];
+            for (int y = 0; y < 8; y++)
+                for (int x = 0; x < 8; x++) pixels[y * 8 + x] = new Color(x / 7f, y / 7f, (x + y) % 3 / 2f);
+            tex.SetPixels(pixels);
+            tex.Apply(false, true);
+            created.Add(tex);
+            return tex;
+        }
+
+        private HotspotRecipe TwoPatches(Texture2D top) {
+            var a = HotspotPatch.Default(new Rect(0.0625f, 0.0625f, 0.375f, 0.375f));
+            var b = HotspotPatch.Default(new Rect(0.5625f, 0.5f, 0.375f, 0.375f));
+            var recipe = Recipe(a, b);
+            recipe.top.albedo = top;
+            recipe.top.tileSize = 0.25f;
+            recipe.wear.edgeTone = 0f;
+            recipe.wear.cavity = 0f;
+            return recipe;
+        }
+
+        [Test]
+        public void VariationZero_SeedDoesNotChangeTheLayer() {
+            var recipe = TwoPatches(Gradient());
+            recipe.variation = 0f;
+            recipe.seed = 1;
+            var a = Read(recipe, HotspotMap.BaseColor);
+            recipe.seed = 2;
+            var b = Read(recipe, HotspotMap.BaseColor);
+            Assert.AreEqual(a.GetPixel(15, 48), b.GetPixel(15, 48));
+
+            recipe.variation = 1f;
+            var c = Read(recipe, HotspotMap.BaseColor);
+            recipe.seed = 1;
+            var d = Read(recipe, HotspotMap.BaseColor);
+            Assert.AreNotEqual(c.GetPixel(15, 48), d.GetPixel(15, 48), "with full variation the seed moves the layer");
+        }
+
+        [Test]
+        public void TileSize_SetsTheRepeatInMetres() {
+            var recipe = CentredPatch();
+            recipe.top.albedo = Gradient();
+            recipe.top.tileSize = 0.5f; // half the 1 m atlas → repeats every 32 px
+            recipe.variation = 0f;
+            recipe.wear.edgeTone = 0f;
+            recipe.wear.cavity = 0f;
+            var color = Read(recipe, HotspotMap.BaseColor);
+            for (int y = 16; y < 48; y += 7) {
+                var a = color.GetPixel(14, y);
+                var b = color.GetPixel(46, y);
+                Assert.AreEqual(a.r, b.r, 0.02f, $"row {y}");
+                Assert.AreEqual(a.g, b.g, 0.02f, $"row {y}");
+            }
+        }
+
+        [Test]
+        public void AlignToPatches_StartsEveryPatchAtTheSamePointOfTheLayer() {
+            var recipe = TwoPatches(Gradient());
+            recipe.top.alignToPatches = true;
+            recipe.variation = 1f;
+            recipe.seed = 5;
+            var color = Read(recipe, HotspotMap.BaseColor);
+            // Patch A bottom-left: pixel (4, 36); patch B bottom-left: pixel (36, 8) (texture y up).
+            for (int dy = 2; dy < 20; dy += 5)
+                for (int dx = 2; dx < 20; dx += 5) {
+                    var a = color.GetPixel(4 + dx, 36 + dy);
+                    var b = color.GetPixel(36 + dx, 8 + dy);
+                    Assert.AreEqual(a.r, b.r, 0.02f, $"offset {dx},{dy}");
+                    Assert.AreEqual(a.g, b.g, 0.02f, $"offset {dx},{dy}");
+                }
         }
     }
 }

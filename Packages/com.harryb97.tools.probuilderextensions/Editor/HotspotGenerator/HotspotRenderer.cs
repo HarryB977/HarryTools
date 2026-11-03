@@ -66,6 +66,7 @@ namespace HarryTools.ProBuilderExtensions.Generator {
             material.SetFloat("_GapDepth", wear.gapDepth);
             material.SetFloat("_Cavity", wear.cavity);
             material.SetFloat("_Seed", recipe.seed);
+            material.SetFloat("_Variation", Mathf.Clamp01(recipe.variation));
 
             SetLayer("_Top", recipe.top, worldSize);
             SetLayer("_Bottom", recipe.bottom, worldSize);
@@ -79,13 +80,14 @@ namespace HarryTools.ProBuilderExtensions.Generator {
             material.SetColor(prefix + "Tint", layer.tint);
 
             // Whole repetitions across the atlas, so tiling strips wrap seamlessly.
-            var tileWorld = new Vector2(albedo.width, albedo.height) / Mathf.Max(1f, layer.texelsPerUnit);
+            var tileWorld = new Vector2(1f, (float)albedo.height / Mathf.Max(1, albedo.width)) * Mathf.Max(0.01f, layer.tileSize);
             var reps = ComputeRepetitions(worldSize, tileWorld);
             var texelsPerAtlasPixel = albedo.width * reps.x / Size.x;
             var lod = Mathf.Log(Mathf.Max(1f, texelsPerAtlasPixel), 2f);
 
             material.SetVector(prefix + "Params", new Vector4(layer.metallic, layer.smoothness, layer.normalStrength, lod));
             material.SetVector(prefix + "Tiling", new Vector4(reps.x, reps.y, layer.normal != null ? 1 : 0, layer.metallicSmoothness != null ? 1 : 0));
+            material.SetFloat(prefix + "Align", layer.alignToPatches ? 1 : 0);
         }
 
         /// <summary>Whole numbers of layer tiles across the atlas on each axis.</summary>

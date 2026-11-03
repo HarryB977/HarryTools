@@ -23,6 +23,9 @@ namespace HarryTools.ProBuilderExtensions.Generator {
         [Tooltip("World width (metres) of the atlas, overriding the layout's. 0 = use the layout's.")]
         [Min(0)] public float worldWidthOverride;
 
+        [Tooltip("How differently each patch samples the layers. 0 = the layers run continuously across the atlas; 1 = every patch takes a random offset (and a 90° turn when the patch allows rotation).")]
+        [Range(0, 1)] public float variation = 0.5f;
+
         [Tooltip("Seed for the wear pattern and the per-patch variation.")]
         public int seed;
 
@@ -52,8 +55,11 @@ namespace HarryTools.ProBuilderExtensions.Generator {
         [Range(0, 1)] public float metallic;
         [Range(0, 1)] public float smoothness = 0.3f;
 
-        [Tooltip("Pixels of the albedo per metre. Sets how big the layer looks.")]
-        [Min(1)] public float texelsPerUnit = 512f;
+        [Tooltip("Real-world width (metres) covered by one repeat of the albedo, e.g. 1 for a texture showing 1 m of brick wall.")]
+        [Min(0.01f)] public float tileSize = 2f;
+
+        [Tooltip("Start the layer at the bottom-left corner of every patch, without random offset or rotation, so each patch begins with a whole brick course or plank.")]
+        public bool alignToPatches;
 
         [Range(0, 2)] public float normalStrength = 1f;
     }

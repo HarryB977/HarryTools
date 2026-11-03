@@ -56,7 +56,9 @@ Crea un atlas hotspot a partir de dos texturas tileables y un layout: una **capa
 ### Receta
 
 - **Layout**: los patches. Todas las recetas con el mismo layout producen los mismos rectángulos, así que una habitación mapeada una vez puede pasar de cuidada a vieja cambiando solo el material.
-- **Top / Bottom**: Albedo (obligatorio, tileable), Normal y Metallic/Smoothness (opcionales; R = metálico, A = suavidad), tinte, y **Texels Per Unit** (píxeles del albedo por metro: lo grande que se ve la capa).
+- **Top / Bottom**: Albedo (obligatorio, tileable), Normal y Metallic/Smoothness (opcionales; R = metálico, A = suavidad), tinte y:
+  - **Tile Size**: metros reales que cubre una repetición de la textura (por ejemplo, 1 si la textura muestra 1 m de pared de ladrillo). Así los ladrillos miden lo mismo en todos los patches.
+  - **Align To Patches**: la capa empieza en la esquina inferior izquierda de cada patch, sin desplazamiento ni giro. Útil para ladrillos, tablones o azulejos: cada patch arranca con una hilada entera. La textura tiene que empezar en una junta.
 - **Wear**:
   - **Intensity**: ancho del daño que crece desde los bordes hacia dentro. 0 = solo un bisel suave (siempre hay algo de distinción en los bordes); 1 = bordes muy rotos que dejan ver la capa inferior. El daño siempre parte de la junta, nunca aparecen manchas sueltas.
   - **Bevel Width**: ancho del bisel en metros.
@@ -67,6 +69,7 @@ Crea un atlas hotspot a partir de dos texturas tileables y un layout: una **capa
   - **Gap Depth**: profundidad de juntas y desconchones respecto al bisel.
 - **Resolution**: ancho de las texturas (el alto sigue la proporción del layout).
 - **World Width Override**: cambia los metros que cubre el atlas sin tocar el layout.
+- **Variation**: cuánto cambia la capa de un patch a otro. 0 = la textura sigue continua por todo el atlas; 1 = cada patch toma un trozo distinto (y gira 90° si el patch lo permite). Bájalo si los patches se ven de colores muy distintos.
 - **Seed**: cambia el patrón de desgaste y la variación de cada patch.
 
 ### Salidas
