@@ -32,6 +32,16 @@ namespace HarryTools.UI.Editor
         // Outline
         SerializedProperty _outlineSize;
         SerializedProperty _outlineColor;
+        SerializedProperty _outlineGradientType;
+        SerializedProperty _outlineGradientColor;
+        SerializedProperty _outlineGradientAngle;
+
+        // Inner shadow
+        SerializedProperty _innerShadowSize;
+        SerializedProperty _innerShadowBlur;
+        SerializedProperty _innerShadowOffset;
+        SerializedProperty _innerShadowColor;
+        SerializedProperty _shadowOffset;
 
         // Shadow
         SerializedProperty _shadowSize;
@@ -74,6 +84,14 @@ namespace HarryTools.UI.Editor
 
             _outlineSize = serializedObject.FindProperty("_outlineSize");
             _outlineColor = serializedObject.FindProperty("_outlineColor");
+            _outlineGradientType = serializedObject.FindProperty("_outlineGradientType");
+            _outlineGradientColor = serializedObject.FindProperty("_outlineGradientColor");
+            _outlineGradientAngle = serializedObject.FindProperty("_outlineGradientAngle");
+            _innerShadowSize = serializedObject.FindProperty("_innerShadowSize");
+            _innerShadowBlur = serializedObject.FindProperty("_innerShadowBlur");
+            _innerShadowOffset = serializedObject.FindProperty("_innerShadowOffset");
+            _innerShadowColor = serializedObject.FindProperty("_innerShadowColor");
+            _shadowOffset = serializedObject.FindProperty("_shadowOffset");
 
             _shadowSize = serializedObject.FindProperty("_shadowSize");
             _shadowBlur = serializedObject.FindProperty("_shadowBlur");
@@ -177,6 +195,18 @@ namespace HarryTools.UI.Editor
             // Outline
             BeginSection("Outline");
             FloatWithColorSwatch(_outlineSize, _outlineColor, "Size");
+
+            if (_outlineSize.floatValue > 0f)
+            {
+                EditorGUILayout.PropertyField(_outlineGradientType, new GUIContent("Gradient", "Del color del contorno al color final"));
+                if (_outlineGradientType.enumValueIndex != (int)OutlineGradientType.None)
+                {
+                    EditorGUILayout.PropertyField(_outlineGradientColor, new GUIContent("Gradient End"));
+                    if (_outlineGradientType.enumValueIndex == (int)OutlineGradientType.Angle)
+                        EditorGUILayout.PropertyField(_outlineGradientAngle, new GUIContent("Gradient Angle"));
+                }
+            }
+
             EndSection();
 
             // Shadow
@@ -187,6 +217,19 @@ namespace HarryTools.UI.Editor
             {
                 EditorGUILayout.PropertyField(_shadowBlur, new GUIContent("Blur"));
                 EditorGUILayout.PropertyField(_shadowPower, new GUIContent("Power"));
+                EditorGUILayout.PropertyField(_shadowOffset, new GUIContent("Offset"));
+            }
+
+            EndSection();
+
+            // Inner shadow
+            BeginSection("Inner Shadow");
+            FloatWithColorSwatch(_innerShadowSize, _innerShadowColor, "Size");
+
+            if (_innerShadowSize.floatValue > 0f || _innerShadowBlur.floatValue > 0f)
+            {
+                EditorGUILayout.PropertyField(_innerShadowBlur, new GUIContent("Blur"));
+                EditorGUILayout.PropertyField(_innerShadowOffset, new GUIContent("Offset"));
             }
 
             EndSection();

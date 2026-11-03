@@ -27,6 +27,15 @@ namespace HarryTools.UI
         Outside
     }
 
+    /// <summary> Dirección del degradado del contorno: del color del contorno al color final </summary>
+    public enum OutlineGradientType
+    {
+        None,
+        Vertical,
+        Horizontal,
+        Angle
+    }
+
     [RequireComponent(typeof(CanvasRenderer))]
     public class SignedDistanceFieldGraphic : MaskableGraphic, IColored
     {
@@ -51,10 +60,20 @@ namespace HarryTools.UI
         [SerializeField, Min(0f)] float _outlineSize;
         [SerializeField] Color _outlineColor = Color.black;
 
+        [SerializeField] OutlineGradientType _outlineGradientType;
+        [SerializeField] Color _outlineGradientColor = Color.white;
+        [SerializeField, Range(0f, 360f)] float _outlineGradientAngle;
+
         [SerializeField, Min(0f)] float _shadowSize;
         [SerializeField, Min(0f)] float _shadowBlur;
         [SerializeField, Min(0f)] float _shadowPower = 1f;
         [SerializeField] Color _shadowColor = Color.black;
+        [SerializeField] Vector2 _shadowOffset;
+
+        [SerializeField, Min(0f)] float _innerShadowSize;
+        [SerializeField, Min(0f)] float _innerShadowBlur;
+        [SerializeField] Vector2 _innerShadowOffset;
+        [SerializeField] Color _innerShadowColor = new Color(0f, 0f, 0f, 0.5f);
 
         [SerializeField, Min(0f)] float _embossSize;
         [SerializeField, Range(0f, 360f)] float _embossAngle = 135f;
@@ -161,6 +180,57 @@ namespace HarryTools.UI
             set { if (_outlineColor == value) return; _outlineColor = value; SetVerticesDirty(); }
         }
 
+        public OutlineGradientType outlineGradientType
+        {
+            get => _outlineGradientType;
+            set { if (_outlineGradientType == value) return; _outlineGradientType = value; SetAllDirty(); }
+        }
+
+        /// <summary> Color final del degradado del contorno (el inicial es <see cref="outlineColor"/>) </summary>
+        public Color outlineGradientColor
+        {
+            get => _outlineGradientColor;
+            set { if (_outlineGradientColor == value) return; _outlineGradientColor = value; SetMaterialDirty(); }
+        }
+
+        public float outlineGradientAngle
+        {
+            get => _outlineGradientAngle;
+            set { if (Mathf.Approximately(_outlineGradientAngle, value)) return; _outlineGradientAngle = value; SetMaterialDirty(); }
+        }
+
+        /// <summary> Desplazamiento de la sombra exterior, en píxeles </summary>
+        public Vector2 shadowOffset
+        {
+            get => _shadowOffset;
+            set { if (_shadowOffset == value) return; _shadowOffset = value; SetAllDirty(); }
+        }
+
+        public float innerShadowSize
+        {
+            get => _innerShadowSize;
+            set { value = Mathf.Max(0f, value); if (Mathf.Approximately(_innerShadowSize, value)) return; _innerShadowSize = value; SetAllDirty(); }
+        }
+
+        public float innerShadowBlur
+        {
+            get => _innerShadowBlur;
+            set { value = Mathf.Max(0f, value); if (Mathf.Approximately(_innerShadowBlur, value)) return; _innerShadowBlur = value; SetAllDirty(); }
+        }
+
+        /// <summary> Desplazamiento de la sombra interior, en píxeles </summary>
+        public Vector2 innerShadowOffset
+        {
+            get => _innerShadowOffset;
+            set { if (_innerShadowOffset == value) return; _innerShadowOffset = value; SetMaterialDirty(); }
+        }
+
+        public Color innerShadowColor
+        {
+            get => _innerShadowColor;
+            set { if (_innerShadowColor == value) return; _innerShadowColor = value; SetMaterialDirty(); }
+        }
+
         public float shadowSize
         {
             get => _shadowSize;
@@ -227,7 +297,58 @@ namespace HarryTools.UI
             }
         }
 
-        float extraMargin => _outlineSize + FrameOutwardExtension + _shadowSize + _shadowBlur + 1f;
+        float extraMargin => _outlineSize + FrameOutwardExtension + _shadowSize + _shadowBlur + ExtendedPadding + 1f;
+
+        // ---------- Opciones extendidas: material propio solo para los gráficos que las usan ----------
+        public const string ExtendedKeyword = "HT_EXTENDED";
+
+        static readonly int OutlineColorBId = Shader.PropertyToID("_OutlineColorB");
+        static readonly int OutlineGradientId = Shader.PropertyToID("_OutlineGradient");
+        static readonly int InnerShadowColorId = Shader.PropertyToID("_InnerShadowColor");
+        static readonly int InnerShadowId = Shader.PropertyToID("_InnerShadow");
+        static readonly int ShadowOffsetId = Shader.PropertyToID("_ShadowOffset");
+
+        Material _extendedMaterial;
+
+        /// <summary> Usa alguna opción que no cabe en los datos de vértice (degradado del contorno, sombra interior o desplazamiento de sombra) </summary>
+        public bool usesExtendedFeatures =>
+            (_outlineGradientType != OutlineGradientType.None && _outlineSize > 0f)
+            || _innerShadowSize > 0f || _innerShadowBlur > 0f
+            || (_shadowOffset != Vector2.zero && _shadowSize + _shadowBlur > 0f);
+
+        /// <summary> Margen que necesita el desplazamiento de la sombra (el shader lo recibe en _ShadowOffset.z) </summary>
+        float ExtendedPadding => usesExtendedFeatures ? Mathf.Max(Mathf.Abs(_shadowOffset.x), Mathf.Abs(_shadowOffset.y)) : 0f;
+
+        public override Material GetModifiedMaterial(Material baseMaterial)
+        {
+            var modified = base.GetModifiedMaterial(baseMaterial);
+            if (!usesExtendedFeatures || !modified)
+                return modified;
+
+            if (!_extendedMaterial)
+                _extendedMaterial = new Material(modified) { hideFlags = HideFlags.HideAndDontSave, name = "RectangleRenderer (Extended)" };
+            else if (_extendedMaterial.shader != modified.shader)
+                _extendedMaterial.shader = modified.shader;
+
+            _extendedMaterial.CopyPropertiesFromMaterial(modified);
+            _extendedMaterial.EnableKeyword(ExtendedKeyword);
+
+            float angle = _outlineGradientAngle * Mathf.Deg2Rad;
+            _extendedMaterial.SetColor(OutlineColorBId, _outlineGradientColor);
+            _extendedMaterial.SetVector(OutlineGradientId, new Vector4((int)_outlineGradientType, Mathf.Cos(angle), Mathf.Sin(angle), 0f));
+            _extendedMaterial.SetColor(InnerShadowColorId, _innerShadowColor);
+            _extendedMaterial.SetVector(InnerShadowId, new Vector4(_innerShadowSize, _innerShadowBlur, _innerShadowOffset.x, _innerShadowOffset.y));
+            _extendedMaterial.SetVector(ShadowOffsetId, new Vector4(_shadowOffset.x, _shadowOffset.y, ExtendedPadding, 0f));
+            return _extendedMaterial;
+        }
+
+        protected override void OnDestroy()
+        {
+            base.OnDestroy();
+            if (!_extendedMaterial) return;
+            if (Application.isPlaying) Destroy(_extendedMaterial);
+            else DestroyImmediate(_extendedMaterial);
+        }
 
         public override Texture mainTexture => _texture ? _texture : s_WhiteTexture;
 
@@ -556,7 +677,9 @@ namespace HarryTools.UI
             "Outline",
             "Shadow",
             "Emboss Highlight",
-            "Emboss Shadow"
+            "Emboss Shadow",
+            "Outline Gradient",
+            "Inner Shadow"
         };
 
         public string[] keys => _keys;
@@ -571,6 +694,8 @@ namespace HarryTools.UI
                 3 => shadowColor,
                 4 => embossHighlightColor,
                 5 => embossShadowColor,
+                6 => outlineGradientColor,
+                7 => innerShadowColor,
                 _ => throw new ArgumentOutOfRangeException(nameof(keyIndex), keyIndex, $"Key index must be between 0 and {_keys.Length - 1}.")
             };
         }
@@ -585,6 +710,8 @@ namespace HarryTools.UI
                 case 3: shadowColor = color; break;
                 case 4: embossHighlightColor = color; break;
                 case 5: embossShadowColor = color; break;
+                case 6: outlineGradientColor = color; break;
+                case 7: innerShadowColor = color; break;
             }
         }
     }

@@ -81,12 +81,14 @@ Shader "Hidden/HarryTools/UI/GlowRenderer"
                 float4 roundness  : TEXCOORD1;
                 float4 params     : TEXCOORD2; // xy=halfSize, z=spread, w=blur
                 float2 params2    : TEXCOORD3; // x=power, y=encodedFrame
-                float2 worldPos   : TEXCOORD4;
+                half4 mask        : TEXCOORD4; // RectMask2D con softness
                 UNITY_VERTEX_OUTPUT_STEREO
             };
 
             fixed4 _Color;
             float4 _ClipRect;
+            float _UIMaskSoftnessX;
+            float _UIMaskSoftnessY;
 
             float sdRoundedBox(float2 p, float2 b, float4 r)
             {
@@ -128,7 +130,11 @@ Shader "Hidden/HarryTools/UI/GlowRenderer"
                 OUT.roundness = v.uv1;
                 OUT.params = float4(size * 0.5, spread, blur);
                 OUT.params2 = float2(v.uv2.z, frameVal);
-                OUT.worldPos = v.vertex.xy;
+                float2 pixelSize = OUT.vertex.w;
+                pixelSize /= abs(mul((float2x2)UNITY_MATRIX_P, _ScreenParams.xy));
+                float4 clampedRect = clamp(_ClipRect, -2e10, 2e10);
+                OUT.mask = half4(v.vertex.xy * 2 - clampedRect.xy - clampedRect.zw,
+                                 0.25 / (0.25 * half2(_UIMaskSoftnessX, _UIMaskSoftnessY) + abs(pixelSize.xy)));
 
                 return OUT;
             }
@@ -176,7 +182,8 @@ Shader "Hidden/HarryTools/UI/GlowRenderer"
                 result.a = alpha;
 
                 #ifdef UNITY_UI_CLIP_RECT
-                result *= UnityGet2DClipping(IN.worldPos, _ClipRect);
+                half2 clipMask = saturate((_ClipRect.zw - _ClipRect.xy - abs(IN.mask.xy)) * IN.mask.zw);
+                result *= clipMask.x * clipMask.y;
                 #endif
 
                 #ifdef UNITY_UI_ALPHACLIP

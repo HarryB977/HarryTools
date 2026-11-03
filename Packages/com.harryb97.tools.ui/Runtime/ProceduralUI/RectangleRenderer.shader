@@ -14,6 +14,13 @@ Shader "Hidden/HarryTools/UI/RectangleRenderer"
         _ColorMask ("Color Mask", Float) = 15
 
         [Toggle(UNITY_UI_ALPHACLIP)] _UseUIAlphaClip ("Use Alpha Clip", Float) = 0
+
+        // Opciones extendidas (solo con la palabra clave HT_EXTENDED, en un material por instancia)
+        [HideInInspector] _OutlineColorB ("Outline Gradient Color", Color) = (1,1,1,1)
+        [HideInInspector] _OutlineGradient ("Outline Gradient (type, cos, sin)", Vector) = (0,1,0,0)
+        [HideInInspector] _InnerShadowColor ("Inner Shadow Color", Color) = (0,0,0,0.5)
+        [HideInInspector] _InnerShadow ("Inner Shadow (size, blur, offset)", Vector) = (0,0,0,0)
+        [HideInInspector] _ShadowOffset ("Shadow Offset (xy, padding)", Vector) = (0,0,0,0)
     }
 
     SubShader
@@ -48,13 +55,14 @@ Shader "Hidden/HarryTools/UI/RectangleRenderer"
             CGPROGRAM
             #pragma vertex vert
             #pragma fragment frag
-            #pragma target 2.0
+            #pragma target 3.0
 
             #include "UnityCG.cginc"
             #include "UnityUI.cginc"
 
             #pragma multi_compile_local _ UNITY_UI_CLIP_RECT
             #pragma multi_compile_local _ UNITY_UI_ALPHACLIP
+            #pragma multi_compile_local _ HT_EXTENDED
 
             // Vertex attributes packed by OnPopulateMesh:
             //   uv0: texU, texV, width, height
@@ -91,6 +99,7 @@ Shader "Hidden/HarryTools/UI/RectangleRenderer"
                 float3 emboss       : TEXCOORD6; // x=size, y=angle, z=strength
                 half4 embossHColor  : TEXCOORD7;
                 half4 embossLColor  : TEXCOORD8;
+                half4 mask          : TEXCOORD9; // xy=posición relativa al ClipRect, zw=inverso del softness
                 UNITY_VERTEX_OUTPUT_STEREO
             };
 
@@ -98,6 +107,14 @@ Shader "Hidden/HarryTools/UI/RectangleRenderer"
             fixed4 _Color;
             fixed4 _TextureSampleAdd;
             float4 _ClipRect;
+            float _UIMaskSoftnessX;
+            float _UIMaskSoftnessY;
+
+            half4 _OutlineColorB;
+            float4 _OutlineGradient;
+            half4 _InnerShadowColor;
+            float4 _InnerShadow;
+            float4 _ShadowOffset;
 
             // Unpack a Color32 from 2 floats (r+g*256, b+a*256)
             half4 UnpackColor(float2 packed)
@@ -138,6 +155,9 @@ Shader "Hidden/HarryTools/UI/RectangleRenderer"
                     outlineExtent = rawOutline;
                 }
                 float padding = outlineExtent + v.uv2.y + v.uv2.z + 1.0; // outline+frame + shadow + blur + 1px
+                #ifdef HT_EXTENDED
+                padding += _ShadowOffset.z; // margen extra para la sombra desplazada
+                #endif
                 float2 normPad = padding / size;
                 float2 uv = v.uv0.xy * (1 + normPad * 2) - normPad;
 
@@ -145,6 +165,13 @@ Shader "Hidden/HarryTools/UI/RectangleRenderer"
                 OUT.roundness = v.uv1;
                 OUT.params = float4(size * 0.5, v.uv2.xy);
                 OUT.params2 = float4(v.uv2.zw, v.vertex.xy);
+
+                // RectMask2D con softness, igual que UI/Default
+                float2 pixelSize = OUT.vertex.w;
+                pixelSize /= abs(mul((float2x2)UNITY_MATRIX_P, _ScreenParams.xy));
+                float4 clampedRect = clamp(_ClipRect, -2e10, 2e10);
+                OUT.mask = half4(v.vertex.xy * 2 - clampedRect.xy - clampedRect.zw,
+                                 0.25 / (0.25 * half2(_UIMaskSoftnessX, _UIMaskSoftnessY) + abs(pixelSize.xy)));
 
                 // Unpack colors in vertex shader (4 verts) instead of fragment (thousands)
                 OUT.outlineColor = UnpackColor(v.uv3.xy);
@@ -234,11 +261,19 @@ Shader "Hidden/HarryTools/UI/RectangleRenderer"
                 float shadowRange = shadowSize + shadowBlur;
                 if (shadowRange > 0)
                 {
+                    float shadowSdf = sdf;
+                    #ifdef HT_EXTENDED
+                    if (any(_ShadowOffset.xy != 0))
+                    {
+                        shadowSdf = sdRoundedBox(IN.texAndSdf.zw - _ShadowOffset.xy, halfSize, IN.roundness);
+                        if (frameMode) shadowSdf = abs(shadowSdf - ringCenter) - ringHalf;
+                    }
+                    #endif
                     float shadowEdge = outlineSize + shadowSize;
                     shadow = 1 - smoothstep(
                         shadowEdge - shadowBlur,
                         shadowEdge + delta,
-                        sdf);
+                        shadowSdf);
                     shadow = pow(shadow, shadowPow);
                 }
 
@@ -273,11 +308,36 @@ Shader "Hidden/HarryTools/UI/RectangleRenderer"
                     fillRgb = lerp(fillRgb, tint, abs(light) * bandMask * saturate(fill * 8));
                 }
 
+                half4 outlineColor = IN.outlineColor;
+
+                #ifdef HT_EXTENDED
+                // Sombra interior: banda dentro del borde que se difumina hacia el centro
+                float innerSize = _InnerShadow.x;
+                float innerBlur = _InnerShadow.y;
+                if (innerSize + innerBlur > 0)
+                {
+                    float innerSdf = sdRoundedBox(IN.texAndSdf.zw - _InnerShadow.zw, halfSize, IN.roundness);
+                    if (frameMode) innerSdf = abs(innerSdf - ringCenter) - ringHalf;
+                    float inner = 1 - smoothstep(innerSize, innerSize + innerBlur + delta, -innerSdf);
+                    fillRgb = lerp(fillRgb, _InnerShadowColor.rgb, inner * _InnerShadowColor.a);
+                }
+
+                // Degradado del contorno: 1 vertical (arriba → abajo), 2 horizontal (izquierda → derecha), 3 ángulo
+                if (_OutlineGradient.x > 0.5)
+                {
+                    float2 uvn = IN.texAndSdf.xy;
+                    float t = _OutlineGradient.x < 1.5 ? 1 - uvn.y
+                            : _OutlineGradient.x < 2.5 ? uvn.x
+                            : dot(uvn - 0.5, _OutlineGradient.yz) + 0.5;
+                    outlineColor = lerp(IN.outlineColor, _OutlineColorB, saturate(t));
+                }
+                #endif
+
                 // vertex.color = graphicColor * Graphic.color
                 // .a is master alpha (CanvasGroup compatible)
                 float masterAlpha = IN.color.a;
                 float gA = fill * graphic.a * masterAlpha;
-                float oA = outline * IN.outlineColor.a * masterAlpha;
+                float oA = outline * outlineColor.a * masterAlpha;
                 float sA = shadow * IN.shadowColor.a * masterAlpha;
 
                 // Inlined Over(fill, Over(outline, shadow)) in premultiplied space
@@ -286,14 +346,15 @@ Shader "Hidden/HarryTools/UI/RectangleRenderer"
 
                 half4 result;
                 result.rgb = fillRgb * gA
-                    + IN.outlineColor.rgb * oA * oneMinusGA
+                    + outlineColor.rgb * oA * oneMinusGA
                     + IN.shadowColor.rgb * sA * oneMinusOA * oneMinusGA;
                 result.a = gA
                     + oA * oneMinusGA
                     + sA * oneMinusOA * oneMinusGA;
 
                 #ifdef UNITY_UI_CLIP_RECT
-                result *= UnityGet2DClipping(IN.params2.zw, _ClipRect);
+                half2 clipMask = saturate((_ClipRect.zw - _ClipRect.xy - abs(IN.mask.xy)) * IN.mask.zw);
+                result *= clipMask.x * clipMask.y;
                 #endif
 
                 #ifdef UNITY_UI_ALPHACLIP
