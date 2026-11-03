@@ -1,0 +1,22 @@
+{
+  "name": "com.harryb97.tools.probuilderextensions",
+  "version": "1.0.0",
+  "displayName": "ProBuilder Extensions",
+  "description": "Herramientas que amplían ProBuilder. Incluye Hotspot UV: asigna a cada cara seleccionada el rectángulo de un atlas que mejor encaja con su forma y tamaño",
+  "unity": "6000.0",
+  "keywords": [
+    "probuilder",
+    "hotspot",
+    "uv",
+    "level design"
+  ],
+  "author": {
+    "name": "HarryB97",
+    "email": "36953173+HarryB977@users.noreply.github.com"
+  },
+  "hideInEditor": true,
+  "license": "MIT",
+  "dependencies": {
+    "com.unity.probuilder": "6.0.0"
+  }
+}
