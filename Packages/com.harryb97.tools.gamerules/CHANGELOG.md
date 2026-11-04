@@ -1,5 +1,9 @@
 # Change Log:
 
+## 1.0.5
+
+    - `displayName` de `GameRules` a `HarryTools GameRules`, para distinguirlo en la carpeta Packages y en el Package Manager. Los samples nuevos se importan en `Assets/Samples/HarryTools GameRules/`
+
 ## 1.0.4
 
     - Añadido README con la instalación, el uso y la configuración

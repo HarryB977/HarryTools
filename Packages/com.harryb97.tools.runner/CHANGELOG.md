@@ -1,5 +1,9 @@
 # Change Log:
 
+## 1.0.8
+
+    - `displayName` de `Runner` a `HarryTools Runner`, para distinguirlo en la carpeta Packages y en el Package Manager. Los samples nuevos se importan en `Assets/Samples/HarryTools Runner/`
+
 ## 1.0.7
 
     - Añadido README con la instalación, el uso y la configuración

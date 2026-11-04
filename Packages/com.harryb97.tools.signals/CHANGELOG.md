@@ -1,5 +1,9 @@
 # Change Log:
 
+## 1.0.4
+
+    - `displayName` de `Signals` a `HarryTools Signals`, para distinguirlo en la carpeta Packages y en el Package Manager. Los samples nuevos se importan en `Assets/Samples/HarryTools Signals/`
+
 ## 1.0.3
 
     - Añadido README con la instalación, el uso y la configuración

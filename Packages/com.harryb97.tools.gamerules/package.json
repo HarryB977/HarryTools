@@ -1,7 +1,7 @@
 {
   "name": "com.harryb97.tools.gamerules",
-  "version": "1.0.4",
-  "displayName": "GameRules",
+  "version": "1.0.5",
+  "displayName": "HarryTools GameRules",
   "description": "Herramienta que permite crear reglas que pueden verificarse, para permitir o denegar cualquier función dentro del juego",
   "unity": "6000.0",
   "author": {

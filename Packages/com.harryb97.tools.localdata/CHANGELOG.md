@@ -1,5 +1,9 @@
 # Change Log:
 
+## 2.0.3
+
+    - `displayName` de `Local Data` a `HarryTools Local Data`, para distinguirlo en la carpeta Packages y en el Package Manager. Los samples nuevos se importan en `Assets/Samples/HarryTools Local Data/`
+
 ## 2.0.2
 
     - Añadido README con la instalación, el uso y la configuración

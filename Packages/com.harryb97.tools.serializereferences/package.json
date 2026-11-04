@@ -1,7 +1,7 @@
 {
   "name": "com.harryb97.tools.serializereferences",
-  "version": "1.0.2",
-  "displayName": "Serialize References",
+  "version": "1.0.3",
+  "displayName": "HarryTools Serialize References",
   "description": "Desplegable para elegir el tipo de los campos con [SerializeReference], corrección automática de referencias duplicadas y explorador de referencias de las escenas abiertas",
   "unity": "6000.0",
   "keywords": [

@@ -1,5 +1,9 @@
 # Change Log:
 
+## 1.2.6
+
+    - `displayName` de `Localization` a `HarryTools Localization`, para distinguirlo en la carpeta Packages y en el Package Manager. Los samples nuevos se importan en `Assets/Samples/HarryTools Localization/`
+
 ## 1.2.5
 
     - Añadido README con la instalación, el uso y la configuración

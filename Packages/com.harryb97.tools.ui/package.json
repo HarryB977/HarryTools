@@ -1,7 +1,7 @@
 {
   "name": "com.harryb97.tools.ui",
-  "version": "1.0.2",
-  "displayName": "UI",
+  "version": "1.0.3",
+  "displayName": "HarryTools UI",
   "description": "Sistema de interfaces basado en PurrUI: vistas, popups y overlays por capas, paleta de colores con temas, iconos en texto y gráficos procedurales para uGUI.",
   "unity": "6000.0",
   "author": {

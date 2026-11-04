@@ -1,7 +1,7 @@
 {
   "name": "com.harryb97.tools.actions",
-  "version": "1.0.3",
-  "displayName": "Actions",
+  "version": "1.0.4",
+  "displayName": "HarryTools Actions",
   "description": "Acciones modulares asíncronas configurables desde el inspector con [SerializeReference]. Se ejecutan en orden, con condiciones, ramas, paralelos, esperas y cancelación",
   "unity": "6000.0",
   "keywords": [

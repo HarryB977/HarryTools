@@ -1,5 +1,9 @@
 # Change Log:
 
+## 1.0.4
+
+    - `displayName` de `Actions` a `HarryTools Actions`, para distinguirlo en la carpeta Packages y en el Package Manager. Los samples nuevos se importan en `Assets/Samples/HarryTools Actions/`
+
 ## 1.0.3
 
     - Dependencia `com.harryb97.tools.serializereferences` de 1.0.0 a 1.0.2: la 1.0.0 no está publicada y no se podía resolver desde OpenUPM

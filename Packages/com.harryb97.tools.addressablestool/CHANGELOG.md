@@ -1,5 +1,9 @@
 # Change Log:
 
+## 1.1.4
+
+    - `displayName` de `Addressables Tool` a `HarryTools Addressables Tool`, para distinguirlo en la carpeta Packages y en el Package Manager. Los samples nuevos se importan en `Assets/Samples/HarryTools Addressables Tool/`
+
 ## 1.1.3
 
     - Añadido README con la instalación, el uso y la configuración

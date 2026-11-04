@@ -1,5 +1,9 @@
 # Change Log:
 
+## 1.2.2
+
+    - `displayName` de `ProBuilder Extensions` a `HarryTools ProBuilder Extensions`, para distinguirlo en la carpeta Packages y en el Package Manager. Los samples nuevos se importan en `Assets/Samples/HarryTools ProBuilder Extensions/`
+
 ## 1.2.1
 
     - Publicado en OpenUPM: se instala con `openupm add com.harryb97.tools.probuilderextensions` y el Package Manager avisa de las actualizaciones

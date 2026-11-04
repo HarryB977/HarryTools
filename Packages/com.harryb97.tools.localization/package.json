@@ -1,7 +1,7 @@
 {
   "name": "com.harryb97.tools.localization",
-  "version": "1.2.5",
-  "displayName": "Localization",
+  "version": "1.2.6",
+  "displayName": "HarryTools Localization",
   "description": "Herramientas para facilitar el uso del paquete de localización de Unity",
   "unity": "6000.0",
   "author": {

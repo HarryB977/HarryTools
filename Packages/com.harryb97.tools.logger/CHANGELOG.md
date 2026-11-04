@@ -1,5 +1,9 @@
 # Change Log:
 
+## 1.0.3
+
+    - `displayName` de `Logger` a `HarryTools Logger`, para distinguirlo en la carpeta Packages y en el Package Manager. Los samples nuevos se importan en `Assets/Samples/HarryTools Logger/`
+
 ## 1.0.2
 
     - Añadido README con la instalación, el uso y la configuración

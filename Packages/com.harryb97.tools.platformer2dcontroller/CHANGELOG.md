@@ -1,5 +1,9 @@
 # Change Log:
 
+## 1.0.4
+
+    - `displayName` de `Platformer 2D Controller` a `HarryTools Platformer 2D Controller`, para distinguirlo en la carpeta Packages y en el Package Manager. Los samples nuevos se importan en `Assets/Samples/HarryTools Platformer 2D Controller/`
+
 ## 1.0.3
 
     - Añadido README con la instalación, el uso y la configuración

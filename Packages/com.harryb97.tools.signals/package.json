@@ -1,7 +1,7 @@
 {
   "name": "com.harryb97.tools.signals",
-  "version": "1.0.3",
-  "displayName": "Signals",
+  "version": "1.0.4",
+  "displayName": "HarryTools Signals",
   "description": "Sistema similar a Event System, pero que usa una clase central para contener los eventos, evitando dependencias entre clases",
   "unity": "6000.0",
   "author": {

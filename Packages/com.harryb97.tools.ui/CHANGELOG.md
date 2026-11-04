@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.0.3] - 2026-11-04
+### Cambiado
+- `displayName` de `UI` a `HarryTools UI`, para distinguirlo en la carpeta Packages y en el Package Manager. Los samples nuevos se importan en `Assets/Samples/HarryTools UI/`.
+
 ## [1.0.2] - 2026-11-04
 ### Cambiado
 - Publicado en OpenUPM: se instala con `openupm add com.harryb97.tools.ui` y el Package Manager avisa de las actualizaciones

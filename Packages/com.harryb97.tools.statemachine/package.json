@@ -1,7 +1,7 @@
 {
   "name": "com.harryb97.tools.statemachine",
-  "version": "1.0.2",
-  "displayName": "State Machine",
+  "version": "1.0.3",
+  "displayName": "HarryTools State Machine",
   "description": "Herramienta que añade una máquina de estado con interfaces para estados, transiciones y predicados personalizados",
   "unity": "6000.0",
   "author": {

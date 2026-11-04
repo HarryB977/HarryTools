@@ -1,5 +1,9 @@
 # Change Log:
 
+## 1.3.3
+
+    - `displayName` de `Service Provider` a `HarryTools Service Provider`, para distinguirlo en la carpeta Packages y en el Package Manager. Los samples nuevos se importan en `Assets/Samples/HarryTools Service Provider/`
+
 ## 1.3.2
 
     - Publicado en OpenUPM: se instala con `openupm add com.harryb97.tools.serviceprovider` y el Package Manager avisa de las actualizaciones

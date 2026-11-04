@@ -1,7 +1,7 @@
 {
   "name": "com.harryb97.tools.serviceprovider",
-  "version": "1.3.2",
-  "displayName": "Service Provider",
+  "version": "1.3.3",
+  "displayName": "HarryTools Service Provider",
   "description": "Integración simple de un sistema que provee servicios",
   "unity": "6000.0",
   "keywords": [
