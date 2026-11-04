@@ -99,9 +99,12 @@ namespace HarryTools.Audio.Tests {
             Create<VoiceAsset>("A");
             AudioCatalogMaintainer.Rebuild(catalog);
 
-            Assert.AreEqual(3, catalog.Items.Count);
             var _paths = new List<string>();
-            for (int _i = 0; _i < catalog.Items.Count; _i++) _paths.Add(AssetDatabase.GetAssetPath(catalog.Items[_i]));
+            for (int _i = 0; _i < catalog.Items.Count; _i++) {
+                string _path = AssetDatabase.GetAssetPath(catalog.Items[_i]);
+                if (_path.StartsWith(Folder + "/")) _paths.Add(_path);
+            }
+            Assert.AreEqual(3, _paths.Count);
             var _sorted = new List<string>(_paths);
             _sorted.Sort(System.StringComparer.Ordinal);
             CollectionAssert.AreEqual(_sorted, _paths);

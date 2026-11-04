@@ -17,6 +17,9 @@ namespace HarryTools.Audio {
 
         public IReadOnlyList<AudioCatalogItem> Items => items;
 
+        // ==================== UNITY ===================
+        private void OnEnable() => lookup = null;
+
         // ==================== PUBLIC ===================
         public bool TryGet(string _id, out AudioCatalogItem _item) {
             _item = null;
