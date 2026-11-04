@@ -506,5 +506,92 @@ namespace HarryTools.ProBuilderExtensions.Tests {
             recipe.wear.wearSize = 0.1f;
             AssertSeamless(Read(recipe, HotspotMap.Cracks));
         }
+
+        /// <summary>A non-readable grunge frame, black where <paramref name="black"/> is true and white elsewhere.</summary>
+        private Texture2D Frame(int w, int h, System.Func<int, int, bool> black) {
+            var tex = new Texture2D(w, h, TextureFormat.RGBA32, false);
+            var pixels = new Color[w * h];
+            for (int y = 0; y < h; y++)
+                for (int x = 0; x < w; x++) pixels[y * w + x] = black(x, y) ? Color.black : Color.white;
+            tex.SetPixels(pixels);
+            tex.Apply(false, true);
+            created.Add(tex);
+            return tex;
+        }
+
+        private HotspotRecipe TextureRecipe(params HotspotPatch[] patches) {
+            var recipe = Recipe(patches);
+            recipe.wear.style = HotspotWearStyle.None;
+            recipe.wear.edgeWidth = 0f;
+            recipe.wear.intensity = 1f;
+            recipe.wear.textureBorder = 0.5f;
+            recipe.wear.textureDepth = 0.125f; // 8 px
+            return recipe;
+        }
+
+        private Texture2D DepthFrame() => Frame(32, 32, (x, y) => x < 8); // left half of the 16-px strip worn → 4 px deep
+
+        [Test]
+        public void WearTexture_DepthIsInMetres_WhateverThePatchSize() {
+            var frame = DepthFrame();
+            foreach (var rect in new[] { new Rect(0.125f, 0.125f, 0.75f, 0.75f), new Rect(0.125f, 0.375f, 0.75f, 0.25f) }) {
+                var recipe = TextureRecipe(HotspotPatch.Default(rect));
+                recipe.wear.wearTexture = frame;
+                var wear = Read(recipe, HotspotMap.Wear);
+                int d = 0;
+                while (d < 30 && wear.GetPixel(8 + d, 32).r > 0.5f) d++;
+                Assert.AreEqual(4, d, 1, rect.ToString());
+            }
+        }
+
+        [Test]
+        public void WearTexture_ShowsTheBottomLayer() {
+            var recipe = TextureRecipe(HotspotPatch.Default(new Rect(0.125f, 0.125f, 0.75f, 0.75f)));
+            recipe.wear.wearTexture = DepthFrame();
+            var c = Read(recipe, HotspotMap.BaseColor, linear: false).GetPixel(9, 32);
+            Assert.Greater(c.r, c.g);
+        }
+
+        [Test]
+        public void WearTexture_IsConnectedToTheEdge() {
+            var recipe = TextureRecipe(HotspotPatch.Default(new Rect(0.125f, 0.125f, 0.75f, 0.75f)));
+            recipe.wear.wearTexture = Frame(32, 32, (x, y) => x < 2 + (y * 7 % 5) || (x == 9 && y % 6 == 0));
+            Assert.AreEqual(0, Isolated(Read(recipe, HotspotMap.Wear)));
+        }
+
+        [Test]
+        public void WearTexture_LowerIntensity_WearsLess() {
+            var recipe = TextureRecipe(HotspotPatch.Default(new Rect(0.125f, 0.125f, 0.75f, 0.75f)));
+            recipe.wear.wearTexture = DepthFrame();
+            var full = Coverage(recipe);
+            recipe.wear.intensity = 0.5f;
+            var half = Coverage(recipe);
+            Assert.Greater(half, 0f);
+            Assert.Less(half, full);
+        }
+
+        [Test]
+        public void WearTexture_SeamlessAcrossTheWrap() {
+            var strip = HotspotPatch.Default(new Rect(0, 0.25f, 1, 0.5f));
+            strip.allowTiling = true;
+            var recipe = TextureRecipe(strip);
+            recipe.wear.wearTexture = Frame(32, 32, (x, y) => x < 1 + y % 8);
+            AssertSeamless(Read(recipe, HotspotMap.Wear));
+        }
+
+        [Test]
+        public void WearTexture_CombinesWithTheStyle() {
+            var recipe = TextureRecipe(HotspotPatch.Default(new Rect(0.125f, 0.125f, 0.75f, 0.75f)));
+            recipe.wear.style = HotspotWearStyle.Bites;
+            recipe.wear.wearSize = 0.25f;
+            var bites = Coverage(recipe);
+            recipe.wear.wearTexture = Frame(32, 32, (x, y) => x < 1 + y % 8);
+            var both = Coverage(recipe);
+            recipe.wear.style = HotspotWearStyle.None;
+            var texture = Coverage(recipe);
+            Assert.Greater(bites, 0f);
+            Assert.Greater(texture, 0f);
+            Assert.GreaterOrEqual(both, Mathf.Max(bites, texture));
+        }
     }
 }

@@ -6,13 +6,16 @@ namespace HarryTools.ProBuilderExtensions.Generator {
     public static class HotspotWearMask {
         /// <summary>
         /// Reads the left <paramref name="border"/> fraction of <paramref name="source"/> (column 0 = the rim) and keeps
-        /// only the dark pixels connected to the rim, so no loose specks float inside the patches.
+        /// only the dark pixels connected to the rim, so no loose specks float inside the patches. The rows at both ends
+        /// (as many as the strip is wide, at most a quarter each) are skipped: they hold the frame's corners, where its
+        /// top and bottom bands would cross the whole strip.
         /// </summary>
         /// <returns>A new readable R8 texture (1 = worn) that the caller owns and must destroy.</returns>
         public static Texture2D Build(Texture2D source, float border) {
             int width = Mathf.Clamp(Mathf.RoundToInt(border * source.width), 1, source.width);
-            int height = source.height;
-            var luminance = ReadLuminance(source, width);
+            int skip = Mathf.Min(width, source.height / 4);
+            int height = source.height - 2 * skip;
+            var luminance = ReadLuminance(source, width, skip, height);
 
             const float dark = 0.5f;
             var keep = new bool[width * height];
@@ -52,15 +55,15 @@ namespace HarryTools.ProBuilderExtensions.Generator {
             return mask;
         }
 
-        /// <summary>Perceptual luminance of the first <paramref name="width"/> columns, read on the GPU so non-readable textures work.</summary>
-        private static float[] ReadLuminance(Texture2D source, int width) {
+        /// <summary>Perceptual luminance of a block at the left of the texture, read on the GPU so non-readable textures work.</summary>
+        private static float[] ReadLuminance(Texture2D source, int width, int y, int height) {
             var previous = RenderTexture.active;
             var rt = RenderTexture.GetTemporary(source.width, source.height, 0, RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB);
-            var copy = new Texture2D(width, source.height, TextureFormat.RGBA32, false, false);
+            var copy = new Texture2D(width, height, TextureFormat.RGBA32, false, false);
             try {
                 Graphics.Blit(source, rt);
                 RenderTexture.active = rt;
-                copy.ReadPixels(new Rect(0, 0, width, source.height), 0, 0, false);
+                copy.ReadPixels(new Rect(0, y, width, height), 0, 0, false);
                 copy.Apply(false, false);
                 var pixels = copy.GetPixels32();
                 var luminance = new float[pixels.Length];

@@ -35,12 +35,20 @@ namespace HarryTools.ProBuilderExtensions.Tests {
 
         [Test]
         public void Build_KeepsDarkConnectedToTheRim_DropsSpecks() {
-            var m = Build(Source(32, 32, (x, y) => x < 3 || (y == 5 && x < 7) || (x == 10 && y == 16)), 0.5f);
-            Assert.AreEqual(16, m.width);
-            Assert.AreEqual(32, m.height);
-            Assert.Greater(m.GetPixel(1, 20).r, 0.5f);
+            // Strip: 8 columns; rows 8..23 (the frame corners, 8 rows at each end, are skipped).
+            var m = Build(Source(32, 32, (x, y) => x < 3 || (y == 13 && x < 7) || (x == 5 && y == 16)), 0.25f);
+            Assert.AreEqual(8, m.width);
+            Assert.AreEqual(16, m.height);
+            Assert.Greater(m.GetPixel(1, 12).r, 0.5f);
             Assert.Greater(m.GetPixel(6, 5).r, 0.5f, "connected blob kept");
-            Assert.AreEqual(0f, m.GetPixel(10, 16).r, 1e-3f, "floating speck kept");
+            Assert.AreEqual(0f, m.GetPixel(5, 8).r, 1e-3f, "floating speck kept");
+        }
+
+        [Test]
+        public void Build_SkipsTheFrameCorners() {
+            // A frame whose top and bottom bands cross the whole strip: those corner rows must not reach the mask.
+            var m = Build(Source(32, 32, (x, y) => x < 2 || y < 4 || y >= 28), 0.25f);
+            for (int y = 0; y < m.height; y++) Assert.AreEqual(0f, m.GetPixel(5, y).r, 1e-3f, $"row {y}");
         }
 
         [Test]

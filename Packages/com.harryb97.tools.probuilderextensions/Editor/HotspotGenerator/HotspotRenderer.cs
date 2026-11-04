@@ -18,6 +18,7 @@ namespace HarryTools.ProBuilderExtensions.Generator {
         private readonly Material material;
         private readonly Dictionary<HotspotMap, RenderTexture> targets = new();
         private RenderTexture data;
+        private Texture2D wearMask;
 
         public Vector2Int Size { get; }
 
@@ -66,11 +67,30 @@ namespace HarryTools.ProBuilderExtensions.Generator {
             material.SetFloat("_EdgeWidth", Mathf.Max(0f, wear.edgeWidth));
             material.SetFloat("_GapDepth", wear.gapDepth);
             material.SetFloat("_Cavity", wear.cavity);
+            SetWearMask(wear, worldSize);
             material.SetFloat("_Seed", recipe.seed);
             material.SetFloat("_Variation", Mathf.Clamp01(recipe.variation));
 
             SetLayer("_Top", recipe.top, worldSize);
             SetLayer("_Bottom", recipe.bottom, worldSize);
+        }
+
+        private void SetWearMask(HotspotWear wear, Vector2 worldSize) {
+            if (wear.wearTexture == null) {
+                material.SetTexture("_WearMask", Texture2D.blackTexture);
+                material.SetFloat("_HasWearMask", 0);
+                return;
+            }
+            wearMask = HotspotWearMask.Build(wear.wearTexture, wear.textureBorder);
+            var depth = Mathf.Max(0.001f, wear.textureDepth);
+            // The strip keeps its proportions: its length along the border follows from its depth, rounded to whole
+            // repetitions of the atlas so tiling strips wrap seamlessly.
+            var stripLength = depth * wearMask.height / wearMask.width;
+            var reps = new Vector2(Mathf.Max(1, Mathf.Round(worldSize.x / stripLength)), Mathf.Max(1, Mathf.Round(worldSize.y / stripLength)));
+            material.SetTexture("_WearMask", wearMask);
+            material.SetFloat("_HasWearMask", 1);
+            material.SetFloat("_TextureDepth", depth);
+            material.SetVector("_WearMaskReps", new Vector4(reps.x, reps.y, 0, 0));
         }
 
         private void SetLayer(string prefix, HotspotLayer layer, Vector2 worldSize) {
@@ -184,6 +204,8 @@ namespace HarryTools.ProBuilderExtensions.Generator {
             targets.Clear();
             Release(data);
             data = null;
+            if (wearMask != null) Object.DestroyImmediate(wearMask);
+            wearMask = null;
             if (material != null) Object.DestroyImmediate(material);
         }
 

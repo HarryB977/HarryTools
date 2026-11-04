@@ -21,6 +21,9 @@ Shader "Hidden/HarryTools/HotspotGenerator" {
 
         float _Intensity, _BevelWidth, _EdgeTone, _Style, _WearSize, _EdgeWidth, _GapDepth, _Cavity, _Seed, _Variation;
         float _TopAlign, _BottomAlign;
+        sampler2D _WearMask; // border strip of the wear texture: u = depth (0 = rim), v = along the border
+        float _HasWearMask, _TextureDepth;
+        float4 _WearMaskReps; // whole repetitions of the strip along the atlas width (x) and height (y)
         int _Channel;
 
         sampler2D _TopAlbedo, _TopNormal, _TopMS;
@@ -239,6 +242,15 @@ Shader "Hidden/HarryTools/HotspotGenerator" {
                 // Wear Size is the length of a bite along the edge; its depth stays in proportion.
                 float width = _Intensity * _WearSize * 1.25 * n;
                 wear = max(wear, width > pixel * 0.5 ? 1 - smoothstep(width - pixel, width, p.dist) : 0);
+            }
+            // Wear texture: its border strip unrolled along the nearest border. Intensity shrinks the band (rather than
+            // moving a threshold), which keeps every worn texel connected to the rim.
+            float textureDepth = _TextureDepth * _Intensity;
+            if (_HasWearMask > 0.5 && textureDepth > 0 && p.dist < textureDepth) {
+                float u = p.dist / textureDepth * 0.999;
+                float reps = p.side < 2 ? _WearMaskReps.y : _WearMaskReps.x;
+                float v = p.along / AlongPeriod(p.side) * reps + Hash(int2(p.index, p.side), _Seed * 0.001 + 0.91);
+                wear = max(wear, smoothstep(0.4, 0.6, tex2Dlod(_WearMask, float4(u, v, 0, 0)).r));
             }
             height = lerp(height, bottom, wear);
             height = lerp(height, bottom, 0.6 * CrackMask(uv)); // cracks: grooves in the top layer, no bottom layer
