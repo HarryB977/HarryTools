@@ -12,7 +12,7 @@ namespace HarryTools.ProBuilderExtensions.Generator {
         [Tooltip("Surface layer: paint, plaster, varnish…")]
         public HotspotLayer top = new();
 
-        [Tooltip("Layer revealed in the gaps between patches and where the top layer is chipped: brick, bare wood, mortar…")]
+        [Tooltip("Layer revealed in the gaps between patches and where the top layer is worn away: brick, bare wood, mortar…")]
         public HotspotLayer bottom = new();
 
         public HotspotWear wear = new();

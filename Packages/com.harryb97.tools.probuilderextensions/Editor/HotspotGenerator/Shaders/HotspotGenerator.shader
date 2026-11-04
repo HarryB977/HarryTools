@@ -321,7 +321,7 @@ Shader "Hidden/HarryTools/HotspotGenerator" {
             float amount = BottomAmount(l);
             float3 worn = lerp(top, saturate(top + 0.25), _EdgeTone * l.data.b * (1 - amount));
             float3 color = lerp(worn, bottom, amount);
-            float depth = saturate((1 - l.data.r) / max(1e-3, 1 - BottomLevel())); // 0 on top, 1 in gaps and chips
+            float depth = saturate((1 - l.data.r) / max(1e-3, 1 - BottomLevel())); // 0 on top, 1 in gaps and worn areas
             return float4(color * (1 - _Cavity * depth), 1);
         }
 

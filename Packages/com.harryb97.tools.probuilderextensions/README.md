@@ -60,13 +60,20 @@ Crea un atlas hotspot a partir de dos texturas tileables y un layout: una **capa
   - **Tile Size**: metros reales que cubre una repetición de la textura (por ejemplo, 1 si la textura muestra 1 m de pared de ladrillo). Así los ladrillos miden lo mismo en todos los patches.
   - **Align To Patches**: la capa empieza en la esquina inferior izquierda de cada patch, sin desplazamiento ni giro. Útil para ladrillos, tablones o azulejos: cada patch arranca con una hilada entera. La textura tiene que empezar en una junta.
 - **Wear**:
-  - **Intensity**: ancho del daño que crece desde los bordes hacia dentro. 0 = solo un bisel suave (siempre hay algo de distinción en los bordes); 1 = bordes muy rotos que dejan ver la capa inferior. El daño siempre parte de la junta, nunca aparecen manchas sueltas.
-  - **Bevel Width**: ancho del bisel en metros.
-  - **Chip Size**: longitud típica de cada mordisco a lo largo del borde (metros). Pequeño = borde muy recortado; grande = mordiscos largos y suaves.
-  - **Chip Density**: cuánto se adentra el daño en el patch.
-  - **Cavity**: cuánto se oscurecen juntas, desconchones y el pie del bisel. Hace que los bordes se lean aunque las dos capas sean el mismo material.
+  - **Style**: el tipo de daño que se añade al borde.
+    - **Cracks** (por defecto): grietas finas que salen del canto y se ramifican hacia dentro. Son surcos en la propia capa superior y no dejan ver la inferior. Para azulejos, yeso o esmalte.
+    - **Bites**: mordiscos redondeados que dejan ver la capa inferior. Para metal o pintura saltada.
+    - **None**: solo el borde dañado (Edge Width) y la textura de desgaste, si hay.
+  - **Intensity**: cuánto daño añaden el estilo y la textura. 0 = solo el borde dañado; 1 = grietas largas y numerosas o mordiscos profundos. No cambia Edge Width.
+  - **Bevel Width**: ancho del bisel redondeado en metros.
+  - **Edge Width**: ancho mínimo, en metros, de la franja dañada que recorre todo el borde de cada patch y deja ver la capa inferior. En ningún punto del borde es más estrecha, así que no quedan tramos sin daño. 0 = bisel limpio.
+  - **Wear Size**: tamaño del patrón en metros. En Cracks, la separación típica entre grietas (y su longitud con Intensity 1); en Bites, la longitud de cada mordisco.
+  - **Wear Texture** (opcional): una imagen de "edge wear" o marco de grunge, blanca por dentro y con el borde negro y desgarrado. Solo se lee una franja de su lado izquierdo, que se repite a lo largo del borde de cada patch sin deformarse. Las motas sueltas se eliminan. Se combina con Style; para usar solo la textura, elige None.
+    - **Texture Border**: qué fracción del ancho de la imagen se lee como franja.
+    - **Texture Depth**: hasta dónde entra la textura en el patch (metros) con Intensity 1.
+  - **Cavity**: cuánto se oscurecen juntas, grietas, zonas gastadas y el pie del bisel. Hace que los bordes se lean aunque las dos capas sean el mismo material.
   - **Edge Tone**: cuánto se aclara el borde gastado de la capa superior.
-  - **Gap Depth**: profundidad de juntas y desconchones respecto al bisel.
+  - **Gap Depth**: profundidad de juntas y zonas gastadas respecto al bisel.
 - **Resolution**: ancho de las texturas (el alto sigue la proporción del layout).
 - **World Width Override**: cambia los metros que cubre el atlas sin tocar el layout.
 - **Variation**: cuánto cambia la capa de un patch a otro. 0 = la textura sigue continua por todo el atlas; 1 = cada patch toma un trozo distinto (y gira 90° si el patch lo permite). Bájalo si los patches se ven de colores muy distintos.

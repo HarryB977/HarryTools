@@ -1,5 +1,13 @@
 # Change Log:
 
+## 1.2.0
+
+    - Generador hotspot: nuevo Edge Width, una franja dañada que recorre todo el borde de cada patch con un ancho mínimo garantizado; ya no quedan tramos del borde sin daño
+    - Nuevo Style de desgaste: Cracks (grietas finas que salen del canto, por defecto), Bites (los mordiscos de antes) o None
+    - Nueva Wear Texture opcional: una imagen de grunge cuyo borde se repite a lo largo de cada patch sin deformarse, con Texture Border y Texture Depth; las motas sueltas se eliminan
+    - Chip Size y Chip Density se sustituyen por Wear Size. Las recetas anteriores se abren como Bites sin franja y con el mismo aspecto (su Intensity puede cambiar de valor)
+    - Nuevo mapa Cracks en la vista previa y en `HotspotMap`
+
 ## 1.1.1
 
     - Corregido: al generar, los mapas Normal, Mask y Occlusion se exportaban vacíos (la importación del primer PNG invalidaba el render de los siguientes). Ahora se renderizan todos antes de escribir ningún archivo

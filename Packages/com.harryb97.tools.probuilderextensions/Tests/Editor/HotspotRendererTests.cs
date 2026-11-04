@@ -258,7 +258,7 @@ namespace HarryTools.ProBuilderExtensions.Tests {
             recipe.seed = seed;
             var wear = Read(recipe, HotspotMap.Wear);
             Assert.Greater(Coverage(recipe), 0f);
-            Assert.AreEqual(0, Isolated(wear), "chips must grow from the patch border");
+            Assert.AreEqual(0, Isolated(wear), "wear must grow from the patch border");
         }
 
         [Test]
