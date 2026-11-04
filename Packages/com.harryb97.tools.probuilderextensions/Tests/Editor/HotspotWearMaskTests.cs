@@ -1,0 +1,73 @@
+using System;
+using System.Collections.Generic;
+using HarryTools.ProBuilderExtensions.Generator;
+using NUnit.Framework;
+using UnityEngine;
+using Object = UnityEngine.Object;
+
+namespace HarryTools.ProBuilderExtensions.Tests {
+    public class HotspotWearMaskTests {
+        private readonly List<Object> created = new();
+
+        [TearDown]
+        public void TearDown() {
+            foreach (var o in created) if (o != null) Object.DestroyImmediate(o);
+            created.Clear();
+        }
+
+        /// <summary>A non-readable texture, black where <paramref name="black"/> is true and white elsewhere.</summary>
+        private Texture2D Source(int w, int h, Func<int, int, bool> black) {
+            var tex = new Texture2D(w, h, TextureFormat.RGBA32, false);
+            var pixels = new Color[w * h];
+            for (int y = 0; y < h; y++)
+                for (int x = 0; x < w; x++) pixels[y * w + x] = black(x, y) ? Color.black : Color.white;
+            tex.SetPixels(pixels);
+            tex.Apply(false, true);
+            created.Add(tex);
+            return tex;
+        }
+
+        private Texture2D Build(Texture2D source, float border) {
+            var mask = HotspotWearMask.Build(source, border);
+            created.Add(mask);
+            return mask;
+        }
+
+        [Test]
+        public void Build_KeepsDarkConnectedToTheRim_DropsSpecks() {
+            var m = Build(Source(32, 32, (x, y) => x < 3 || (y == 5 && x < 7) || (x == 10 && y == 16)), 0.5f);
+            Assert.AreEqual(16, m.width);
+            Assert.AreEqual(32, m.height);
+            Assert.Greater(m.GetPixel(1, 20).r, 0.5f);
+            Assert.Greater(m.GetPixel(6, 5).r, 0.5f, "connected blob kept");
+            Assert.AreEqual(0f, m.GetPixel(10, 16).r, 1e-3f, "floating speck kept");
+        }
+
+        [Test]
+        public void Build_TinyBorder_ReadsAtLeastOneColumn() => Assert.AreEqual(1, Build(Source(32, 32, (x, y) => true), 0.001f).width);
+
+        [Test]
+        public void Build_AllWhite_IsEmpty() {
+            foreach (var c in Build(Source(16, 16, (x, y) => false), 0.5f).GetPixels()) Assert.AreEqual(0f, c.r, 1e-3f);
+        }
+
+        [Test]
+        public void Build_AllBlack_IsFull() {
+            foreach (var c in Build(Source(16, 16, (x, y) => true), 0.5f).GetPixels()) Assert.Greater(c.r, 0.9f);
+        }
+
+        [Test]
+        public void Build_RestoresTheActiveRenderTexture() {
+            var mine = new RenderTexture(4, 4, 0);
+            created.Add(mine);
+            var previous = RenderTexture.active;
+            RenderTexture.active = mine;
+            try {
+                Build(Source(8, 8, (x, y) => x < 2), 0.5f);
+                Assert.AreEqual(mine, RenderTexture.active);
+            } finally {
+                RenderTexture.active = previous;
+            }
+        }
+    }
+}
