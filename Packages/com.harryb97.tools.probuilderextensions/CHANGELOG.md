@@ -6,7 +6,9 @@
     - Nuevo Style de desgaste: Cracks (grietas finas que salen del canto, por defecto), Bites (los mordiscos de antes) o None
     - Nueva Wear Texture opcional: una imagen de grunge cuyo borde se repite a lo largo de cada patch sin deformarse, con Texture Border y Texture Depth; las motas sueltas se eliminan
     - Chip Size y Chip Density se sustituyen por Wear Size. Las recetas anteriores se abren como Bites sin franja y con el mismo aspecto (su Intensity puede cambiar de valor)
-    - Nuevo mapa Cracks en la vista previa y en `HotspotMap`
+    - Nuevo mapa Height (`<Receta>_Height.png`), conectado al material como Height Map con la intensidad de parallax a 0
+    - Nueva pestaña Style en la vista previa (y `HotspotMap.Style`): muestra solo el daño del estilo elegido. Los mordiscos más finos que un píxel ya no desaparecen en la vista previa
+    - Editor de la receta por secciones (Layout, Layers, Bevel and Rim, Wear, Wear Texture, Shading, Variation), con las medidas pequeñas en centímetros
 
 ## 1.1.1
 

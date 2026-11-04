@@ -50,7 +50,7 @@ En `Packages/ProBuilder Extensions/Layouts`. Todos son de 8×8 m (512 px/m a 409
 Crea un atlas hotspot a partir de dos texturas tileables y un layout: una **capa superior** (pintura, yeso, barniz…) y una **capa inferior** que asoma en las juntas y en los desconchones (ladrillo, madera, mortero…). Cada patch recibe un bisel en sus bordes, y el desgaste se calcula por código, sin máscaras pintadas.
 
 1. Crear una **Hotspot Recipe**: `Create > HarryTools > ProBuilder Extensions > Hotspot Recipe`.
-2. Abrirla con doble clic (o `Tools > HarryTools > ProBuilder Extensions > Hotspot Texture Generator`). A la derecha se ve una vista previa de cada mapa.
+2. Abrirla con doble clic (o `Tools > HarryTools > ProBuilder Extensions > Hotspot Texture Generator`). A la derecha se ve una vista previa de cada mapa; la pestaña **Style** muestra solo el daño del estilo elegido (grietas o mordiscos). La vista previa es de 512 px, así que el detalle más fino se ve suavizado.
 3. Elegir un layout, las dos capas y el desgaste, y pulsar **Generate**.
 
 ### Receta
@@ -59,18 +59,20 @@ Crea un atlas hotspot a partir de dos texturas tileables y un layout: una **capa
 - **Top / Bottom**: Albedo (obligatorio, tileable), Normal y Metallic/Smoothness (opcionales; R = metálico, A = suavidad), tinte y:
   - **Tile Size**: metros reales que cubre una repetición de la textura (por ejemplo, 1 si la textura muestra 1 m de pared de ladrillo). Así los ladrillos miden lo mismo en todos los patches.
   - **Align To Patches**: la capa empieza en la esquina inferior izquierda de cada patch, sin desplazamiento ni giro. Útil para ladrillos, tablones o azulejos: cada patch arranca con una hilada entera. La textura tiene que empezar en una junta.
+La receta se organiza en secciones: Layout, Layers, Bevel and Rim, Wear, Wear Texture, Shading y Variation. Las medidas pequeñas se editan en centímetros.
+
 - **Wear**:
   - **Style**: el tipo de daño que se añade al borde.
     - **Cracks** (por defecto): grietas finas que salen del canto y se ramifican hacia dentro. Son surcos en la propia capa superior y no dejan ver la inferior. Para azulejos, yeso o esmalte.
     - **Bites**: mordiscos redondeados que dejan ver la capa inferior. Para metal o pintura saltada.
     - **None**: solo el borde dañado (Edge Width) y la textura de desgaste, si hay.
   - **Intensity**: cuánto daño añaden el estilo y la textura. 0 = solo el borde dañado; 1 = grietas largas y numerosas o mordiscos profundos. No cambia Edge Width.
-  - **Bevel Width**: ancho del bisel redondeado en metros.
-  - **Edge Width**: ancho mínimo, en metros, de la franja dañada que recorre todo el borde de cada patch y deja ver la capa inferior. En ningún punto del borde es más estrecha, así que no quedan tramos sin daño. 0 = bisel limpio.
-  - **Wear Size**: tamaño del patrón en metros. En Cracks, la separación típica entre grietas (y su longitud con Intensity 1); en Bites, la longitud de cada mordisco.
+  - **Bevel Width**: ancho del bisel redondeado (cm).
+  - **Edge Width**: ancho mínimo (cm, de 0 a 5) de la franja dañada que recorre todo el borde de cada patch y deja ver la capa inferior. En ningún punto del borde es más estrecha, así que no quedan tramos sin daño. 0 = bisel limpio.
+  - **Wear Size**: tamaño del patrón (cm). En Cracks se llama Crack Spacing: la separación típica entre grietas (y su longitud con Intensity 1); en Bites se llama Bite Length: la longitud de cada mordisco.
   - **Wear Texture** (opcional): una imagen de "edge wear" o marco de grunge, blanca por dentro y con el borde negro y desgarrado. Solo se lee una franja de su lado izquierdo, que se repite a lo largo del borde de cada patch sin deformarse. Las motas sueltas se eliminan. Se combina con Style; para usar solo la textura, elige None.
     - **Texture Border**: qué fracción del ancho de la imagen se lee como franja.
-    - **Texture Depth**: hasta dónde entra la textura en el patch (metros) con Intensity 1.
+    - **Texture Depth**: hasta dónde entra la textura en el patch (cm) con Intensity 1.
   - **Cavity**: cuánto se oscurecen juntas, grietas, zonas gastadas y el pie del bisel. Hace que los bordes se lean aunque las dos capas sean el mismo material.
   - **Edge Tone**: cuánto se aclara el borde gastado de la capa superior.
   - **Gap Depth**: profundidad de juntas y zonas gastadas respecto al bisel.
@@ -83,8 +85,8 @@ Crea un atlas hotspot a partir de dos texturas tileables y un layout: una **capa
 
 En una carpeta junto a la receta, con su nombre:
 
-- `<Receta>_BaseColor.png`, `<Receta>_Normal.png`, `<Receta>_Mask.png` (Metallic/Smoothness de URP) y `<Receta>_Occlusion.png`.
-- `<Receta>.mat`: material URP Lit con los cuatro mapas.
+- `<Receta>_BaseColor.png`, `<Receta>_Normal.png`, `<Receta>_Mask.png` (Metallic/Smoothness de URP) `<Receta>_Occlusion.png` (AO) y `<Receta>_Height.png`.
+- `<Receta>.mat`: material URP Lit con los cinco mapas. El Height Map empieza con la intensidad de parallax a 0; súbela en el material si la quieres (al regenerar se respeta tu valor).
 - `<Receta> Hotspot.asset`: Hotspot Texture listo para Hotspot Selection.
 
 Volver a generar sobrescribe los mismos archivos y conserva sus GUIDs, así que materiales y escenas siguen apuntando a ellos aunque se hayan movido de carpeta.

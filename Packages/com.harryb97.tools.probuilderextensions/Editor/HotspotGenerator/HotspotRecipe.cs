@@ -78,16 +78,16 @@ namespace HarryTools.ProBuilderExtensions.Generator {
         [Tooltip("Amount of damage from the style and the wear texture. 0 = only the rim; 1 = long cracks or deep bites. Does not change the rim.")]
         [Range(0, 1)] public float intensity = 0.2f;
 
-        [Tooltip("Width of the rounded bevel around each patch, in metres.")]
+        [Tooltip("Width of the rounded bevel around each patch.")]
         [Min(0.001f)] public float bevelWidth = 0.02f;
 
-        [Tooltip("Minimum width (metres) of the damaged rim that runs along the whole border of every patch, revealing the bottom layer. Never narrower than this anywhere. 0 = clean bevel.")]
+        [Tooltip("Minimum width of the damaged rim that runs along the whole border of every patch, revealing the bottom layer. Never narrower than this anywhere. 0 = clean bevel.")]
         [Min(0)] public float edgeWidth = 0.01f;
 
         [Tooltip("How much lighter worn edges look.")]
         [Range(0, 1)] public float edgeTone = 0.15f;
 
-        [Tooltip("Size of the wear pattern in metres. Cracks: typical spacing between cracks. Bites: typical length of a bite along the edge.")]
+        [Tooltip("Size of the wear pattern. Cracks: typical spacing between cracks. Bites: typical length of a bite along the edge.")]
         [Min(0.005f)] public float wearSize = 0.05f;
 
         [Tooltip("Optional grunge frame: white = intact, black = worn, with a ragged black border. Only a strip of its left side is read and wrapped along every patch border; loose specks are removed.")]
@@ -96,7 +96,7 @@ namespace HarryTools.ProBuilderExtensions.Generator {
         [Tooltip("Fraction of the wear texture's width read as the border strip.")]
         [Range(0.01f, 0.5f)] public float textureBorder = 0.2f;
 
-        [Tooltip("How far (metres) the wear texture reaches into every patch at full Intensity.")]
+        [Tooltip("How far the wear texture reaches into every patch at full Intensity.")]
         [Min(0.001f)] public float textureDepth = 0.05f;
 
         [Tooltip("How much darker gaps, cracks, worn areas and the foot of the bevel look, so edges read even when both layers are the same material.")]
