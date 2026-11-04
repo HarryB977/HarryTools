@@ -37,6 +37,8 @@ Shader "Hidden/HarryTools/HotspotGenerator" {
             float dist;   // metres to the nearest border that does not repeat
             float2 edgeUV; // that border's closest point (UV space), where the wear width is sampled
             float2 cornerUV; // bottom-left corner of the patch (UV space)
+            int side;      // that border: 0 xMin, 1 xMax, 2 yMin, 3 yMax (normalized, top-left origin)
+            float along;   // absolute atlas position (metres) along that border; period AlongPeriod(side)
             float tiling;
             float rotate;
             float2 rnd;
@@ -44,7 +46,7 @@ Shader "Hidden/HarryTools/HotspotGenerator" {
 
         PatchInfo FindPatch(float2 uv) {
             PatchInfo p;
-            p.index = -1; p.dist = 0; p.edgeUV = uv; p.cornerUV = 0; p.tiling = 0; p.rotate = 0; p.rnd = 0;
+            p.index = -1; p.dist = 0; p.edgeUV = uv; p.cornerUV = 0; p.side = 0; p.along = 0; p.tiling = 0; p.rotate = 0; p.rnd = 0;
             float2 n = float2(uv.x, 1 - uv.y);
             [loop]
             for (int i = 0; i < _PatchCount; i++) {
@@ -57,6 +59,8 @@ Shader "Hidden/HarryTools/HotspotGenerator" {
                     float dy = f.x == 2 ? 1e5 : min(a.y, b.y);
                     float2 edge = dx < dy ? float2(a.x < b.x ? r.x : r.z, n.y) : float2(n.x, a.y < b.y ? r.y : r.w);
                     p.index = i; p.dist = min(dx, dy); p.edgeUV = float2(edge.x, 1 - edge.y); p.cornerUV = float2(r.x, 1 - r.w);
+                    p.side = dx < dy ? (a.x < b.x ? 0 : 1) : (a.y < b.y ? 2 : 3);
+                    p.along = p.side < 2 ? n.y * _AtlasWorld.y : n.x * _AtlasWorld.x;
                     p.tiling = f.x; p.rotate = f.y; p.rnd = f.zw;
                     return p;
                 }
@@ -105,6 +109,24 @@ Shader "Hidden/HarryTools/HotspotGenerator" {
             return saturate((v - 0.5) * 1.8 + 0.5);
         }
 
+        float AlongPeriod(int side) { return side < 2 ? _AtlasWorld.y : _AtlasWorld.x; }
+
+        float ValueNoise1(float x, int period, float seed) {
+            int i = (int)floor(x);
+            float f = frac(x);
+            f = f * f * (3 - 2 * f);
+            float a = Hash(Wrap(int2(i, 0), int2(period, 1)), seed);
+            float b = Hash(Wrap(int2(i + 1, 0), int2(period, 1)), seed);
+            return lerp(a, b, f);
+        }
+
+        // Smooth two-octave noise along a border, in [0, 1], repeating every `period` metres.
+        float EdgeNoise(float along, float period, float cellSize, float seed) {
+            int cells = (int)max(1, round(period / cellSize));
+            float x = along / period * cells;
+            return 0.7 * ValueNoise1(x, cells, seed) + 0.3 * ValueNoise1(x * 2, cells * 2, seed + 0.017);
+        }
+
         float BottomLevel() { return 1 - saturate(_GapDepth); }
 
         float4 ComputeData(float2 uv) {
@@ -116,15 +138,25 @@ Shader "Hidden/HarryTools/HotspotGenerator" {
             float profile = sqrt(1 - (1 - t) * (1 - t)); // rounded bevel
             float height = lerp(bottom, 1, profile);
 
-            // Wear grows inwards from the border: a band whose width varies along the border. The width is sampled at
-            // the closest border point, so every worn pixel is connected to the edge (no floating chips).
+            // All wear grows inwards from the border, so every worn pixel is connected to the edge.
+            float pixel = _AtlasWorld.z;
+            float seed = _Seed * 0.001 + p.index * 0.0731 + p.side * 0.013;
+
+            // The rim: damage along the whole border, never narrower than Edge Width (or one pixel), with an
+            // irregular inner outline up to 1.5x wider.
             float wear = 0;
+            if (_EdgeWidth > 0) {
+                float minWidth = max(_EdgeWidth, pixel);
+                float n = EdgeNoise(p.along, AlongPeriod(p.side), max(_EdgeWidth, pixel) * 4, seed + 0.5);
+                float rim = minWidth * (1 + 0.5 * n);
+                wear = 1 - smoothstep(rim, rim + pixel, p.dist);
+            }
+            // Bites: a band whose width varies along the border, sampled at the closest border point.
             if (_Style == 1 && _Intensity > 0) {
                 float n = WearNoise(p.edgeUV, _Seed * 0.001 + p.index * 0.0731);
                 // Wear Size is the length of a bite along the edge; its depth stays in proportion.
                 float width = _Intensity * _WearSize * 1.25 * n;
-                float pixel = _AtlasWorld.z;
-                wear = width > pixel * 0.5 ? 1 - smoothstep(width - pixel, width, p.dist) : 0;
+                wear = max(wear, width > pixel * 0.5 ? 1 - smoothstep(width - pixel, width, p.dist) : 0);
             }
             height = lerp(height, bottom, wear);
             float edge = 1 - saturate(p.dist / (_BevelWidth * 2));

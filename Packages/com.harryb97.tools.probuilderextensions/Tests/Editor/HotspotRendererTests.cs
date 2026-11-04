@@ -343,5 +343,82 @@ namespace HarryTools.ProBuilderExtensions.Tests {
                     Assert.AreEqual(a.g, b.g, 0.02f, $"offset {dx},{dy}");
                 }
         }
+
+        /// <summary>Metres from the pixel centre to the border of the centred patch (pixels 8..56 at 64 px/m).</summary>
+        private static float BorderDistance(int x, int y) =>
+            Mathf.Min(Mathf.Min(x + 0.5f - 8, 56 - x - 0.5f), Mathf.Min(y + 0.5f - 8, 56 - y - 0.5f)) / 64f;
+
+        [Test]
+        public void Rim_HasNoGaps([Values(HotspotWearStyle.Cracks, HotspotWearStyle.Bites, HotspotWearStyle.None)] HotspotWearStyle style,
+            [Values(0f, 1f)] float intensity, [Values(0.01f, 0.25f)] float wearSize, [Values(0, 7)] int seed) {
+            var recipe = CentredPatch();
+            recipe.wear.style = style;
+            recipe.wear.intensity = intensity;
+            recipe.wear.wearSize = wearSize;
+            recipe.wear.edgeWidth = 0.05f;
+            recipe.seed = seed;
+            var wear = Read(recipe, HotspotMap.Wear);
+            var color = Read(recipe, HotspotMap.BaseColor, linear: false);
+            for (int y = 8; y < 56; y++)
+                for (int x = 8; x < 56; x++) {
+                    if (BorderDistance(x, y) >= 0.05f - 1f / 64f) continue;
+                    Assert.Greater(wear.GetPixel(x, y).r, 0.5f, $"rim gap at {x},{y}");
+                    var c = color.GetPixel(x, y);
+                    Assert.Greater(c.r, c.g, $"rim not showing the bottom layer at {x},{y}");
+                }
+        }
+
+        [Test]
+        public void Rim_ThinnerThanAPixel_StillDrawsOne() {
+            var recipe = CentredPatch();
+            recipe.wear.edgeWidth = 0.001f;
+            recipe.wear.style = HotspotWearStyle.None;
+            var wear = Read(recipe, HotspotMap.Wear);
+            for (int i = 8; i < 56; i++) {
+                Assert.Greater(wear.GetPixel(8, i).r, 0.5f, $"left {i}");
+                Assert.Greater(wear.GetPixel(55, i).r, 0.5f, $"right {i}");
+                Assert.Greater(wear.GetPixel(i, 8).r, 0.5f, $"bottom {i}");
+                Assert.Greater(wear.GetPixel(i, 55).r, 0.5f, $"top {i}");
+            }
+        }
+
+        [Test]
+        public void Rim_InPatchNarrowerThanTwoRims_WearsItAll() {
+            var recipe = Recipe(HotspotPatch.Default(new Rect(0.25f, 0.25f, 4f / 64f, 0.5f)));
+            recipe.wear.edgeWidth = 0.05f;
+            recipe.wear.style = HotspotWearStyle.None;
+            var wear = Read(recipe, HotspotMap.Wear);
+            for (int y = 17; y < 47; y++)
+                for (int x = 16; x < 20; x++) {
+                    var v = wear.GetPixel(x, y).r;
+                    Assert.IsFalse(float.IsNaN(v), $"{x},{y}");
+                    Assert.Greater(v, 0.5f, $"{x},{y}");
+                }
+        }
+
+        [Test]
+        public void EdgeWidthZero_NoRim_ButBevelRemains() {
+            var recipe = CentredPatch();
+            recipe.wear.style = HotspotWearStyle.None;
+            recipe.wear.edgeWidth = 0f;
+            Assert.AreEqual(0f, Coverage(recipe));
+            var height = Read(recipe, HotspotMap.Height);
+            Assert.Greater(height.GetPixel(32, 32).r, height.GetPixel(8, 32).r + 0.05f);
+        }
+
+        [Test]
+        public void Rim_InnerOutlineIsIrregular() {
+            var recipe = CentredPatch();
+            recipe.wear.edgeWidth = 0.08f;
+            recipe.wear.style = HotspotWearStyle.None;
+            var wear = Read(recipe, HotspotMap.Wear);
+            var depths = new HashSet<int>();
+            for (int y = 12; y < 52; y++) {
+                int d = 0;
+                while (d < 20 && wear.GetPixel(8 + d, y).r > 0.5f) d++;
+                depths.Add(d);
+            }
+            Assert.Greater(depths.Count, 1, "rim inner outline is a straight line");
+        }
     }
 }
