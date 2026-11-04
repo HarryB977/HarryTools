@@ -1,5 +1,10 @@
 # Change Log:
 
+## 1.0.4
+
+    - Añadido README con la instalación, el uso y la configuración
+    - Dependencia `com.harryb97.harryutils` de 1.0.1 a 2.0.1: la 1.0.1 no está publicada y no se podía resolver desde OpenUPM
+
 ## 1.0.3
 
     - Publicado en OpenUPM: se instala con `openupm add com.harryb97.tools.gamerules` y el Package Manager avisa de las actualizaciones

@@ -1,5 +1,9 @@
 # Change Log:
 
+## 1.0.2
+
+    - Añadido README con la instalación, el uso y la configuración
+
 ## 1.0.1
 
     - Publicado en OpenUPM: se instala con `openupm add com.harryb97.tools.platformer3dcontroller` y el Package Manager avisa de las actualizaciones

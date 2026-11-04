@@ -1,6 +1,6 @@
 {
   "name": "com.harryb97.tools.logger",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "displayName": "Logger",
   "description": "Herramienta que expande el uso de 'Debug.Log'",
   "unity": "6000.0",

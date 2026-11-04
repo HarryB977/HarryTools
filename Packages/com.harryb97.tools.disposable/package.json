@@ -1,6 +1,6 @@
 {
   "name": "com.harryb97.tools.disposable",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "displayName": "Disposable",
   "description": "Atributo que al ser colocado sobre un método estático, lo ejecuta al salir del Modo Play en el Editor",
   "unity": "6000.0",

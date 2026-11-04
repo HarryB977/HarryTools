@@ -1,6 +1,6 @@
 {
   "name": "com.harryb97.tools.gameloop",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "displayName": "Game Loop",
   "description": "Permite crear varias ramas de loop de juego, a las que se puede suscribir cualquier clase",
   "unity": "6000.0",

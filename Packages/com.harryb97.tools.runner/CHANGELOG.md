@@ -1,5 +1,9 @@
 # Change Log:
 
+## 1.0.7
+
+    - Añadido README con la instalación, el uso y la configuración
+
 ## 1.0.6
 
     - Publicado en OpenUPM: se instala con `openupm add com.harryb97.tools.runner` y el Package Manager avisa de las actualizaciones

@@ -1,6 +1,6 @@
 {
   "name": "com.harryb97.tools.platformer3dcontroller",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "displayName": "Platformer 3D Controller",
   "description": "Herramienta que añade un controlador de movimiento en 3D basado en físicas (cápsula flotante) para juegos de plataformas",
   "unity": "6000.0",

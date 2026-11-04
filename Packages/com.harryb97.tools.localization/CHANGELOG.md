@@ -1,5 +1,11 @@
 # Change Log:
 
+## 1.2.5
+
+    - Añadido README con la instalación, el uso y la configuración
+    - Dependencia `com.harryb97.tools.domainreload` de 1.0.0 a 1.0.2: la 1.0.0 no está publicada y no se podía resolver desde OpenUPM
+    - Dependencia `com.harryb97.harryutils` de 1.0.1 a 2.0.1: la 1.0.1 no está publicada y no se podía resolver desde OpenUPM
+
 ## 1.2.4
 
     - Publicado en OpenUPM: se instala con `openupm add com.harryb97.tools.localization` y el Package Manager avisa de las actualizaciones

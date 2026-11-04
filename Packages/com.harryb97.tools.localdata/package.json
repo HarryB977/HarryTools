@@ -1,6 +1,6 @@
 {
   "name": "com.harryb97.tools.localdata",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "displayName": "Local Data",
   "description": "Herramienta que permite guardar y cargar datos en archivos locales",
   "unity": "6000.0",

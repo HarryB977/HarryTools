@@ -1,5 +1,9 @@
 # Change Log:
 
+## 1.0.3
+
+    - Añadido README con la instalación, el uso y la configuración
+
 ## 1.0.2
 
     - Publicado en OpenUPM: se instala con `openupm add com.harryb97.tools.signals` y el Package Manager avisa de las actualizaciones
