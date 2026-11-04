@@ -85,7 +85,7 @@ La receta se organiza en secciones: Layout, Layers, Bevel and Rim, Wear, Wear Te
 
 En una carpeta junto a la receta, con su nombre:
 
-- `<Receta>_BaseColor.png`, `<Receta>_Normal.png`, `<Receta>_Mask.png` (Metallic/Smoothness de URP) `<Receta>_Occlusion.png` (AO) y `<Receta>_Height.png`.
+- `<Receta>_BaseColor.png`, `<Receta>_Normal.png`, `<Receta>_Mask.png` (Metallic/Smoothness de URP), `<Receta>_Occlusion.png` (AO) y `<Receta>_Height.png`.
 - `<Receta>.mat`: material URP Lit con los cinco mapas. El Height Map empieza con la intensidad de parallax a 0; súbela en el material si la quieres (al regenerar se respeta tu valor).
 - `<Receta> Hotspot.asset`: Hotspot Texture listo para Hotspot Selection.
 
