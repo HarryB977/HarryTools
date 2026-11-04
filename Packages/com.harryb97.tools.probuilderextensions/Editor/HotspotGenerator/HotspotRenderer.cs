@@ -67,7 +67,7 @@ namespace HarryTools.ProBuilderExtensions.Generator {
             material.SetFloat("_EdgeWidth", Mathf.Max(0f, wear.edgeWidth));
             material.SetFloat("_GapDepth", wear.gapDepth);
             material.SetFloat("_Cavity", wear.cavity);
-            SetWearMask(wear, worldSize);
+            SetWearMask(wear, worldSize, metresPerPixel);
             material.SetFloat("_Seed", recipe.seed);
             material.SetFloat("_Variation", Mathf.Clamp01(recipe.variation));
 
@@ -75,14 +75,16 @@ namespace HarryTools.ProBuilderExtensions.Generator {
             SetLayer("_Bottom", recipe.bottom, worldSize);
         }
 
-        private void SetWearMask(HotspotWear wear, Vector2 worldSize) {
+        private void SetWearMask(HotspotWear wear, Vector2 worldSize, float metresPerPixel) {
             if (wear.wearTexture == null) {
                 material.SetTexture("_WearMask", Texture2D.blackTexture);
                 material.SetFloat("_HasWearMask", 0);
                 return;
             }
-            wearMask = HotspotWearMask.Build(wear.wearTexture, wear.textureBorder);
             var depth = Mathf.Max(0.001f, wear.textureDepth);
+            // No more strip columns than output pixels across the band, so sub-pixel detail is averaged, not aliased.
+            var bandPixels = Mathf.Max(2, Mathf.CeilToInt(depth * Mathf.Max(0.05f, wear.intensity) / metresPerPixel));
+            wearMask = HotspotWearMask.Build(wear.wearTexture, wear.textureBorder, bandPixels);
             // The strip keeps its proportions: its length along the border follows from its depth, rounded to whole
             // repetitions of the atlas so tiling strips wrap seamlessly.
             var stripLength = depth * wearMask.height / wearMask.width;

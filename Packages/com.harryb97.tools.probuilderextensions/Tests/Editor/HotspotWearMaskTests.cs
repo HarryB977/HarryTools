@@ -77,5 +77,32 @@ namespace HarryTools.ProBuilderExtensions.Tests {
                 RenderTexture.active = previous;
             }
         }
+
+        [Test]
+        public void Build_SingleChannelTexture_ReadsItsValue([Values(TextureFormat.R8, TextureFormat.Alpha8)] TextureFormat format) {
+            var tex = new Texture2D(32, 32, format, false);
+            var pixels = new Color[32 * 32];
+            for (int y = 0; y < 32; y++)
+                for (int x = 0; x < 32; x++) {
+                    var v = x < 3 ? 0f : 1f;
+                    pixels[y * 32 + x] = new Color(v, v, v, v);
+                }
+            tex.SetPixels(pixels);
+            tex.Apply(false, true);
+            created.Add(tex);
+            var m = Build(tex, 0.5f);
+            Assert.Greater(m.GetPixel(1, 8).r, 0.5f, "dark rim lost");
+            Assert.AreEqual(0f, m.GetPixel(10, 8).r, 1e-3f, "white read as worn");
+        }
+
+        [Test]
+        public void Build_MaxWidth_DownsamplesTheStrip() {
+            var m = HotspotWearMask.Build(Source(64, 64, (x, y) => x < 8), 0.5f, 8);
+            created.Add(m);
+            Assert.AreEqual(8, m.width);
+            Assert.AreEqual(8, m.height); // 64 − 2·16 skipped corner rows = 32, scaled by 8/32
+            Assert.Greater(m.GetPixel(0, 6).r, 0.5f);
+            Assert.AreEqual(0f, m.GetPixel(6, 6).r, 1e-3f);
+        }
     }
 }

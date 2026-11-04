@@ -487,13 +487,32 @@ namespace HarryTools.ProBuilderExtensions.Tests {
             recipe.wear.style = HotspotWearStyle.Cracks;
             recipe.wear.edgeWidth = 0f;
             recipe.wear.intensity = 1f;
-            recipe.wear.wearSize = 0.5f;
+            recipe.wear.wearSize = 0.1f;
             var mask = Read(recipe, HotspotMap.Cracks);
             // Patch A: px x 4..28, y 36..60 (texture y up); patch B: x 36..60, y 8..32.
-            bool Inside(int x, int y) => (x >= 4 && x < 28 && y >= 36 && y < 60) || (x >= 36 && x < 60 && y >= 8 && y < 32);
+            bool InA(int x, int y) => x >= 4 && x < 28 && y >= 36 && y < 60;
+            bool InB(int x, int y) => x >= 36 && x < 60 && y >= 8 && y < 32;
+            bool a = false, b = false;
             for (int y = 0; y < 64; y++)
-                for (int x = 0; x < 64; x++)
-                    if (!Inside(x, y)) Assert.AreEqual(0f, mask.GetPixel(x, y).r, 1e-3f, $"{x},{y}");
+                for (int x = 0; x < 64; x++) {
+                    var v = mask.GetPixel(x, y).r;
+                    if (InA(x, y)) a |= v > 0.5f;
+                    else if (InB(x, y)) b |= v > 0.5f;
+                    else Assert.AreEqual(0f, v, 1e-3f, $"{x},{y}");
+                }
+            Assert.IsTrue(a && b, "every patch should have cracks");
+        }
+
+        [Test]
+        public void Cracks_LongerThanThePatch_StillAppearAndStayConnected([Values(0, 7)] int seed) {
+            var recipe = Cracks(1f, seed);
+            recipe.wear.wearSize = 0.5f; // cracks 0.5–1 m long on a 0.75 m patch
+            var mask = Read(recipe, HotspotMap.Cracks);
+            var any = false;
+            for (int y = 8; y < 56; y++)
+                for (int x = 8; x < 56; x++) any |= mask.GetPixel(x, y).r > 0.5f;
+            Assert.IsTrue(any, "raising Intensity must not remove the cracks");
+            Assert.AreEqual(0, Isolated(mask));
         }
 
         [Test]
@@ -592,6 +611,14 @@ namespace HarryTools.ProBuilderExtensions.Tests {
             Assert.Greater(bites, 0f);
             Assert.Greater(texture, 0f);
             Assert.GreaterOrEqual(both, Mathf.Max(bites, texture));
+        }
+
+        [Test]
+        public void WearTexture_FineDetailFarBelowAPixel_LeavesNoIslands() {
+            var recipe = TextureRecipe(HotspotPatch.Default(new Rect(0.125f, 0.125f, 0.75f, 0.75f)));
+            // 256-texel strip squeezed into an 8 px band: one-texel filaments connected to the rim.
+            recipe.wear.wearTexture = Frame(512, 512, (x, y) => x < 4 || (x < 200 && (y + x / 3) % 16 == 0));
+            Assert.AreEqual(0, Isolated(Read(recipe, HotspotMap.Wear)));
         }
     }
 }

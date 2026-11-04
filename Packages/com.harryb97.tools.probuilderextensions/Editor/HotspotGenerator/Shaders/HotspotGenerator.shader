@@ -148,8 +148,8 @@ Shader "Hidden/HarryTools/HotspotGenerator" {
         }
 
         // Fine cracks growing from every non-tiling border of the patch under uv. Each crack is a polyline rooted just
-        // outside the border, with one branch, so it is connected to the edge by construction. Roots sit far enough
-        // from the border's ends that a crack can never leave the patch through a neighbouring side and come back.
+        // outside the border, with one branch, so it is connected to the edge by construction. Only the part inside the
+        // patch is drawn; a crack that leaves through a neighbouring side and comes back re-enters from that border.
         float CrackMask(float2 uv) {
             if (_Style != 0 || _Intensity <= 0) return 0;
             PatchInfo p = FindPatch(uv);
@@ -184,7 +184,7 @@ Shader "Hidden/HarryTools/HotspotGenerator" {
                     if (Hash(cell, baseSeed) >= _Intensity) continue;
                     float length = _Intensity * _WearSize * 2 * (0.5 + 0.5 * Hash(cell, baseSeed + 0.1));
                     float s0 = (c + 0.5 + 0.8 * (Hash(cell, baseSeed + 0.2) - 0.5)) * cellLength;
-                    if (!wraps && (s0 < extent.x + 0.65 * length || s0 > extent.y - 0.65 * length)) continue;
+                    if (!wraps && (s0 < extent.x || s0 > extent.y)) continue;
 
                     float2 q = float2(s - s0, d); // crack space: x along the border, y inwards
                     float step = (length + pixel) / 4;
