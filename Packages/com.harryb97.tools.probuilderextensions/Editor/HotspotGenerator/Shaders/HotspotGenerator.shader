@@ -129,6 +129,88 @@ Shader "Hidden/HarryTools/HotspotGenerator" {
 
         float BottomLevel() { return 1 - saturate(_GapDepth); }
 
+        // Distance from p to segment ab; t = position along it (0..1).
+        float SegmentDistance(float2 p, float2 a, float2 b, out float t) {
+            float2 ab = b - a;
+            t = saturate(dot(p - a, ab) / max(dot(ab, ab), 1e-12));
+            return length(p - a - ab * t);
+        }
+
+        // Coverage of one crack segment, tapering from w0 to w1 half-width (never below 0.75 px, so it stays connected).
+        float CrackSegment(float2 q, float2 a, float2 b, float w0, float w1, float pixel) {
+            float t;
+            float d = SegmentDistance(q, a, b, t);
+            float hw = max(0.75 * pixel, lerp(w0, w1, t));
+            return 1 - smoothstep(hw - pixel * 0.5, hw + pixel * 0.5, d);
+        }
+
+        // Fine cracks growing from every non-tiling border of the patch under uv. Each crack is a polyline rooted just
+        // outside the border, with one branch, so it is connected to the edge by construction. Roots sit far enough
+        // from the border's ends that a crack can never leave the patch through a neighbouring side and come back.
+        float CrackMask(float2 uv) {
+            if (_Style != 0 || _Intensity <= 0) return 0;
+            PatchInfo p = FindPatch(uv);
+            if (p.index < 0) return 0;
+            float4 r = _Patches[p.index];
+            float2 world = _AtlasWorld.xy;
+            float2 pos = float2(uv.x, 1 - uv.y) * world;
+            float2 lo = r.xy * world, hi = r.zw * world;
+            float pixel = _AtlasWorld.z;
+            float baseSeed = _Seed * 0.001 + 0.37;
+            float rootWidth = max(0.75 * pixel, 0.02 * _WearSize);
+            float mask = 0;
+
+            [loop]
+            for (int side = 0; side < 4; side++) {
+                if ((p.tiling == 1 && side < 2) || (p.tiling == 2 && side >= 2)) continue;
+                bool vertical = side < 2;
+                float s = vertical ? pos.y : pos.x;
+                float d = side == 0 ? pos.x - lo.x : side == 1 ? hi.x - pos.x : side == 2 ? pos.y - lo.y : hi.y - pos.y;
+                float period = vertical ? world.y : world.x;
+                bool wraps = (vertical && p.tiling == 2) || (!vertical && p.tiling == 1);
+                float2 extent = vertical ? float2(lo.y, hi.y) : float2(lo.x, hi.x);
+                int cells = (int)max(1, round(period / _WearSize));
+                float cellLength = period / cells;
+                int k = (int)floor(s / cellLength);
+                int id = p.index * 4 + side;
+
+                [loop]
+                for (int j = -2; j <= 2; j++) {
+                    int c = k + j;
+                    int2 cell = int2(((c % cells) + cells) % cells, id);
+                    if (Hash(cell, baseSeed) >= _Intensity) continue;
+                    float length = _Intensity * _WearSize * 2 * (0.5 + 0.5 * Hash(cell, baseSeed + 0.1));
+                    float s0 = (c + 0.5 + 0.8 * (Hash(cell, baseSeed + 0.2) - 0.5)) * cellLength;
+                    if (!wraps && (s0 < extent.x + 0.65 * length || s0 > extent.y - 0.65 * length)) continue;
+
+                    float2 q = float2(s - s0, d); // crack space: x along the border, y inwards
+                    float step = (length + pixel) / 4;
+                    float2 a = float2(0, -pixel);
+                    float2 branchStart = a;
+                    int branchAt = Hash(cell, baseSeed + 0.3) < 0.5 ? 1 : 2;
+                    [unroll]
+                    for (int seg = 0; seg < 4; seg++) {
+                        float angle = (Hash(cell, baseSeed + 0.4 + seg * 0.05) - 0.5) * 1.22; // ±35°
+                        float2 b = a + float2(sin(angle), cos(angle)) * step;
+                        mask = max(mask, CrackSegment(q, a, b, rootWidth * (1 - 0.15 * seg), rootWidth * (0.85 - 0.15 * seg), pixel));
+                        if (seg + 1 == branchAt) branchStart = b;
+                        a = b;
+                    }
+
+                    float side01 = Hash(cell, baseSeed + 0.7) < 0.5 ? -1 : 1;
+                    float branchAngle = side01 * (0.52 + 0.52 * Hash(cell, baseSeed + 0.75)); // 30°..60°
+                    float branchStep = (length * (1 - branchAt / 4.0)) * 0.25;
+                    float2 b0 = branchStart, b1 = b0 + float2(sin(branchAngle), cos(branchAngle)) * branchStep;
+                    float bendAngle = branchAngle * 0.6;
+                    float2 b2 = b1 + float2(sin(bendAngle), cos(bendAngle)) * branchStep;
+                    float bw = rootWidth * (0.85 - 0.15 * branchAt);
+                    mask = max(mask, CrackSegment(q, b0, b1, bw, bw * 0.7, pixel));
+                    mask = max(mask, CrackSegment(q, b1, b2, bw * 0.7, bw * 0.4, pixel));
+                }
+            }
+            return mask;
+        }
+
         float4 ComputeData(float2 uv) {
             PatchInfo p = FindPatch(uv);
             float bottom = BottomLevel();
@@ -159,6 +241,7 @@ Shader "Hidden/HarryTools/HotspotGenerator" {
                 wear = max(wear, width > pixel * 0.5 ? 1 - smoothstep(width - pixel, width, p.dist) : 0);
             }
             height = lerp(height, bottom, wear);
+            height = lerp(height, bottom, 0.6 * CrackMask(uv)); // cracks: grooves in the top layer, no bottom layer
             float edge = 1 - saturate(p.dist / (_BevelWidth * 2));
             return float4(height, wear, edge, p.index + 1);
         }
@@ -273,6 +356,11 @@ Shader "Hidden/HarryTools/HotspotGenerator" {
             return float4(ao, ao, ao, 1);
         }
 
+        float4 FragCracks(v2f_img i) : SV_Target {
+            float v = CrackMask(i.uv);
+            return float4(v, v, v, 1);
+        }
+
         float4 FragChannel(v2f_img i) : SV_Target {
             float v = tex2D(_DataTex, i.uv)[_Channel];
             return float4(v, v, v, 1);
@@ -307,6 +395,11 @@ Shader "Hidden/HarryTools/HotspotGenerator" {
         Pass { CGPROGRAM
             #pragma vertex vert_img
             #pragma fragment FragChannel
+            #pragma target 3.5
+        ENDCG }
+        Pass { CGPROGRAM
+            #pragma vertex vert_img
+            #pragma fragment FragCracks
             #pragma target 3.5
         ENDCG }
     }

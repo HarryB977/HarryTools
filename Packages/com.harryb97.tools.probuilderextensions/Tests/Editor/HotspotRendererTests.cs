@@ -119,14 +119,15 @@ namespace HarryTools.ProBuilderExtensions.Tests {
         }
 
         [Test]
-        public void SameSeed_IsDeterministic_DifferentSeed_Differs() {
+        public void SameSeed_IsDeterministic_DifferentSeed_Differs([Values(HotspotMap.Wear, HotspotMap.Cracks)] HotspotMap map) {
             var recipe = CentredPatch();
             recipe.wear.intensity = 0.6f;
+            if (map == HotspotMap.Cracks) recipe.wear.style = HotspotWearStyle.Cracks;
             recipe.seed = 3;
-            var a = Read(recipe, HotspotMap.Wear).GetPixels32();
-            var b = Read(recipe, HotspotMap.Wear).GetPixels32();
+            var a = Read(recipe, map).GetPixels32();
+            var b = Read(recipe, map).GetPixels32();
             recipe.seed = 4;
-            var c = Read(recipe, HotspotMap.Wear).GetPixels32();
+            var c = Read(recipe, map).GetPixels32();
             var different = 0;
             for (int i = 0; i < a.Length; i++) {
                 Assert.AreEqual(a[i], b[i], $"pixel {i}");
@@ -175,11 +176,14 @@ namespace HarryTools.ProBuilderExtensions.Tests {
             var recipe = Recipe(strip);
             recipe.wear.intensity = 1f;
             recipe.wear.wearSize = 0.25f;
-            var wear = Read(recipe, HotspotMap.Wear);
+            AssertSeamless(Read(recipe, HotspotMap.Wear));
+        }
 
+        /// <summary>The wrap column (63 → 0) of a horizontal strip changes no more than ordinary neighbouring columns.</summary>
+        private static void AssertSeamless(Texture2D mask) {
             float Column(int x0, int x1) {
                 var sum = 0f;
-                for (int y = 17; y < 47; y++) sum += Mathf.Abs(wear.GetPixel(x0, y).r - wear.GetPixel(x1, y).r);
+                for (int y = 17; y < 47; y++) sum += Mathf.Abs(mask.GetPixel(x0, y).r - mask.GetPixel(x1, y).r);
                 return sum;
             }
             var seam = Column(63, 0);
@@ -222,9 +226,9 @@ namespace HarryTools.ProBuilderExtensions.Tests {
             Assert.Less(Mathf.Abs(Mathf.Log(actual.x / tile.x)), Mathf.Log(1.35f), $"scale {actual.x} vs {tile.x}");
         }
         /// <summary>Worn pixels inside the centred patch that cannot reach the patch border through other worn pixels.</summary>
-        private static int IsolatedWear(Texture2D wear) {
+        private static int Isolated(Texture2D mask) {
             const int min = 8, max = 55;
-            bool Worn(int x, int y) => wear.GetPixel(x, y).r > 0.5f;
+            bool Worn(int x, int y) => mask.GetPixel(x, y).r > 0.5f;
             var reached = new bool[Size, Size];
             var queue = new Queue<Vector2Int>();
             for (int i = min; i <= max; i++)
@@ -254,7 +258,7 @@ namespace HarryTools.ProBuilderExtensions.Tests {
             recipe.seed = seed;
             var wear = Read(recipe, HotspotMap.Wear);
             Assert.Greater(Coverage(recipe), 0f);
-            Assert.AreEqual(0, IsolatedWear(wear), "chips must grow from the patch border");
+            Assert.AreEqual(0, Isolated(wear), "chips must grow from the patch border");
         }
 
         [Test]
@@ -419,6 +423,88 @@ namespace HarryTools.ProBuilderExtensions.Tests {
                 depths.Add(d);
             }
             Assert.Greater(depths.Count, 1, "rim inner outline is a straight line");
+        }
+
+        private HotspotRecipe Cracks(float intensity, int seed) {
+            var recipe = CentredPatch();
+            recipe.wear.style = HotspotWearStyle.Cracks;
+            recipe.wear.edgeWidth = 0f;
+            recipe.wear.wearSize = 0.1f;
+            recipe.wear.bevelWidth = 0.02f;
+            recipe.wear.intensity = intensity;
+            recipe.seed = seed;
+            return recipe;
+        }
+
+        [Test]
+        public void Cracks_AreConnectedToTheEdge([Values(0.3f, 0.6f, 1f)] float intensity, [Values(0, 7)] int seed) {
+            var mask = Read(Cracks(intensity, seed), HotspotMap.Cracks);
+            var any = false;
+            for (int y = 8; y < 56; y++)
+                for (int x = 8; x < 56; x++) any |= mask.GetPixel(x, y).r > 0.5f;
+            Assert.IsTrue(any, "no cracks at all");
+            Assert.AreEqual(0, Isolated(mask));
+        }
+
+        [Test]
+        public void Cracks_ReachBeyondTheBevel() {
+            var mask = Read(Cracks(1f, 0), HotspotMap.Cracks);
+            var deep = 0;
+            for (int y = 8; y < 56; y++)
+                for (int x = 8; x < 56; x++)
+                    if (BorderDistance(x, y) > 0.03f && mask.GetPixel(x, y).r > 0.5f) deep++;
+            Assert.Greater(deep, 0);
+        }
+
+        [Test]
+        public void Cracks_DoNotShowTheBottomLayer() => Assert.AreEqual(0f, Coverage(Cracks(1f, 3)));
+
+        [Test]
+        public void Cracks_LowerTheHeight() {
+            var recipe = Cracks(1f, 0);
+            var mask = Read(recipe, HotspotMap.Cracks);
+            var height = Read(recipe, HotspotMap.Height);
+            var plateau = height.GetPixel(32, 32).r;
+            var found = false;
+            for (int y = 8; y < 56; y++)
+                for (int x = 8; x < 56; x++)
+                    if (BorderDistance(x, y) > 0.03f && mask.GetPixel(x, y).r > 0.9f) {
+                        found = true;
+                        Assert.Less(height.GetPixel(x, y).r, plateau - 0.05f, $"{x},{y}");
+                    }
+            Assert.IsTrue(found);
+        }
+
+        [Test]
+        public void Cracks_IntensityZero_NoCracks() {
+            var mask = Read(Cracks(0f, 0), HotspotMap.Cracks);
+            foreach (var c in mask.GetPixels()) Assert.AreEqual(0f, c.r, 1e-3f);
+        }
+
+        [Test]
+        public void Cracks_StayInsideTheirPatch() {
+            var recipe = TwoPatches(Solid(Color.green));
+            recipe.wear.style = HotspotWearStyle.Cracks;
+            recipe.wear.edgeWidth = 0f;
+            recipe.wear.intensity = 1f;
+            recipe.wear.wearSize = 0.5f;
+            var mask = Read(recipe, HotspotMap.Cracks);
+            // Patch A: px x 4..28, y 36..60 (texture y up); patch B: x 36..60, y 8..32.
+            bool Inside(int x, int y) => (x >= 4 && x < 28 && y >= 36 && y < 60) || (x >= 36 && x < 60 && y >= 8 && y < 32);
+            for (int y = 0; y < 64; y++)
+                for (int x = 0; x < 64; x++)
+                    if (!Inside(x, y)) Assert.AreEqual(0f, mask.GetPixel(x, y).r, 1e-3f, $"{x},{y}");
+        }
+
+        [Test]
+        public void Cracks_SeamlessAcrossTheWrap() {
+            var strip = HotspotPatch.Default(new Rect(0, 0.25f, 1, 0.5f));
+            strip.allowTiling = true;
+            var recipe = Recipe(strip);
+            recipe.wear.style = HotspotWearStyle.Cracks;
+            recipe.wear.intensity = 1f;
+            recipe.wear.wearSize = 0.1f;
+            AssertSeamless(Read(recipe, HotspotMap.Cracks));
         }
     }
 }

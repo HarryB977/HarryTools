@@ -5,13 +5,13 @@ using UnityEngine;
 using Object = UnityEngine.Object;
 
 namespace HarryTools.ProBuilderExtensions.Generator {
-    public enum HotspotMap { BaseColor, Normal, Mask, Occlusion, Height, Wear }
+    public enum HotspotMap { BaseColor, Normal, Mask, Occlusion, Height, Wear, Cracks }
 
     /// <summary>Renders the maps of a <see cref="HotspotRecipe"/> on the GPU.</summary>
     public sealed class HotspotRenderer : IDisposable {
         public const int MaxPatches = 256;
         private const string ShaderName = "Hidden/HarryTools/HotspotGenerator";
-        private const int DataPass = 0, ChannelPass = 5;
+        private const int DataPass = 0, ChannelPass = 5, CracksPass = 6;
 
         private static readonly int DataTexId = Shader.PropertyToID("_DataTex");
 
@@ -148,6 +148,9 @@ namespace HarryTools.ProBuilderExtensions.Generator {
                 case HotspotMap.Wear:
                     material.SetInt("_Channel", map == HotspotMap.Height ? 0 : 1);
                     Blit(rt, ChannelPass);
+                    break;
+                case HotspotMap.Cracks:
+                    Blit(rt, CracksPass);
                     break;
                 default:
                     Blit(rt, 1 + (int)map);
