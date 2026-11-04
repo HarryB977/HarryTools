@@ -13,7 +13,8 @@ openupm add com.harryb97.tools.gameloop
 ```csharp
 using HarryTools.GameLoop;
 
-// Una vez al arrancar: crea el GameObject "Loop Manager" (DontDestroyOnLoad)
+// Opcional: el "Loop Manager" (DontDestroyOnLoad) se crea solo al usar la API.
+// Initialize() es idempotente: llamarlo otra vez no vacía los loops
 LoopSystem.Initialize();
 
 ILoopable gameplay = new Loop("Gameplay");
@@ -28,6 +29,9 @@ gameplay.IsPaused = true;               // Deja de llamar a sus listeners
 gameplay.RemoveUpdateListener(OnUpdate);
 LoopSystem.RemoveLoop("Gameplay");
 
+LoopSystem.HasLoop("Gameplay");                       // bool
+LoopSystem.TryGetLoop("Gameplay", out ILoopable loop);
+
 private void OnUpdate() { }             // LoopSystem.LoopDelegate: void sin parámetros
 ```
 
@@ -35,6 +39,5 @@ private void OnUpdate() { }             // LoopSystem.LoopDelegate: void sin par
 
 ## Limitaciones
 
-- Hay que llamar a `LoopSystem.Initialize()` antes de `AddLoop`. Llamarlo otra vez vacía los loops y crea otro "Loop Manager".
 - `AddLoop` ignora sin aviso un loop con un `LoopID` ya registrado.
-- No se pueden añadir ni quitar loops desde un listener: se modificaría el diccionario mientras se recorre.
+- `AddLoop` y `RemoveLoop` llamados desde un listener se aplican al terminar el recorrido en curso (`Update`, `FixedUpdate` o `LateUpdate`), no al instante: `HasLoop` sigue devolviendo el valor anterior hasta entonces.

@@ -1,0 +1,22 @@
+{
+    "name": "HarryTools.GameLoop.Tests.PlayMode",
+    "rootNamespace": "HarryTools.GameLoop.Tests",
+    "references": [
+        "GUID:5565c121f675aca498b9a3c20e681d52",
+        "UnityEngine.TestRunner",
+        "UnityEditor.TestRunner"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "nunit.framework.dll"
+    ],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
