@@ -9,7 +9,7 @@ using Cysharp.Threading.Tasks;
 using HarryUtils.Singleton;
 
 namespace HarryTools.Localization {
-    [CreateAssetMenu(fileName = "Localization Config", menuName = "Tools/Localization/Localization Config")]
+    [CreateAssetMenu(fileName = "Localization Config", menuName = "HarryTools/Localization/Localization Config")]
     public class LocalizationConfig : ScriptableSingleton<LocalizationConfig> {
         [Serializable]
         public struct FlagStruct {
