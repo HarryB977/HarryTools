@@ -1,0 +1,21 @@
+{
+    "name": "HarryTools.Audio.Editor",
+    "rootNamespace": "HarryTools.Audio.Editor",
+    "references": [
+        "GUID:c85f48641bf49bd458b1adbdee201d0b",
+        "GUID:3cbd4dbbdd8d22542bf927dec8fe2000",
+        "GUID:5a48a51724773b745ac570afd65b9606",
+        "GUID:ce4097fb1cd381e499cd9508a42275ce"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

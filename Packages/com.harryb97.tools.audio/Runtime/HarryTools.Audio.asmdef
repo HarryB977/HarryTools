@@ -1,0 +1,21 @@
+{
+    "name": "HarryTools.Audio",
+    "rootNamespace": "HarryTools.Audio",
+    "references": [
+        "GUID:3cbd4dbbdd8d22542bf927dec8fe2000",
+        "GUID:5565c121f675aca498b9a3c20e681d52",
+        "GUID:5a48a51724773b745ac570afd65b9606",
+        "GUID:e9438e756332f8b49902de137df9187b",
+        "GUID:ce4097fb1cd381e499cd9508a42275ce",
+        "GUID:f51ebe6a0ceec4240a699833d6309b23"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
