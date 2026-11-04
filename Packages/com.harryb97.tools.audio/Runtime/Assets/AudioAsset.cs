@@ -75,6 +75,16 @@ namespace HarryTools.Audio {
         public bool IgnorePause => ignorePause;
         public bool FollowTimeScale => followTimeScale;
 
+        // ==================== UNITY ===================
+        private void OnValidate() {
+            volumeRange.x = Mathf.Clamp(volumeRange.x, 0f, 1f);
+            volumeRange.y = Mathf.Clamp(volumeRange.y, 0f, 1f);
+            if (volumeRange.x > volumeRange.y) volumeRange.x = volumeRange.y;
+            pitchRange.x = Mathf.Clamp(pitchRange.x, 0.1f, 3f);
+            pitchRange.y = Mathf.Clamp(pitchRange.y, 0.1f, 3f);
+            if (pitchRange.x > pitchRange.y) pitchRange.x = pitchRange.y;
+        }
+
         // ==================== PUBLIC ===================
         /// <summary> Effective spatial settings: the profile wins over the inline values. </summary>
         public SpatialSettings GetSpatial() => spatialProfile != null ? spatialProfile.Settings : spatial;

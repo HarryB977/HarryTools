@@ -23,7 +23,7 @@ namespace HarryTools.Audio {
             bag = new int[_entries.Count];
             int _valid = 0;
             for (int _i = 0; _i < _entries.Count; _i++) {
-                if (_entries[_i].Clip == null) continue;
+                if (_entries[_i] == null || _entries[_i].Clip == null) continue;
                 clips[_valid] = _entries[_i].Clip;
                 weights[_valid] = Mathf.Max(0f, _entries[_i].Weight);
                 _valid++;

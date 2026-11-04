@@ -61,6 +61,30 @@ namespace HarryTools.Audio.Tests {
         }
 
         [Test]
+        public void Shuffle_NoImmediateRepeatAcrossBags() {
+            var _selector = MakeSelector(ClipSelection.Shuffle,
+                new ClipEntry(MakeClip("a")), new ClipEntry(MakeClip("b")), new ClipEntry(MakeClip("c")));
+            AudioClip _previous = null;
+            for (int _i = 0; _i < 30; _i++) {
+                var _clip = _selector.Next();
+                Assert.AreNotSame(_previous, _clip);
+                _previous = _clip;
+            }
+        }
+
+        [Test]
+        public void NewClipEntry_DefaultWeightIsOne() {
+            Assert.AreEqual(1f, new ClipEntry().Weight);
+        }
+
+        [Test]
+        public void NullEntry_IsSkipped() {
+            var _a = MakeClip("a");
+            var _selector = MakeSelector(ClipSelection.Random, null, new ClipEntry(_a));
+            Assert.AreSame(_a, _selector.Next());
+        }
+
+        [Test]
         public void Sequence_CyclesInOrder() {
             var _a = MakeClip("a");
             var _b = MakeClip("b");

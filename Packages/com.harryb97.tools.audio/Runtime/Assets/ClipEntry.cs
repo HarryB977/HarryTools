@@ -2,19 +2,25 @@ using System;
 using UnityEngine;
 
 namespace HarryTools.Audio {
-    /// <summary> A clip with a selection weight. </summary>
+    /// <summary> A clip with a selection weight. A class so that rows added in the Inspector start with weight 1. </summary>
     [Serializable]
-    public struct ClipEntry {
+    public sealed class ClipEntry {
         // ==================== VARIABLES ===================
-        [Tooltip("Audio clip to play.")]
-        public AudioClip Clip;
-        [Min(0), Tooltip("Relative chance of being picked when the selection mode is random. 0 never picks it.")]
-        public float Weight;
+        [SerializeField, Tooltip("Audio clip to play.")]
+        private AudioClip clip;
+        [SerializeField, Min(0), Tooltip("Relative chance of being picked by Random and RandomNoRepeat. 0 never picks it. Ignored by Shuffle and Sequence.")]
+        private float weight = 1f;
 
         // ==================== CONSTRUCTORS ===================
+        public ClipEntry() { }
+
         public ClipEntry(AudioClip _clip, float _weight = 1f) {
-            Clip = _clip;
-            Weight = _weight;
+            clip = _clip;
+            weight = _weight;
         }
+
+        // ==================== PROPERTIES ===================
+        public AudioClip Clip => clip;
+        public float Weight => weight;
     }
 }
