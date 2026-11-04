@@ -61,8 +61,9 @@ namespace HarryTools.ProBuilderExtensions.Generator {
             material.SetFloat("_Intensity", wear.intensity);
             material.SetFloat("_BevelWidth", Mathf.Max(0.001f, wear.bevelWidth));
             material.SetFloat("_EdgeTone", wear.edgeTone);
-            material.SetFloat("_ChipSize", Mathf.Max(0.005f, wear.chipSize));
-            material.SetFloat("_ChipDensity", wear.chipDensity);
+            material.SetFloat("_Style", (int)wear.style);
+            material.SetFloat("_WearSize", Mathf.Max(0.005f, wear.wearSize));
+            material.SetFloat("_EdgeWidth", Mathf.Max(0f, wear.edgeWidth));
             material.SetFloat("_GapDepth", wear.gapDepth);
             material.SetFloat("_Cavity", wear.cavity);
             material.SetFloat("_Seed", recipe.seed);

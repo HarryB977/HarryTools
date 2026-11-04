@@ -41,6 +41,8 @@ namespace HarryTools.ProBuilderExtensions.Tests {
             recipe.top.tileSize = recipe.bottom.tileSize = 0.125f; // 8 px texture at 64 px/m
             recipe.wear.bevelWidth = 0.05f;
             recipe.wear.intensity = 0f;
+            recipe.wear.style = HotspotWearStyle.Bites;
+            recipe.wear.edgeWidth = 0f;
             created.Add(layout);
             created.Add(recipe);
             return recipe;
@@ -93,7 +95,6 @@ namespace HarryTools.ProBuilderExtensions.Tests {
         public void IntensityOne_ShowsBottomNearEdges() {
             var recipe = CentredPatch();
             recipe.wear.intensity = 1f;
-            recipe.wear.chipDensity = 1f;
             var color = Read(recipe, HotspotMap.BaseColor, linear: false);
             var red = 0;
             for (int y = 8; y < 56; y++)
@@ -173,7 +174,7 @@ namespace HarryTools.ProBuilderExtensions.Tests {
             strip.allowTiling = true;
             var recipe = Recipe(strip);
             recipe.wear.intensity = 1f;
-            recipe.wear.chipSize = 0.25f;
+            recipe.wear.wearSize = 0.25f;
             var wear = Read(recipe, HotspotMap.Wear);
 
             float Column(int x0, int x1) {
@@ -249,8 +250,7 @@ namespace HarryTools.ProBuilderExtensions.Tests {
         public void Wear_IsAlwaysConnectedToTheEdge([Values(0.3f, 0.6f, 1f)] float intensity, [Values(0, 7)] int seed) {
             var recipe = CentredPatch();
             recipe.wear.intensity = intensity;
-            recipe.wear.chipSize = 0.05f;
-            recipe.wear.chipDensity = 1f;
+            recipe.wear.wearSize = 0.05f;
             recipe.seed = seed;
             var wear = Read(recipe, HotspotMap.Wear);
             Assert.Greater(Coverage(recipe), 0f);

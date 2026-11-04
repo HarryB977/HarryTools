@@ -19,7 +19,7 @@ Shader "Hidden/HarryTools/HotspotGenerator" {
         float4 _Patches[MAX_PATCHES];    // xMin, yMin, xMax, yMax (normalized, top-left origin)
         float4 _PatchFlags[MAX_PATCHES]; // tiling axis (0 none, 1 horizontal, 2 vertical), rotate layers, random, random
 
-        float _Intensity, _BevelWidth, _EdgeTone, _ChipSize, _ChipDensity, _GapDepth, _Cavity, _Seed, _Variation;
+        float _Intensity, _BevelWidth, _EdgeTone, _Style, _WearSize, _EdgeWidth, _GapDepth, _Cavity, _Seed, _Variation;
         float _TopAlign, _BottomAlign;
         int _Channel;
 
@@ -85,7 +85,7 @@ Shader "Hidden/HarryTools/HotspotGenerator" {
         }
 
         float Fbm(float2 uv, float seed) {
-            float2 cells = max(1, round(_AtlasWorld.xy / _ChipSize));
+            float2 cells = max(1, round(_AtlasWorld.xy / _WearSize));
             float2 x = float2(uv.x, 1 - uv.y) * cells;
             float sum = 0, amp = 0.5, norm = 0;
             [unroll]
@@ -99,7 +99,7 @@ Shader "Hidden/HarryTools/HotspotGenerator" {
 
         // Smooth two-octave noise for the wear width along an edge: rounded bites instead of needles.
         float WearNoise(float2 uv, float seed) {
-            float2 cells = max(1, round(_AtlasWorld.xy / (_ChipSize * 1.5)));
+            float2 cells = max(1, round(_AtlasWorld.xy / (_WearSize * 1.5)));
             float2 x = float2(uv.x, 1 - uv.y) * cells;
             float v = 0.7 * ValueNoise(x, (int2)cells, seed) + 0.3 * ValueNoise(x * 2, (int2)(cells * 2), seed + 0.017);
             return saturate((v - 0.5) * 1.8 + 0.5);
@@ -119,10 +119,10 @@ Shader "Hidden/HarryTools/HotspotGenerator" {
             // Wear grows inwards from the border: a band whose width varies along the border. The width is sampled at
             // the closest border point, so every worn pixel is connected to the edge (no floating chips).
             float wear = 0;
-            if (_Intensity > 0) {
+            if (_Style == 1 && _Intensity > 0) {
                 float n = WearNoise(p.edgeUV, _Seed * 0.001 + p.index * 0.0731);
-                // Chip Size is the length of a bite along the edge; its depth stays in proportion (at most ~2x).
-                float width = _Intensity * _ChipSize * (0.5 + 1.5 * _ChipDensity) * n;
+                // Wear Size is the length of a bite along the edge; its depth stays in proportion.
+                float width = _Intensity * _WearSize * 1.25 * n;
                 float pixel = _AtlasWorld.z;
                 wear = width > pixel * 0.5 ? 1 - smoothstep(width - pixel, width, p.dist) : 0;
             }

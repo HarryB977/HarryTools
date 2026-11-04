@@ -64,27 +64,59 @@ namespace HarryTools.ProBuilderExtensions.Generator {
         [Range(0, 2)] public float normalStrength = 1f;
     }
 
+    public enum HotspotWearStyle { Cracks, Bites, None }
+
     [Serializable]
-    public class HotspotWear {
-        [Tooltip("Width of the damage growing in from the edges. 0 = only a soft bevel and a slight edge tone; 1 = deep chips revealing the bottom layer.")]
+    public class HotspotWear : ISerializationCallbackReceiver {
+        /// <summary>Depth of a Bites band per metre of Wear Size at full Intensity.</summary>
+        public const float BitesDepth = 1.25f;
+
+        [Tooltip("Damage added on top of the rim. Cracks: fine cracks branching in from the edge (tiles, plaster). Bites: rounded chips revealing the bottom layer (metal, chipped paint). None: only the rim and the texture below.")]
+        public HotspotWearStyle style = HotspotWearStyle.Cracks;
+
+        [Tooltip("Amount of damage from the style and the wear texture. 0 = only the rim; 1 = long cracks or deep bites. Does not change the rim.")]
         [Range(0, 1)] public float intensity = 0.2f;
 
-        [Tooltip("Width of the bevel around each patch, in metres.")]
+        [Tooltip("Width of the rounded bevel around each patch, in metres.")]
         [Min(0.001f)] public float bevelWidth = 0.02f;
+
+        [Tooltip("Minimum width (metres) of the damaged rim that runs along the whole border of every patch, revealing the bottom layer. Never narrower than this anywhere. 0 = clean bevel.")]
+        [Min(0)] public float edgeWidth = 0.01f;
 
         [Tooltip("How much lighter worn edges look.")]
         [Range(0, 1)] public float edgeTone = 0.15f;
 
-        [Tooltip("Typical length (metres) of a bite along the edge. Bites reach at most about twice as deep.")]
-        [Min(0.005f)] public float chipSize = 0.05f;
+        [Tooltip("Size of the wear pattern in metres. Cracks: typical spacing between cracks. Bites: typical length of a bite along the edge.")]
+        [Min(0.005f)] public float wearSize = 0.05f;
 
-        [Tooltip("How far into the patch the wear can reach.")]
-        [Range(0, 1)] public float chipDensity = 0.5f;
+        [Tooltip("Optional grunge frame: white = intact, black = worn, with a ragged black border. Only a strip of its left side is read and wrapped along every patch border; loose specks are removed.")]
+        public Texture2D wearTexture;
 
-        [Tooltip("How much darker gaps, chips and the foot of the bevel look, so edges read even when both layers are the same material.")]
+        [Tooltip("Fraction of the wear texture's width read as the border strip.")]
+        [Range(0.01f, 0.5f)] public float textureBorder = 0.2f;
+
+        [Tooltip("How far (metres) the wear texture reaches into every patch at full Intensity.")]
+        [Min(0.001f)] public float textureDepth = 0.05f;
+
+        [Tooltip("How much darker gaps, cracks, worn areas and the foot of the bevel look, so edges read even when both layers are the same material.")]
         [Range(0, 1)] public float cavity = 0.5f;
 
-        [Tooltip("Depth of the gaps and chips relative to the bevel.")]
+        [Tooltip("Depth of the gaps and worn areas relative to the bevel.")]
         [Range(0.05f, 1)] public float gapDepth = 0.5f;
+
+        // Settings of recipes saved before 1.2. -1 = not present.
+        [SerializeField, HideInInspector] private float chipSize = -1f;
+        [SerializeField, HideInInspector] private float chipDensity = -1f;
+
+        void ISerializationCallbackReceiver.OnBeforeSerialize() { }
+
+        void ISerializationCallbackReceiver.OnAfterDeserialize() {
+            if (chipSize < 0) return;
+            style = HotspotWearStyle.Bites;
+            wearSize = chipSize;
+            edgeWidth = 0f;
+            intensity = Mathf.Min(1f, intensity * (0.5f + 1.5f * Mathf.Max(0f, chipDensity)) / BitesDepth);
+            chipSize = chipDensity = -1f;
+        }
     }
 }
