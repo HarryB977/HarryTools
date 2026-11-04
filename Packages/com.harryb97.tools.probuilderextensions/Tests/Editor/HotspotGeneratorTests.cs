@@ -47,7 +47,7 @@ namespace HarryTools.ProBuilderExtensions.Tests {
         private static string Guid(Object asset) => AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(asset));
 
         private static string[] Guids(HotspotRecipe r) => new[] {
-            Guid(r.baseColorMap), Guid(r.normalMap), Guid(r.maskMap), Guid(r.occlusionMap), Guid(r.material), Guid(r.hotspotTexture),
+            Guid(r.baseColorMap), Guid(r.normalMap), Guid(r.maskMap), Guid(r.occlusionMap), Guid(r.material), Guid(r.hotspotTexture), Guid(r.heightMap),
         };
 
         [Test]
@@ -65,7 +65,9 @@ namespace HarryTools.ProBuilderExtensions.Tests {
             Assert.AreEqual(TextureImporterType.NormalMap, Importer(recipe.normalMap).textureType);
             Assert.IsFalse(Importer(recipe.maskMap).sRGBTexture);
             Assert.IsFalse(Importer(recipe.occlusionMap).sRGBTexture);
-            foreach (var map in new[] { recipe.baseColorMap, recipe.normalMap, recipe.maskMap, recipe.occlusionMap }) {
+            Assert.AreEqual(Folder + "/Plaster/Plaster_Height.png", AssetDatabase.GetAssetPath(recipe.heightMap));
+            Assert.IsFalse(Importer(recipe.heightMap).sRGBTexture);
+            foreach (var map in new[] { recipe.baseColorMap, recipe.normalMap, recipe.maskMap, recipe.occlusionMap, recipe.heightMap }) {
                 Assert.AreEqual(TextureWrapMode.Repeat, Importer(map).wrapMode, map.name);
                 Assert.IsTrue(Importer(map).mipmapEnabled, map.name);
                 Assert.AreEqual(128, map.width, map.name);
@@ -80,11 +82,23 @@ namespace HarryTools.ProBuilderExtensions.Tests {
             Assert.IsTrue(mat.IsKeywordEnabled("_NORMALMAP"));
             Assert.IsTrue(mat.IsKeywordEnabled("_METALLICSPECGLOSSMAP"));
             Assert.IsTrue(mat.IsKeywordEnabled("_OCCLUSIONMAP"));
+            Assert.AreEqual(recipe.heightMap, mat.GetTexture("_ParallaxMap"));
+            Assert.IsTrue(mat.IsKeywordEnabled("_PARALLAXMAP"));
+            Assert.AreEqual(0f, mat.GetFloat("_Parallax"), "parallax starts off; the user turns it up");
 
             var hotspot = recipe.hotspotTexture;
             Assert.AreEqual(layout, hotspot.layout);
             Assert.AreEqual(recipe.baseColorMap, hotspot.target);
             Assert.AreEqual(16f, hotspot.EffectiveTexelsPerUnit, 1e-3f); // 128 px over 8 m
+        }
+
+        [Test]
+        public void Regenerate_KeepsTheUsersParallaxScale() {
+            var recipe = Recipe("Plaster");
+            HotspotGenerator.Generate(recipe);
+            recipe.material.SetFloat("_Parallax", 0.02f);
+            HotspotGenerator.Generate(recipe);
+            Assert.AreEqual(0.02f, recipe.material.GetFloat("_Parallax"), 1e-6f);
         }
 
         [Test]

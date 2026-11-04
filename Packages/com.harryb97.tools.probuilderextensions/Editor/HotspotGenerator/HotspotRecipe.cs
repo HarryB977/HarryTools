@@ -34,6 +34,7 @@ namespace HarryTools.ProBuilderExtensions.Generator {
         public Texture2D normalMap;
         public Texture2D maskMap;
         public Texture2D occlusionMap;
+        public Texture2D heightMap;
         public Material material;
         public HotspotTexture hotspotTexture;
 

@@ -119,10 +119,10 @@ namespace HarryTools.ProBuilderExtensions.Tests {
         }
 
         [Test]
-        public void SameSeed_IsDeterministic_DifferentSeed_Differs([Values(HotspotMap.Wear, HotspotMap.Cracks)] HotspotMap map) {
+        public void SameSeed_IsDeterministic_DifferentSeed_Differs([Values(HotspotMap.Wear, HotspotMap.Style)] HotspotMap map) {
             var recipe = CentredPatch();
             recipe.wear.intensity = 0.6f;
-            if (map == HotspotMap.Cracks) recipe.wear.style = HotspotWearStyle.Cracks;
+            if (map == HotspotMap.Style) recipe.wear.style = HotspotWearStyle.Cracks;
             recipe.seed = 3;
             var a = Read(recipe, map).GetPixels32();
             var b = Read(recipe, map).GetPixels32();
@@ -438,7 +438,7 @@ namespace HarryTools.ProBuilderExtensions.Tests {
 
         [Test]
         public void Cracks_AreConnectedToTheEdge([Values(0.3f, 0.6f, 1f)] float intensity, [Values(0, 7)] int seed) {
-            var mask = Read(Cracks(intensity, seed), HotspotMap.Cracks);
+            var mask = Read(Cracks(intensity, seed), HotspotMap.Style);
             var any = false;
             for (int y = 8; y < 56; y++)
                 for (int x = 8; x < 56; x++) any |= mask.GetPixel(x, y).r > 0.5f;
@@ -448,7 +448,7 @@ namespace HarryTools.ProBuilderExtensions.Tests {
 
         [Test]
         public void Cracks_ReachBeyondTheBevel() {
-            var mask = Read(Cracks(1f, 0), HotspotMap.Cracks);
+            var mask = Read(Cracks(1f, 0), HotspotMap.Style);
             var deep = 0;
             for (int y = 8; y < 56; y++)
                 for (int x = 8; x < 56; x++)
@@ -462,7 +462,7 @@ namespace HarryTools.ProBuilderExtensions.Tests {
         [Test]
         public void Cracks_LowerTheHeight() {
             var recipe = Cracks(1f, 0);
-            var mask = Read(recipe, HotspotMap.Cracks);
+            var mask = Read(recipe, HotspotMap.Style);
             var height = Read(recipe, HotspotMap.Height);
             var plateau = height.GetPixel(32, 32).r;
             var found = false;
@@ -477,7 +477,7 @@ namespace HarryTools.ProBuilderExtensions.Tests {
 
         [Test]
         public void Cracks_IntensityZero_NoCracks() {
-            var mask = Read(Cracks(0f, 0), HotspotMap.Cracks);
+            var mask = Read(Cracks(0f, 0), HotspotMap.Style);
             foreach (var c in mask.GetPixels()) Assert.AreEqual(0f, c.r, 1e-3f);
         }
 
@@ -488,7 +488,7 @@ namespace HarryTools.ProBuilderExtensions.Tests {
             recipe.wear.edgeWidth = 0f;
             recipe.wear.intensity = 1f;
             recipe.wear.wearSize = 0.1f;
-            var mask = Read(recipe, HotspotMap.Cracks);
+            var mask = Read(recipe, HotspotMap.Style);
             // Patch A: px x 4..28, y 36..60 (texture y up); patch B: x 36..60, y 8..32.
             bool InA(int x, int y) => x >= 4 && x < 28 && y >= 36 && y < 60;
             bool InB(int x, int y) => x >= 36 && x < 60 && y >= 8 && y < 32;
@@ -507,7 +507,7 @@ namespace HarryTools.ProBuilderExtensions.Tests {
         public void Cracks_LongerThanThePatch_StillAppearAndStayConnected([Values(0, 7)] int seed) {
             var recipe = Cracks(1f, seed);
             recipe.wear.wearSize = 0.5f; // cracks 0.5–1 m long on a 0.75 m patch
-            var mask = Read(recipe, HotspotMap.Cracks);
+            var mask = Read(recipe, HotspotMap.Style);
             var any = false;
             for (int y = 8; y < 56; y++)
                 for (int x = 8; x < 56; x++) any |= mask.GetPixel(x, y).r > 0.5f;
@@ -523,7 +523,7 @@ namespace HarryTools.ProBuilderExtensions.Tests {
             recipe.wear.style = HotspotWearStyle.Cracks;
             recipe.wear.intensity = 1f;
             recipe.wear.wearSize = 0.1f;
-            AssertSeamless(Read(recipe, HotspotMap.Cracks));
+            AssertSeamless(Read(recipe, HotspotMap.Style));
         }
 
         /// <summary>A non-readable grunge frame, black where <paramref name="black"/> is true and white elsewhere.</summary>
@@ -619,6 +619,36 @@ namespace HarryTools.ProBuilderExtensions.Tests {
             // 256-texel strip squeezed into an 8 px band: one-texel filaments connected to the rim.
             recipe.wear.wearTexture = Frame(512, 512, (x, y) => x < 4 || (x < 200 && (y + x / 3) % 16 == 0));
             Assert.AreEqual(0, Isolated(Read(recipe, HotspotMap.Wear)));
+        }
+
+        [Test]
+        public void StyleMap_ShowsBites() {
+            var recipe = CentredPatch();
+            recipe.wear.style = HotspotWearStyle.Bites;
+            recipe.wear.intensity = 1f;
+            recipe.wear.wearSize = 0.25f;
+            var style = Read(recipe, HotspotMap.Style);
+            var wear = Read(recipe, HotspotMap.Wear);
+            var any = false;
+            for (int y = 8; y < 56; y++)
+                for (int x = 8; x < 56; x++) {
+                    var s = style.GetPixel(x, y).r;
+                    any |= s > 0.5f;
+                    Assert.AreEqual(wear.GetPixel(x, y).r, s, 0.02f, $"{x},{y}"); // no rim or texture here: wear = bites
+                }
+            Assert.IsTrue(any);
+        }
+
+        [Test]
+        public void Bites_NarrowerThanAPixel_StillShowPartially() {
+            var recipe = CentredPatch();
+            recipe.wear.intensity = 1f;
+            recipe.wear.wearSize = 0.02f; // at most 0.025 m · n = 1.6 px, mostly well under a pixel
+            recipe.wear.intensity = 0.2f; // at most 0.32 px
+            var wear = Read(recipe, HotspotMap.Wear);
+            var max = 0f;
+            for (int y = 8; y < 56; y++) max = Mathf.Max(max, wear.GetPixel(8, y).r);
+            Assert.Greater(max, 0.05f, "sub-pixel bites are dropped");
         }
     }
 }

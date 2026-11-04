@@ -214,6 +214,15 @@ Shader "Hidden/HarryTools/HotspotGenerator" {
             return mask;
         }
 
+        // Bites: a band whose width varies along the border, sampled at the closest border point. Drawn with its pixel
+        // coverage, so bites narrower than a pixel (in the preview) still show faintly instead of vanishing.
+        float BitesMask(PatchInfo p) {
+            if (_Style != 1 || _Intensity <= 0 || p.index < 0) return 0;
+            float n = WearNoise(p.edgeUV, _Seed * 0.001 + p.index * 0.0731);
+            float width = _Intensity * _WearSize * 1.25 * n; // keep 1.25 in sync with HotspotWear.BitesDepth
+            return width > 0 ? saturate((width - p.dist) / _AtlasWorld.z + 0.5) : 0;
+        }
+
         float4 ComputeData(float2 uv) {
             PatchInfo p = FindPatch(uv);
             float bottom = BottomLevel();
@@ -236,13 +245,7 @@ Shader "Hidden/HarryTools/HotspotGenerator" {
                 float rim = minWidth * (1 + 0.5 * n);
                 wear = 1 - smoothstep(rim, rim + pixel, p.dist);
             }
-            // Bites: a band whose width varies along the border, sampled at the closest border point.
-            if (_Style == 1 && _Intensity > 0) {
-                float n = WearNoise(p.edgeUV, _Seed * 0.001 + p.index * 0.0731);
-                // Wear Size is the length of a bite along the edge; its depth stays in proportion.
-                float width = _Intensity * _WearSize * 1.25 * n;
-                wear = max(wear, width > pixel * 0.5 ? 1 - smoothstep(width - pixel, width, p.dist) : 0);
-            }
+            wear = max(wear, BitesMask(p));
             // Wear texture: its border strip unrolled along the nearest border. Intensity shrinks the band (rather than
             // moving a threshold), which keeps every worn texel connected to the rim.
             float textureDepth = _TextureDepth * _Intensity;
@@ -368,8 +371,9 @@ Shader "Hidden/HarryTools/HotspotGenerator" {
             return float4(ao, ao, ao, 1);
         }
 
-        float4 FragCracks(v2f_img i) : SV_Target {
-            float v = CrackMask(i.uv);
+        // The damage of the selected style alone: cracks or bites.
+        float4 FragStyle(v2f_img i) : SV_Target {
+            float v = _Style == 0 ? CrackMask(i.uv) : BitesMask(FindPatch(i.uv));
             return float4(v, v, v, 1);
         }
 
@@ -411,7 +415,7 @@ Shader "Hidden/HarryTools/HotspotGenerator" {
         ENDCG }
         Pass { CGPROGRAM
             #pragma vertex vert_img
-            #pragma fragment FragCracks
+            #pragma fragment FragStyle
             #pragma target 3.5
         ENDCG }
     }

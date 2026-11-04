@@ -36,16 +36,17 @@ namespace HarryTools.ProBuilderExtensions.Generator {
             var normalPath = Resolve(recipe, recipe.normalMap, $"{folder}/{name}_Normal.png");
             var maskPath = Resolve(recipe, recipe.maskMap, $"{folder}/{name}_Mask.png");
             var occlusionPath = Resolve(recipe, recipe.occlusionMap, $"{folder}/{name}_Occlusion.png");
+            var heightPath = Resolve(recipe, recipe.heightMap, $"{folder}/{name}_Height.png");
             var materialPath = Resolve(recipe, recipe.material, $"{folder}/{name}.mat");
             var hotspotPath = Resolve(recipe, recipe.hotspotTexture, $"{folder}/{name} Hotspot.asset");
 
             // Only create the default folder if an output actually goes there (they may have been moved elsewhere).
-            foreach (var path in new[] { baseColorPath, normalPath, maskPath, occlusionPath, materialPath, hotspotPath })
+            foreach (var path in new[] { baseColorPath, normalPath, maskPath, occlusionPath, heightPath, materialPath, hotspotPath })
                 if (path.StartsWith(folder + "/")) { EnsureFolder(folder); break; }
 
             // Render every map before touching the AssetDatabase: importing an asset between two blits leaves the
             // following maps empty (the import invalidates textures the renderer is sampling).
-            byte[] baseColor, normal, mask, occlusion;
+            byte[] baseColor, normal, mask, occlusion, height;
             Vector2Int size;
             using (var renderer = new HotspotRenderer(recipe, recipe.resolution)) {
                 size = renderer.Size;
@@ -53,12 +54,14 @@ namespace HarryTools.ProBuilderExtensions.Generator {
                 normal = Encode(renderer, HotspotMap.Normal, false);
                 mask = Encode(renderer, HotspotMap.Mask, false);
                 occlusion = Encode(renderer, HotspotMap.Occlusion, false);
+                height = Encode(renderer, HotspotMap.Height, false);
             }
 
             recipe.baseColorMap = WriteMap(baseColor, size, baseColorPath, true, false);
             recipe.normalMap = WriteMap(normal, size, normalPath, false, true);
             recipe.maskMap = WriteMap(mask, size, maskPath, false, false);
             recipe.occlusionMap = WriteMap(occlusion, size, occlusionPath, false, false);
+            recipe.heightMap = WriteMap(height, size, heightPath, false, false);
 
             recipe.material = WriteMaterial(recipe, materialPath);
             recipe.hotspotTexture = WriteHotspotTexture(recipe, hotspotPath);
@@ -86,7 +89,7 @@ namespace HarryTools.ProBuilderExtensions.Generator {
                 var other = AssetDatabase.LoadAssetAtPath<HotspotRecipe>(AssetDatabase.GUIDToAssetPath(guid));
                 if (other == null || other == recipe) continue;
                 if (other.baseColorMap == output || other.normalMap == output || other.maskMap == output ||
-                    other.occlusionMap == output || other.material == output || other.hotspotTexture == output)
+                    other.occlusionMap == output || other.heightMap == output || other.material == output || other.hotspotTexture == output)
                     return true;
             }
             return false;
@@ -137,6 +140,7 @@ namespace HarryTools.ProBuilderExtensions.Generator {
                 material = new Material(shader);
                 material.SetColor("_BaseColor", Color.white);
                 material.SetFloat("_Smoothness", 1f); // the mask's alpha holds the real smoothness
+                material.SetFloat("_Parallax", 0f);   // parallax off until the user turns it up
                 AssetDatabase.CreateAsset(material, path);
             }
             // An existing material keeps its shader: the user may have switched to one with the same properties.
@@ -146,10 +150,12 @@ namespace HarryTools.ProBuilderExtensions.Generator {
             material.SetTexture("_BumpMap", recipe.normalMap);
             material.SetTexture("_MetallicGlossMap", recipe.maskMap);
             material.SetTexture("_OcclusionMap", recipe.occlusionMap);
+            material.SetTexture("_ParallaxMap", recipe.heightMap);
             material.SetFloat("_SmoothnessTextureChannel", 0);
             material.EnableKeyword("_NORMALMAP");
             material.EnableKeyword("_METALLICSPECGLOSSMAP");
             material.EnableKeyword("_OCCLUSIONMAP");
+            material.EnableKeyword("_PARALLAXMAP");
             EditorUtility.SetDirty(material);
             return material;
         }
