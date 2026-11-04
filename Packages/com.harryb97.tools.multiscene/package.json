@@ -1,6 +1,6 @@
 {
   "name": "com.harryb97.tools.multiscene",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "displayName": "MultiScene",
   "description": "Herramientas para facilitar la carga y descarga de escenas",
   "unity": "6000.0",

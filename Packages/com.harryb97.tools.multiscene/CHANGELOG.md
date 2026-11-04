@@ -1,5 +1,9 @@
 # Change Log:
 
+## 1.2.2
+
+    - El menú de creación ahora está en 'Assets > Create > HarryTools > MultiScene' en vez de 'Tools > MultiScene'
+
 ## 1.2.1
 
     - Los Assembly Definitions ahora referencian por GUID en vez de por nombre, así que siguen funcionando aunque se renombre un ensamblado
