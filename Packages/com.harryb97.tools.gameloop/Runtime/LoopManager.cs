@@ -5,6 +5,8 @@ namespace HarryTools.GameLoop {
     sealed class LoopManager : MonoBehaviour {
         // ==================== METHODS ====================
         private void Update() {
+            if (!IsActiveManager()) return;
+
             LoopSystem.BeginIteration();
             try {
                 foreach (KeyValuePair<string, ILoopable> _loop in LoopSystem.Loops) {
@@ -17,6 +19,8 @@ namespace HarryTools.GameLoop {
         }
 
         private void FixedUpdate() {
+            if (!IsActiveManager()) return;
+
             LoopSystem.BeginIteration();
             try {
                 foreach (KeyValuePair<string, ILoopable> _loop in LoopSystem.Loops) {
@@ -29,6 +33,8 @@ namespace HarryTools.GameLoop {
         }
 
         private void LateUpdate() {
+            if (!IsActiveManager()) return;
+
             LoopSystem.BeginIteration();
             try {
                 foreach (KeyValuePair<string, ILoopable> _loop in LoopSystem.Loops) {
@@ -38,6 +44,14 @@ namespace HarryTools.GameLoop {
             } finally {
                 LoopSystem.EndIteration();
             }
+        }
+
+        // A manager that is not the registered one (stray copy saved in a scene) must not tick the loops twice
+        private bool IsActiveManager() {
+            if (LoopSystem.IsRegistered(gameObject)) return true;
+
+            Destroy(gameObject);
+            return false;
         }
 
         private void OnDestroy() {

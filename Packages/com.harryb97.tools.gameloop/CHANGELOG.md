@@ -2,11 +2,12 @@
 
 ## 1.1.0
 
-    - `LoopSystem.Initialize()` ya no es obligatorio: `AddLoop`, `RemoveLoop`, `HasLoop` y `TryGetLoop` crean el "Loop Manager" si hace falta
+    - `LoopSystem.Initialize()` ya no es obligatorio: `AddLoop` crea el "Loop Manager" si hace falta. `RemoveLoop`, `HasLoop` y `TryGetLoop` nunca lo crean, y no se crea mientras la aplicación se cierra ni se guarda en la escena en modo edición
     - `Initialize()` es idempotente: con un manager vivo no hace nada y no vacía los loops. Si el manager se destruyó desde fuera, se vuelve a crear conservando los loops
     - `AddLoop` y `RemoveLoop` llamados desde un listener se aplican al terminar el recorrido, en vez de modificar el diccionario mientras se recorre
     - Añadidos `IsInitialized`, `HasLoop` y `TryGetLoop`
     - Con la recarga de dominio desactivada, al entrar en Play ya no quedan loops ni managers de la sesión anterior
+    - Un LoopManager que no es el registrado se destruye y no ejecuta los loops, para que una copia guardada en una escena no los duplique
     - Añadidos tests de PlayMode
 
 ## 1.0.3

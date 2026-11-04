@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
@@ -77,6 +78,36 @@ namespace HarryTools.GameLoop.Tests {
             yield return null;
 
             Assert.AreEqual(0, _calls);
+        }
+
+        [UnityTest]
+        public IEnumerator RemoveLoopAndQueries_WithoutManager_CreateNothing() {
+            LoopSystem.RemoveLoop("A");
+            LoopSystem.HasLoop("A");
+            LoopSystem.TryGetLoop("A", out _);
+            yield return null;
+
+            Assert.IsFalse(LoopSystem.IsInitialized);
+            Assert.AreEqual(0, Object.FindObjectsByType<LoopManager>(FindObjectsSortMode.None).Length);
+        }
+
+        [UnityTest]
+        public IEnumerator StrayManager_DoesNotDoubleTick() {
+            var _frames = new List<int>();
+            ILoopable _loop = new Loop("A");
+            _loop.AddUpdateListener(() => _frames.Add(Time.frameCount));
+            LoopSystem.AddLoop(_loop);
+
+            var _stray = new GameObject("Stray Loop Manager");
+            _stray.AddComponent<LoopManager>();
+
+            yield return null;
+            yield return null;
+            yield return null;
+
+            Assert.Greater(_frames.Count, 0);
+            Assert.AreEqual(new HashSet<int>(_frames).Count, _frames.Count, "A frame ticked the loop more than once.");
+            Assert.AreEqual(1, Object.FindObjectsByType<LoopManager>(FindObjectsSortMode.None).Length);
         }
     }
 }

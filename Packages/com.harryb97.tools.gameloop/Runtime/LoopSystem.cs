@@ -16,7 +16,9 @@ namespace HarryTools.GameLoop {
         #region Private Variables
         private static GameObject s_manager;
         private static int s_iterationDepth;
-        private static readonly List<PendingChange> s_pending = new();
+        private static bool s_quitting;
+        private static List<PendingChange> s_pending = new();
+        private static List<PendingChange> s_applying = new();
 
         private readonly struct PendingChange {
             public readonly bool Add;
@@ -34,18 +36,17 @@ namespace HarryTools.GameLoop {
         // ==================== METHODS ====================
         /// <summary>
         /// Creates the Loop Manager if it does not exist. Safe to call more than once: it never clears the registered loops.
+        /// Only <see cref="Initialize"/> and <see cref="AddLoop"/> create the manager; queries and <see cref="RemoveLoop"/> never do.
         /// </summary>
         public static void Initialize() {
             EnsureInitialized();
         }
 
         public static bool HasLoop(string _loopId) {
-            EnsureInitialized();
             return Loops.ContainsKey(_loopId);
         }
 
         public static bool TryGetLoop(string _loopId, out ILoopable _loop) {
-            EnsureInitialized();
             return Loops.TryGetValue(_loopId, out _loop);
         }
 
@@ -65,8 +66,6 @@ namespace HarryTools.GameLoop {
         }
 
         public static void RemoveLoop(string _loop) {
-            EnsureInitialized();
-
             if (s_iterationDepth > 0) {
                 s_pending.Add(new PendingChange(false, null, _loop));
                 return;
@@ -85,7 +84,9 @@ namespace HarryTools.GameLoop {
             s_manager = null;
             s_iterationDepth = 0;
             s_pending.Clear();
-            Loops = new();
+            s_applying.Clear();
+            s_quitting = false;
+            Loops.Clear();
         }
 
         internal static void BeginIteration() {
@@ -93,20 +94,25 @@ namespace HarryTools.GameLoop {
         }
 
         internal static void EndIteration() {
-            s_iterationDepth--;
+            if (s_iterationDepth > 0) s_iterationDepth--;
             if (s_iterationDepth > 0 || s_pending.Count == 0) return;
 
             // Applied in the order they were requested
-            PendingChange[] _changes = s_pending.ToArray();
+            (s_pending, s_applying) = (s_applying, s_pending);
             s_pending.Clear();
 
-            foreach (PendingChange _change in _changes) {
+            foreach (PendingChange _change in s_applying) {
                 if (_change.Add) {
                     Loops.TryAdd(_change.LoopID, _change.Loop);
                 } else {
                     Loops.Remove(_change.LoopID);
                 }
             }
+            s_applying.Clear();
+        }
+
+        internal static bool IsRegistered(GameObject _manager) {
+            return s_manager == _manager;
         }
 
         internal static void OnManagerDestroyed(GameObject _manager) {
@@ -114,17 +120,24 @@ namespace HarryTools.GameLoop {
         }
 
         private static void EnsureInitialized() {
-            if (s_manager != null) return;
+            if (s_manager != null || s_quitting) return;
 
             s_manager = new GameObject("Loop Manager");
             s_manager.AddComponent<LoopManager>();
 
-            // Only valid in Play mode; in Edit mode (tests, tooling) it would throw
+            // DontDestroyOnLoad only works in Play mode; in Edit mode the manager is hidden so it is never saved in a scene
             if (Application.isPlaying) Object.DontDestroyOnLoad(s_manager);
+            else s_manager.hideFlags = HideFlags.HideAndDontSave;
+        }
+
+        private static void OnQuitting() {
+            s_quitting = true;
         }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         private static void ResetOnLoad() {
+            Application.quitting -= OnQuitting;
+            Application.quitting += OnQuitting;
             Reset();
         }
     }

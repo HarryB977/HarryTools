@@ -13,7 +13,7 @@ openupm add com.harryb97.tools.gameloop
 ```csharp
 using HarryTools.GameLoop;
 
-// Opcional: el "Loop Manager" (DontDestroyOnLoad) se crea solo al usar la API.
+// Opcional: el "Loop Manager" (DontDestroyOnLoad) se crea solo con AddLoop; RemoveLoop, HasLoop y TryGetLoop nunca lo crean.
 // Initialize() es idempotente: llamarlo otra vez no vacía los loops
 LoopSystem.Initialize();
 
@@ -31,6 +31,7 @@ LoopSystem.RemoveLoop("Gameplay");
 
 LoopSystem.HasLoop("Gameplay");                       // bool
 LoopSystem.TryGetLoop("Gameplay", out ILoopable loop);
+LoopSystem.IsInitialized;                             // true si el Loop Manager existe ahora mismo
 
 private void OnUpdate() { }             // LoopSystem.LoopDelegate: void sin parámetros
 ```
