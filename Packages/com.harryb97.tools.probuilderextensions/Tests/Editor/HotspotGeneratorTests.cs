@@ -206,5 +206,50 @@ namespace HarryTools.ProBuilderExtensions.Tests {
             Assert.IsFalse(AssetDatabase.IsValidFolder(Folder + "/Plaster"), "an empty default folder was created");
             StringAssert.StartsWith(Folder + "/Elsewhere/Plaster/", AssetDatabase.GetAssetPath(recipe.baseColorMap));
         }
+        /// <summary>Writes a solid PNG as an imported asset (like a user's layer texture).</summary>
+        private static Texture2D SolidAsset(string name, Color32 color, bool normal) {
+            var path = $"{Folder}/{name}.png";
+            var tex = new Texture2D(8, 8, TextureFormat.RGBA32, false);
+            var pixels = new Color32[64];
+            for (int i = 0; i < pixels.Length; i++) pixels[i] = color;
+            tex.SetPixels32(pixels);
+            System.IO.File.WriteAllBytes(path, tex.EncodeToPNG());
+            Object.DestroyImmediate(tex);
+            AssetDatabase.ImportAsset(path);
+            if (normal) {
+                var importer = (TextureImporter)AssetImporter.GetAtPath(path);
+                importer.textureType = TextureImporterType.NormalMap;
+                importer.SaveAndReimport();
+            }
+            return AssetDatabase.LoadAssetAtPath<Texture2D>(path);
+        }
+
+        private static Color ExportedPixel(Texture2D output) {
+            var tex = new Texture2D(2, 2);
+            tex.LoadImage(System.IO.File.ReadAllBytes(AssetDatabase.GetAssetPath(output)));
+            var c = tex.GetPixel(Mathf.RoundToInt(tex.width * 0.72f), tex.height / 4); // middle of the second patch
+            Object.DestroyImmediate(tex);
+            return c;
+        }
+
+        [Test]
+        public void Generate_WritesTheRenderedPixelsOfEveryMap() {
+            var recipe = Recipe("Plaster");
+            recipe.top.albedo = recipe.bottom.albedo = SolidAsset("Albedo", new Color32(200, 180, 160, 255), false);
+            recipe.top.normal = recipe.bottom.normal = SolidAsset("Normal", new Color32(128, 128, 255, 255), true);
+            recipe.top.smoothness = recipe.bottom.smoothness = 0.6f;
+            recipe.top.metallic = recipe.bottom.metallic = 0.4f;
+            HotspotGenerator.Generate(recipe);
+
+            var normal = ExportedPixel(recipe.normalMap);
+            Assert.AreEqual(0.5f, normal.r, 0.05f, "normal r");
+            Assert.AreEqual(0.5f, normal.g, 0.05f, "normal g");
+            Assert.Greater(normal.b, 0.9f, "normal b");
+            var mask = ExportedPixel(recipe.maskMap);
+            Assert.AreEqual(0.4f, mask.r, 0.05f, "metallic");
+            Assert.AreEqual(0.6f, mask.a, 0.05f, "smoothness");
+            Assert.Greater(ExportedPixel(recipe.baseColorMap).r, 0.5f, "base colour");
+            Assert.Greater(ExportedPixel(recipe.occlusionMap).r, 0.9f, "occlusion on a flat area");
+        }
     }
 }

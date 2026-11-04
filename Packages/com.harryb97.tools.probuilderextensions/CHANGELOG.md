@@ -1,5 +1,9 @@
 # Change Log:
 
+## 1.1.1
+
+    - Corregido: al generar, los mapas Normal, Mask y Occlusion se exportaban vacíos (la importación del primer PNG invalidaba el render de los siguientes). Ahora se renderizan todos antes de escribir ningún archivo
+
 ## 1.1.0
 
     - Nuevo generador de texturas hotspot (Tools > HarryTools > ProBuilder Extensions > Hotspot Texture Generator): a partir de una capa superior, una inferior y un layout genera Base Color, Normal, máscara Metallic/Smoothness y Occlusion para URP Lit, un material y un Hotspot Texture

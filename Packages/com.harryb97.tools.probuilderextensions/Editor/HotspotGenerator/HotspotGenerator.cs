@@ -43,12 +43,22 @@ namespace HarryTools.ProBuilderExtensions.Generator {
             foreach (var path in new[] { baseColorPath, normalPath, maskPath, occlusionPath, materialPath, hotspotPath })
                 if (path.StartsWith(folder + "/")) { EnsureFolder(folder); break; }
 
+            // Render every map before touching the AssetDatabase: importing an asset between two blits leaves the
+            // following maps empty (the import invalidates textures the renderer is sampling).
+            byte[] baseColor, normal, mask, occlusion;
+            Vector2Int size;
             using (var renderer = new HotspotRenderer(recipe, recipe.resolution)) {
-                recipe.baseColorMap = WriteMap(renderer, HotspotMap.BaseColor, baseColorPath, true, false);
-                recipe.normalMap = WriteMap(renderer, HotspotMap.Normal, normalPath, false, true);
-                recipe.maskMap = WriteMap(renderer, HotspotMap.Mask, maskPath, false, false);
-                recipe.occlusionMap = WriteMap(renderer, HotspotMap.Occlusion, occlusionPath, false, false);
+                size = renderer.Size;
+                baseColor = Encode(renderer, HotspotMap.BaseColor, true);
+                normal = Encode(renderer, HotspotMap.Normal, false);
+                mask = Encode(renderer, HotspotMap.Mask, false);
+                occlusion = Encode(renderer, HotspotMap.Occlusion, false);
             }
+
+            recipe.baseColorMap = WriteMap(baseColor, size, baseColorPath, true, false);
+            recipe.normalMap = WriteMap(normal, size, normalPath, false, true);
+            recipe.maskMap = WriteMap(mask, size, maskPath, false, false);
+            recipe.occlusionMap = WriteMap(occlusion, size, occlusionPath, false, false);
 
             recipe.material = WriteMaterial(recipe, materialPath);
             recipe.hotspotTexture = WriteHotspotTexture(recipe, hotspotPath);
@@ -90,13 +100,17 @@ namespace HarryTools.ProBuilderExtensions.Generator {
             return folder;
         }
 
-        private static Texture2D WriteMap(HotspotRenderer renderer, HotspotMap map, string path, bool sRGB, bool normal) {
+        private static byte[] Encode(HotspotRenderer renderer, HotspotMap map, bool sRGB) {
             var tex = renderer.ReadBack(map, linear: !sRGB);
             try {
-                File.WriteAllBytes(path, tex.EncodeToPNG());
+                return tex.EncodeToPNG();
             } finally {
                 Object.DestroyImmediate(tex);
             }
+        }
+
+        private static Texture2D WriteMap(byte[] png, Vector2Int size, string path, bool sRGB, bool normal) {
+            File.WriteAllBytes(path, png);
             AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
 
             var importer = (TextureImporter)AssetImporter.GetAtPath(path);
@@ -104,7 +118,7 @@ namespace HarryTools.ProBuilderExtensions.Generator {
             importer.sRGBTexture = sRGB;
             importer.wrapMode = TextureWrapMode.Repeat;
             importer.mipmapEnabled = true;
-            var largest = Mathf.Max(renderer.Size.x, renderer.Size.y);
+            var largest = Mathf.Max(size.x, size.y);
             if (importer.maxTextureSize < largest) importer.maxTextureSize = Mathf.Min(16384, Mathf.NextPowerOfTwo(largest));
             importer.SaveAndReimport();
 
