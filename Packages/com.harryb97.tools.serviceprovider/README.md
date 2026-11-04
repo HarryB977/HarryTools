@@ -12,10 +12,17 @@ Los servicios son inmutables, pero las instancias pueden variar su uso dependien
 De esta forma, una entidad dentro de la partida puede adquirir un servicio usando "ServiceProvider" y ejecutar un método del mismo, o recuperar el valor de una variable, sin que haya una conexión directa entre el Manager y ella misma.
 
 # Instalación
-1. Ve a **Unity**, en la pestaña de **"Window/Package Manager"**
-2. Dale al símbolo de **"+"** y a la opción de *"Install package from git URL..."*
-3. Pega el link de este repositorio [``https://github.com/RazgriZ77/Unity-ServiceLocator.git``]
-4. Pulsa en **"Install"**
+Desde [OpenUPM](https://openupm.com/packages/com.harryb97.tools.serviceprovider/), con la CLI en la carpeta del proyecto:
+
+```sh
+openupm add com.harryb97.tools.serviceprovider
+```
+
+O por URL de git en el `Packages/manifest.json`:
+
+```json
+"com.harryb97.tools.serviceprovider": "https://github.com/HarryB977/HarryTools.git?path=/Packages/com.harryb97.tools.serviceprovider#serviceprovider/1.3.2"
+```
 
 ## Binding
 Permite que un objeto de la escena rellene un campo de un servicio sin que el servicio lo busque.

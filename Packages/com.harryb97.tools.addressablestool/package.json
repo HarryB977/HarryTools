@@ -1,12 +1,17 @@
 {
   "name": "com.harryb97.tools.addressablestool",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "displayName": "Addressables Tool",
   "description": "Herramienta que ayuda a cargar Addressables usando los Labels",
   "unity": "6000.0",
   "author": {
     "name": "HarryB97",
-    "email": "36953173+HarryB977@users.noreply.github.com"
+    "url": "https://github.com/HarryB977"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/HarryB977/HarryTools.git",
+    "directory": "Packages/com.harryb97.tools.addressablestool"
   },
   "hideInEditor": true,
   "license": "MIT",

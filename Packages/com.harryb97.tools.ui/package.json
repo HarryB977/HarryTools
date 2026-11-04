@@ -1,12 +1,17 @@
 {
   "name": "com.harryb97.tools.ui",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "displayName": "UI",
   "description": "Sistema de interfaces basado en PurrUI: vistas, popups y overlays por capas, paleta de colores con temas, iconos en texto y gráficos procedurales para uGUI.",
   "unity": "6000.0",
   "author": {
     "name": "HarryB97",
-    "email": "36953173+HarryB977@users.noreply.github.com"
+    "url": "https://github.com/HarryB977"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/HarryB977/HarryTools.git",
+    "directory": "Packages/com.harryb97.tools.ui"
   },
   "hideInEditor": true,
   "license": "MIT",

@@ -1,5 +1,11 @@
 # Change Log:
 
+## 1.0.6
+
+    - Publicado en OpenUPM: se instala con `openupm add com.harryb97.tools.runner` y el Package Manager avisa de las actualizaciones
+    - `package.json`: añadido `repository` y el autor ya no incluye email
+    - LICENSE: el titular pasa a ser HarryB97
+
 ## 1.0.5
 
     - Fix: Los archivos .meta tenían GUIDs repetidos con los de otros paquetes, lo que provocaba errores de conflicto de GUID al tener ambos paquetes instalados

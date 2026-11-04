@@ -1,5 +1,11 @@
 # Change Log:
 
+## 2.0.1
+
+    - Publicado en OpenUPM: se instala con `openupm add com.harryb97.tools.localdata` y el Package Manager avisa de las actualizaciones
+    - `package.json`: añadido `repository` y el autor ya no incluye email
+    - LICENSE: el titular pasa a ser HarryB97
+
 ## 2.0.0
 
     - Los datos se guardan en JSON con 'JsonUtility' en vez de 'BinaryFormatter' (obsoleto e inseguro). Los archivos pasan de '.dat' a '.json' y los guardados anteriores no se leen

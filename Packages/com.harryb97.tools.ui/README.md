@@ -11,22 +11,25 @@ Sustituye a los antiguos paquetes `popups`, `views`, `overlays` y `uicanvas`.
 
 ## Instalación
 
-Añade al `Packages/manifest.json` del proyecto el paquete y sus dependencias. Unity no resuelve las dependencias de un paquete instalado por git, así que hay que añadirlas también.
+1. Instala **PrimeTween** antes que el paquete. OpenUPM solo tiene la 1.3.3 y la dependencia pide 1.5.0 o superior, así que usa una de estas dos formas:
+   - Desde el Asset Store: tras importarlo, selecciona `Assets/Plugins/PrimeTween/PrimeTweenInstaller.asset` y pulsa **Install**. Eso añade `"com.kyrylokuzyk.primetween": "file:../Assets/Plugins/PrimeTween/internal/com.kyrylokuzyk.primetween-<versión>.tgz"` al `manifest.json`. Solo importar el asset no basta.
+   - Desde el registro npm del autor: scope `com.kyrylokuzyk`, URL `https://registry.npmjs.org`. En ese caso quita `com.kyrylokuzyk` de los scopes del registro de OpenUPM si la CLI lo añade.
+2. Instala el paquete desde [OpenUPM](https://openupm.com/packages/com.harryb97.tools.ui/). La CLI añade también UniTask y los paquetes `com.harryb97.*` de los que depende:
+
+   ```sh
+   openupm add com.harryb97.tools.ui
+   ```
+
+Para instalarlo por URL de git hay que añadir también sus dependencias, porque Unity no las resuelve en ese caso. UniTask (`com.cysharp.unitask`) se instala desde OpenUPM:
 
 ```json
-"com.harryb97.tools.ui": "https://github.com/RazgriZ77/HarryTools.git?path=/Packages/com.harryb97.tools.ui#ui/1.0.1",
-"com.harryb97.tools.logger": "https://github.com/RazgriZ77/HarryTools.git?path=/Packages/com.harryb97.tools.logger#logger/1.0.0",
-"com.harryb97.tools.domainreload": "https://github.com/RazgriZ77/HarryTools.git?path=/Packages/com.harryb97.tools.domainreload#domainreload/1.0.1",
-"com.harryb97.tools.serializereferences": "https://github.com/RazgriZ77/HarryTools.git?path=/Packages/com.harryb97.tools.serializereferences#serializereferences/1.0.1",
-"com.harryb97.harryutils": "https://github.com/RazgriZ77/HarryUtils.git#2.0.0",
-"com.cysharp.unitask": "2.5.10",
-"com.kyrylokuzyk.primetween": "1.5.0"
+"com.harryb97.tools.ui": "https://github.com/HarryB977/HarryTools.git?path=/Packages/com.harryb97.tools.ui#ui/1.0.2",
+"com.harryb97.tools.logger": "https://github.com/HarryB977/HarryTools.git?path=/Packages/com.harryb97.tools.logger#logger/1.0.1",
+"com.harryb97.tools.domainreload": "https://github.com/HarryB977/HarryTools.git?path=/Packages/com.harryb97.tools.domainreload#domainreload/1.0.2",
+"com.harryb97.tools.serializereferences": "https://github.com/HarryB977/HarryTools.git?path=/Packages/com.harryb97.tools.serializereferences#serializereferences/1.0.2",
+"com.harryb97.harryutils": "https://github.com/HarryB977/HarryUtils.git#2.0.1",
+"com.cysharp.unitask": "2.5.10"
 ```
-
-- **UniTask** se instala desde OpenUPM: scope `com.cysharp.unitask` en el registro `https://package.openupm.com`.
-- **PrimeTween** se instala de una de estas dos formas. La versión de la dependencia es la mínima: cualquier versión igual o superior a 1.5.0 vale.
-  - Desde el Asset Store: tras importarlo, selecciona `Assets/Plugins/PrimeTween/PrimeTweenInstaller.asset` y pulsa **Install**. Eso añade `"com.kyrylokuzyk.primetween": "file:../Assets/Plugins/PrimeTween/internal/com.kyrylokuzyk.primetween-<versión>.tgz"` al `manifest.json`. Solo importar el asset no basta.
-  - Desde el registro npm del autor: scope `com.kyrylokuzyk`, URL `https://registry.npmjs.org`.
 
 ## Vistas
 

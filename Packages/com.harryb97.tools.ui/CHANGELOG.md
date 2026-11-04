@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.2] - 2026-11-04
+### Cambiado
+- Publicado en OpenUPM: se instala con `openupm add com.harryb97.tools.ui` y el Package Manager avisa de las actualizaciones
+- `package.json`: añadido `repository` y el autor ya no incluye email
+- LICENSE: el titular pasa a ser HarryB97
+- Añadida la licencia SIL OFL 1.1 de la fuente Inter (`Samples~/HeroUI/Fonts/OFL.txt`)
+- README: instalación desde OpenUPM
+
 ## [1.0.1] - 2026-11-03
 ### Cambiado
 - Textos del inspector, tooltips, ventanas del editor, mensajes de consola y samples en inglés.

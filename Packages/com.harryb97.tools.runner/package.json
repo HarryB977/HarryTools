@@ -1,6 +1,6 @@
 {
   "name": "com.harryb97.tools.runner",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "displayName": "Runner",
   "description": "Centraliza el loop de juego y permite añadir clases al mismo sin necesidad de MonoBehaviour",
   "unity": "6000.0",
@@ -10,7 +10,12 @@
   ],
   "author": {
     "name": "HarryB97",
-    "email": "36953173+HarryB977@users.noreply.github.com"
+    "url": "https://github.com/HarryB977"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/HarryB977/HarryTools.git",
+    "directory": "Packages/com.harryb97.tools.runner"
   },
   "samples": [
     {

@@ -1,12 +1,17 @@
 {
   "name": "com.harryb97.tools.platformer3dcontroller",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "displayName": "Platformer 3D Controller",
   "description": "Herramienta que añade un controlador de movimiento en 3D basado en físicas (cápsula flotante) para juegos de plataformas",
   "unity": "6000.0",
   "author": {
     "name": "HarryB97",
-    "email": "36953173+HarryB977@users.noreply.github.com"
+    "url": "https://github.com/HarryB977"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/HarryB977/HarryTools.git",
+    "directory": "Packages/com.harryb97.tools.platformer3dcontroller"
   },
   "hideInEditor": true,
   "license": "MIT",

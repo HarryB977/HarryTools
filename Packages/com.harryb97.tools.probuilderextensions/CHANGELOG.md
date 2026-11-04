@@ -1,5 +1,10 @@
 # Change Log:
 
+## 1.2.1
+
+    - Publicado en OpenUPM: se instala con `openupm add com.harryb97.tools.probuilderextensions` y el Package Manager avisa de las actualizaciones
+    - `package.json`: añadido `repository` y el autor ya no incluye email
+
 ## 1.2.0
 
     - Generador hotspot: nuevo Edge Width, una franja dañada que recorre todo el borde de cada patch con un ancho mínimo garantizado; ya no quedan tramos del borde sin daño
