@@ -120,7 +120,8 @@ namespace HarryTools.GameLoop {
         }
 
         private static void EnsureInitialized() {
-            if (s_manager != null || s_quitting) return;
+            // Application.quitting also fires when leaving Play mode in the Editor, so the flag only counts while playing
+            if (s_manager != null || (s_quitting && Application.isPlaying)) return;
 
             s_manager = new GameObject("Loop Manager");
             s_manager.AddComponent<LoopManager>();
