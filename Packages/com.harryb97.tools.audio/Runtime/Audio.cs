@@ -76,6 +76,16 @@ namespace HarryTools.Audio {
         public static AudioHandle Play(SoundAsset _sound, Vector3 _position) => Start(new PlaybackRequest(_sound, _position));
         public static AudioHandle Play(SoundAsset _sound, Transform _follow) => Start(new PlaybackRequest(_sound, Vector3.zero, _follow));
 
+        // ==================== ACOUSTICS ===================
+        /// <summary>
+        /// Adds an acoustic module (occlusion, reverb, ...). Modules run in Order (read now), ties in registration order, for the most audible
+        /// 3D voices (up to MaxSimulated). Registering the same module twice does nothing. Works before the runtime exists. Ignored without a mixer (WebGL).
+        /// </summary>
+        public static void RegisterModule(IAcousticModule _module) => AcousticSimulator.Register(_module);
+
+        /// <summary> Removes a module; the voices it affected return to neutral smoothly. </summary>
+        public static void UnregisterModule(IAcousticModule _module) => AcousticSimulator.Unregister(_module);
+
         // ==================== STOP ===================
         /// <summary> Stops every instance of the sound. A negative fade uses the asset FadeOut; 0 stops at once. </summary>
         public static void Stop(SoundAsset _sound, float _fade = -1f) {

@@ -48,6 +48,7 @@ namespace HarryTools.Audio {
 
             AudioVoice _template = AudioVoice.CreateTemplate(host.transform);
             Voices = new VoiceManager(this, _template, host.transform, _settings.MaxVoices, _settings.PrewarmVoices);
+            Acoustics = new AcousticSimulator(this);
             Music = new MusicChannel(this, host.transform);
             VoiceChannel = new VoiceChannel(this);
 
@@ -65,6 +66,7 @@ namespace HarryTools.Audio {
         public AudioProjectSettings Settings { get; }
         public BusMixer Mixer { get; }
         public VoiceManager Voices { get; }
+        public AcousticSimulator Acoustics { get; }
         public MusicChannel Music { get; }
         /// <summary> Voice lines, emitter queues and conversations. Null until the constructor creates it. </summary>
         public VoiceChannel VoiceChannel { get; }
@@ -140,6 +142,8 @@ namespace HarryTools.Audio {
         // ==================== PRIVATE ===================
         private void Tick() {
             if (disposed) return;
+            // Before the voices: they apply the smoothed acoustic volume in the same tick.
+            Acoustics.Tick(Time.unscaledDeltaTime);
             Voices.Tick(Time.unscaledDeltaTime);
             VoiceChannel.Tick();
             Music.Tick(Time.unscaledDeltaTime);

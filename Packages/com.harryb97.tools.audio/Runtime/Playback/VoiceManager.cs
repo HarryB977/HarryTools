@@ -294,7 +294,7 @@ namespace HarryTools.Audio {
             for (int _i = 0; _i < active.Count; _i++) {
                 AudioVoice _voice = active[_i];
                 if (_voice == null || _voice.Asset == null) continue;
-                float _score = _voice.Priority / 100f * _voice.TargetVolume * Attenuation(_voice);
+                float _score = AudibilityScore(_voice);
                 if (_score >= _lowest) continue;
                 _lowest = _score;
                 _found = _voice;
@@ -302,10 +302,13 @@ namespace HarryTools.Audio {
             return _found;
         }
 
+        /// <summary> Priority/100 × target volume × estimated attenuation. Picks the voices to steal and the voices to simulate. Ignores the acoustic result. </summary>
+        public float AudibilityScore(AudioVoice _voice) => _voice.Priority / 100f * _voice.TargetVolume * Attenuation(_voice);
+
         // Attenuation of a playing voice. A voice forced to 2D (a voice line without emitter) is not attenuated, whatever its asset says.
         private float Attenuation(AudioVoice _voice) {
             if (_voice.Source.spatialBlend <= 0f) return 1f;
-            return Attenuation(_voice.Asset.GetSpatial(), _voice.transform.position);
+            return Attenuation(_voice.Asset.GetSpatial(), _voice.LogicalPosition);
         }
 
         /// <summary> Gain of the spatial settings at the distance to the listener, estimated from the rolloff curve. 1 for 2D or without listener. </summary>

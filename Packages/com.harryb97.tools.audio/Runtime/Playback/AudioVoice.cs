@@ -44,6 +44,13 @@ namespace HarryTools.Audio {
         private float handleElapsed;
         #endregion
 
+        #region Acoustic state
+        // The AudioSource transform sits at the perceived position while an acoustic module asks for one, else at the logical position.
+        private Vector3 logicalPosition;
+        private bool hasPerceivedPosition;
+        private AcousticState acoustic = AcousticState.Neutral;
+        #endregion
+
         // ==================== PROPERTIES ===================
         public int Index { get; private set; }
         public int Generation { get; private set; }
@@ -73,8 +80,14 @@ namespace HarryTools.Audio {
         public bool IsFadingOut => fadingOut;
         /// <summary> Current volume including fades, the handle multiplier and the bus multiplier. </summary>
         public float EffectiveVolume { get; private set; }
-        /// <summary> Level the voice is heading to: base × handle volume × fade-out × bus, ignoring fade-in. Used to pick voices to steal, so a voice that is still fading in is not treated as silent. </summary>
+        /// <summary> Level the voice is heading to: base × handle volume × fade-out × bus, ignoring fade-in and the acoustic multiplier. Used to pick voices to steal, so a voice that is still fading in is not treated as silent. </summary>
         public float TargetVolume { get; private set; }
+        /// <summary> Where the sound is, as the game set it (start position, At or follow target). The source transform may sit elsewhere (perceived position). </summary>
+        public Vector3 LogicalPosition => logicalPosition;
+        /// <summary> Smoothed acoustic state, written by the AcousticSimulator. </summary>
+        public ref AcousticState Acoustic => ref acoustic;
+        /// <summary> Current smoothed volume multiplier of the acoustic modules. </summary>
+        public float AcousticVolume => acoustic.Volume;
         public Action<AudioHandle> EndedCallback { get; set; }
         /// <summary> Length of the current clip in seconds. </summary>
         public float ClipLength => clipLength;
@@ -129,7 +142,7 @@ namespace HarryTools.Audio {
 
             followTarget = _follow;
             following = _follow != null;
-            transform.position = _position;
+            SetLogicalPosition(_position);
 
             clipLength = _clip.length;
             delay = _asset.Delay;
@@ -177,7 +190,7 @@ namespace HarryTools.Audio {
         /// <summary> Advances follow, fades and end detection. Returns true when the voice has finished and must be released. </summary>
         public bool Tick(float _delta, float _busMultiplier, bool _multiplyOnSource, bool _systemPaused) {
             if (following) {
-                if (followTarget != null) transform.position = followTarget.position;
+                if (followTarget != null) SetLogicalPosition(followTarget.position);
                 else {
                     // Target destroyed: keep the last position.
                     following = false;
@@ -227,7 +240,7 @@ namespace HarryTools.Audio {
             float _fadeIn = fadeInDuration > 0f ? Mathf.Clamp01(fadeInElapsed / fadeInDuration) : 1f;
             float _fadeOut = fadingOut ? Mathf.Clamp01(fadeOutRemaining / fadeOutDuration) : 1f;
             float _target = BaseVolume * handleVolume * _fadeOut;
-            float _local = _target * _fadeIn;
+            float _local = _target * _fadeIn * acoustic.Volume;
             TargetVolume = _target * _busMultiplier;
             EffectiveVolume = _local * _busMultiplier;
             source.volume = _multiplyOnSource ? EffectiveVolume : _local;
@@ -272,13 +285,13 @@ namespace HarryTools.Audio {
         public void SetPosition(Vector3 _position) {
             following = false;
             followTarget = null;
-            transform.position = _position;
+            SetLogicalPosition(_position);
         }
 
         public void SetFollow(Transform _target) {
             followTarget = _target;
             following = _target != null;
-            if (following) transform.position = _target.position;
+            if (following) SetLogicalPosition(_target.position);
         }
 
         public void Pause() {
@@ -315,9 +328,23 @@ namespace HarryTools.Audio {
             fadingOut = false;
             EffectiveVolume = 0f;
             TargetVolume = 0f;
+            acoustic = AcousticState.Neutral;
+            hasPerceivedPosition = false;
+        }
+
+        // ==================== ACOUSTICS ===================
+        /// <summary> Moves the source to the perceived position, or back to the logical one. </summary>
+        public void SetPerceivedPosition(bool _has, Vector3 _position) {
+            hasPerceivedPosition = _has;
+            transform.position = _has ? _position : logicalPosition;
         }
 
         // ==================== PRIVATE ===================
+        private void SetLogicalPosition(Vector3 _position) {
+            logicalPosition = _position;
+            if (!hasPerceivedPosition) transform.position = _position;
+        }
+
         private void ApplyPitch() => source.pitch = followTimeScale ? Pitch * Time.timeScale : Pitch;
 
         // Pauses or resumes the AudioSource when the combined pause state changed.
