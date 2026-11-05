@@ -1,0 +1,34 @@
+{
+    "name": "HarryTools.Audio.Tests.Actions",
+    "rootNamespace": "HarryTools.Audio.Tests",
+    "references": [
+        "GUID:c85f48641bf49bd458b1adbdee201d0b",
+        "GUID:a8e5ad753d6cb024b924e160f41465c3",
+        "GUID:29de7d2b7e640ec46a8c18880806d777",
+        "GUID:976ab130102fdc04c9bbc3159f83ad15",
+        "GUID:f51ebe6a0ceec4240a699833d6309b23",
+        "GUID:3cbd4dbbdd8d22542bf927dec8fe2000",
+        "UnityEngine.TestRunner",
+        "UnityEditor.TestRunner"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "nunit.framework.dll"
+    ],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS",
+        "HARRYTOOLS_AUDIO_ACTIONS"
+    ],
+    "versionDefines": [
+        {
+            "name": "com.harryb97.tools.actions",
+            "expression": "1.0.0",
+            "define": "HARRYTOOLS_AUDIO_ACTIONS"
+        }
+    ],
+    "noEngineReferences": false
+}

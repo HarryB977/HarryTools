@@ -1,0 +1,28 @@
+{
+    "name": "HarryTools.Audio.Actions",
+    "rootNamespace": "HarryTools.Audio.Actions",
+    "references": [
+        "GUID:c85f48641bf49bd458b1adbdee201d0b",
+        "GUID:29de7d2b7e640ec46a8c18880806d777",
+        "GUID:976ab130102fdc04c9bbc3159f83ad15",
+        "GUID:ce4097fb1cd381e499cd9508a42275ce",
+        "GUID:f51ebe6a0ceec4240a699833d6309b23"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [
+        "HARRYTOOLS_AUDIO_ACTIONS"
+    ],
+    "versionDefines": [
+        {
+            "name": "com.harryb97.tools.actions",
+            "expression": "1.0.0",
+            "define": "HARRYTOOLS_AUDIO_ACTIONS"
+        }
+    ],
+    "noEngineReferences": false
+}
