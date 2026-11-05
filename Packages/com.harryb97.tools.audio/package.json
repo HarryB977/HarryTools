@@ -13,6 +13,14 @@
     "url": "https://github.com/HarryB977/HarryTools.git",
     "directory": "Packages/com.harryb97.tools.audio"
   },
+  "keywords": [
+    "audio",
+    "sound",
+    "music",
+    "dialogue",
+    "mixer",
+    "pooling"
+  ],
   "hideInEditor": true,
   "license": "MIT",
   "dependencies": {
