@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.0.0-beta.2] - 2026-11-05
+### Añadido
+- `AudioHandle` expone `Clip`, `Duration`, `IsLooping`, `Position`, `Is3D` y `Elapsed` (tiempo de audio sonado, sin el `Delay` ni el tiempo en pausa).
+- `MusicChannel.Elapsed`: segundos sonados de la pista actual, sin reinicio en el paso de intro a loop y congelados con la pausa.
+
 ## [1.0.0-beta.1] - 2026-11-05
 ### Añadido
 - Assets de audio: sonidos, música, voces, conversaciones, speakers y perfiles espaciales, con IDs estables y catálogo mantenido por el editor.

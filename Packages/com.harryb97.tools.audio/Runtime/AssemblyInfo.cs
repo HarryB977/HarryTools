@@ -4,3 +4,5 @@ using System.Runtime.CompilerServices;
 [assembly: InternalsVisibleTo("HarryTools.Audio.Tests.EditMode")]
 [assembly: InternalsVisibleTo("HarryTools.Audio.Tests.PlayMode")]
 [assembly: InternalsVisibleTo("HarryTools.Audio.Tests.Actions")]
+[assembly: InternalsVisibleTo("HarryTools.Audio.Samples.Subtitles.Tests.EditMode")]
+[assembly: InternalsVisibleTo("HarryTools.Audio.Samples.Subtitles.Tests.PlayMode")]

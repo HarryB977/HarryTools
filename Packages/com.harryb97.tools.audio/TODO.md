@@ -1,6 +1,6 @@
 # Pendiente para la 1.0.0
 
-El paquete está en beta (`1.0.0-beta.1`). Antes de publicar la 1.0.0 hay que cerrar lo siguiente.
+El paquete está en beta (`1.0.0-beta.2`). Antes de publicar la 1.0.0 hay que cerrar lo siguiente.
 
 ## Comprobaciones a mano
 

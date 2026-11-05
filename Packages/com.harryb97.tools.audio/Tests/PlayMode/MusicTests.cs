@@ -384,6 +384,38 @@ namespace HarryTools.Audio.Tests {
             Assert.Greater(_loop.time, 1.05f, "Loop points must be ignored without mixer.");
         }
 
+        // ==================== ELAPSED ===================
+        [UnityTest]
+        public IEnumerator Elapsed_GrowsAndFreezesOnPause() {
+            Music.Play(MakeMusic(3f), 0f);
+            yield return WaitReal(0.4f);
+            float _running = Music.Elapsed;
+            Assert.Greater(_running, 0.15f);
+            Assert.Less(_running, 0.8f);
+
+            Music.Pause();
+            yield return null;
+            float _atPause = Music.Elapsed;
+            yield return WaitReal(0.3f);
+            Assert.AreEqual(_atPause, Music.Elapsed, 0.05f, "Elapsed must not grow while paused.");
+
+            Music.Resume();
+            yield return WaitReal(0.3f);
+            Assert.Greater(Music.Elapsed, _atPause + 0.1f);
+        }
+
+        [UnityTest]
+        public IEnumerator Elapsed_NotResetByIntroToLoop() {
+            Music.Play(MakeMusic(3f, 0.3f), 0f);
+            yield return WaitReal(0.7f);
+            Assert.Greater(Music.Elapsed, 0.4f, "Elapsed restarted at the intro to loop join.");
+        }
+
+        [Test]
+        public void Elapsed_ZeroWithoutTrack() {
+            Assert.AreEqual(0f, Music.Elapsed);
+        }
+
         // ==================== PAUSE ===================
         [UnityTest]
         public IEnumerator Pause_PausesMusic() {

@@ -33,6 +33,18 @@ namespace HarryTools.Audio {
         /// <summary> Asset being played, or null when the handle is no longer valid. </summary>
         public AudioAsset Asset => TryGetVoice(out AudioVoice _voice) ? _voice.Asset : null;
 
+        /// <summary> Clip chosen by the selection, or null when the handle is no longer valid. </summary>
+        public AudioClip Clip => TryGetVoice(out AudioVoice _voice) ? _voice.Clip : null;
+        /// <summary> Clip length at the current pitch in seconds, without the delay. 0 when the handle is no longer valid. </summary>
+        public float Duration => TryGetVoice(out AudioVoice _voice) ? _voice.Duration : 0f;
+        public bool IsLooping => TryGetVoice(out AudioVoice _voice) && _voice.IsLooping;
+        /// <summary> Where the sound is, as the game set it (start position, At or follow target). Vector3.zero when the handle is no longer valid. </summary>
+        public Vector3 Position => TryGetVoice(out AudioVoice _voice) ? _voice.LogicalPosition : Vector3.zero;
+        /// <summary> True when the sound is spatialized (spatial blend above 0). </summary>
+        public bool Is3D => TryGetVoice(out AudioVoice _voice) && _voice.Is3D;
+        /// <summary> Seconds of audio played, without the delay and without paused time. 0 when the handle is no longer valid. </summary>
+        public float Elapsed => TryGetVoice(out AudioVoice _voice) ? _voice.PlayedTime : 0f;
+
         // ==================== PUBLIC ===================
         /// <summary> Moves the sound to a world position and stops following its target. </summary>
         public AudioHandle At(Vector3 _position) {

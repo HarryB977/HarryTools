@@ -54,6 +54,9 @@ namespace HarryTools.Audio {
         /// <summary> The current track, or null. A track that is fading out after Stop or a crossfade is not current. </summary>
         public MusicAsset Current => current >= 0 ? decks[current].Asset : null;
 
+        /// <summary> Seconds played of the current track since it started: not reset at the intro to loop join, frozen while paused. 0 without a track. </summary>
+        public float Elapsed => current >= 0 ? decks[current].Elapsed : 0f;
+
         /// <summary> True while there is a current track and it is not paused. </summary>
         public bool IsPlaying => current >= 0 && !decks[current].IsPaused;
 

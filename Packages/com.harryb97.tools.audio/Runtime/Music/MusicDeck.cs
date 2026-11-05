@@ -84,6 +84,8 @@ namespace HarryTools.Audio {
         /// <summary> Base volume × fade level, without the bus multiplier. </summary>
         public float Volume => BaseVolume * level;
         public float FadeLevel => level;
+        /// <summary> Seconds played since the track began. It advances in Tick while the deck is not frozen and is not reset at the intro to loop join. </summary>
+        public float Elapsed { get; private set; }
         /// <summary> Seconds left of the running fade (0 when none). </summary>
         public float FadeRemaining => Mathf.Max(0f, fadeDuration - fadeElapsed);
 
@@ -139,6 +141,7 @@ namespace HarryTools.Audio {
         public bool Tick(float _delta, float _busMultiplier, bool _multiplyOnSource, bool _frozen) {
             SetPaused(_frozen);
             if (!paused) {
+                Elapsed += _delta;
                 if (fadeElapsed < fadeDuration) {
                     fadeElapsed += _delta;
                     level = Mathf.Lerp(fadeFrom, fadeTo, fadeElapsed / fadeDuration);
@@ -222,6 +225,7 @@ namespace HarryTools.Audio {
             introPhase = false;
             loopPoints = false;
             IsFadingOut = false;
+            Elapsed = 0f;
             level = fadeFrom = fadeTo = 0f;
             fadeDuration = fadeElapsed = 0f;
         }

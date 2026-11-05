@@ -91,6 +91,14 @@ namespace HarryTools.Audio {
         public Action<AudioHandle> EndedCallback { get; set; }
         /// <summary> Length of the current clip in seconds. </summary>
         public float ClipLength => clipLength;
+        /// <summary> Clip chosen by the selection for the current playback. </summary>
+        public AudioClip Clip { get; private set; }
+        /// <summary> Length of the clip at the current pitch, without the delay. </summary>
+        public float Duration => clipLength / Mathf.Max(0.01f, Mathf.Abs(Pitch));
+        public bool IsLooping => source.loop;
+        public bool Is3D => source.spatialBlend > 0f;
+        /// <summary> Seconds of audio played: the elapsed time minus the delay. It does not advance while frozen. </summary>
+        public float PlayedTime => Mathf.Max(0f, elapsed - delay);
 
         #region Effect cutoffs
         // The cutoffs the effect preset asked for, kept apart from the filters so the acoustic modules can combine them with their own.
@@ -144,6 +152,7 @@ namespace HarryTools.Audio {
             following = _follow != null;
             SetLogicalPosition(_position);
 
+            Clip = _clip;
             clipLength = _clip.length;
             delay = _asset.Delay;
             elapsed = 0f;
@@ -318,6 +327,7 @@ namespace HarryTools.Audio {
             ResetComponents();
             SetEffectCutoffs(false, 0f, false, 0f);
             Asset = null;
+            Clip = null;
             followTarget = null;
             following = false;
             EndedCallback = null;
