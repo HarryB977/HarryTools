@@ -4,7 +4,7 @@ using UnityEngine;
 using UnityEngine.UIElements;
 
 namespace HarryTools.Audio.Editor {
-    /// <summary> Searchable picker for the id-based ref structs. Writes the asset id and flags ids that no longer resolve. </summary>
+    /// <summary> Searchable picker for the id-based ref structs. Writes the asset id and flags ids that no longer resolve. The asset type comes from the serialized type name, so it works without fieldInfo (SerializeReference instances). </summary>
     [CustomPropertyDrawer(typeof(SoundRef))]
     [CustomPropertyDrawer(typeof(MusicRef))]
     [CustomPropertyDrawer(typeof(VoiceRef))]
@@ -12,9 +12,11 @@ namespace HarryTools.Audio.Editor {
     internal sealed class AudioRefDrawer : PropertyDrawer {
         public override void OnGUI(Rect _position, SerializedProperty _property, GUIContent _label) {
             SerializedProperty _id = _property.FindPropertyRelative("id");
-            Type _assetType = AssetTypeOf(AudioPickerField.ElementType(fieldInfo.FieldType));
-            if (_id == null || _assetType == null) {
-                EditorGUI.PropertyField(_position, _property, _label, true);
+            if (_id == null) return;
+            Type _assetType = AudioPickerField.AssetTypeOfRef(_property.type);
+            if (_assetType == null) {
+                // Never PropertyField on the property itself: that re-enters this drawer.
+                EditorGUI.PropertyField(_position, _id, _label);
                 return;
             }
             EditorGUI.BeginProperty(_position, _label, _property);
@@ -22,23 +24,6 @@ namespace HarryTools.Audio.Editor {
             EditorGUI.EndProperty();
         }
 
-        public override VisualElement CreatePropertyGUI(SerializedProperty _property) {
-            SerializedProperty _copy = _property.Copy();
-            var _label = new GUIContent(_property.displayName, _property.tooltip);
-            return new IMGUIContainer(() => {
-                _copy.serializedObject.Update();
-                Rect _rect = EditorGUILayout.GetControlRect(true, EditorGUIUtility.singleLineHeight);
-                OnGUI(_rect, _copy, _label);
-                _copy.serializedObject.ApplyModifiedProperties();
-            });
-        }
-
-        private static Type AssetTypeOf(Type _refType) {
-            if (_refType == typeof(SoundRef)) return typeof(SoundAsset);
-            if (_refType == typeof(MusicRef)) return typeof(MusicAsset);
-            if (_refType == typeof(VoiceRef)) return typeof(VoiceAsset);
-            if (_refType == typeof(ConversationRef)) return typeof(ConversationAsset);
-            return null;
-        }
+        public override VisualElement CreatePropertyGUI(SerializedProperty _property) => AudioPickerField.CreateGUI(_property, OnGUI);
     }
 }

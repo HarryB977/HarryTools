@@ -8,23 +8,14 @@ namespace HarryTools.Audio.Editor {
     internal sealed class AudioAssetDrawer : PropertyDrawer {
         public override void OnGUI(Rect _position, SerializedProperty _property, GUIContent _label) {
             if (_property.propertyType != SerializedPropertyType.ObjectReference) {
-                EditorGUI.PropertyField(_position, _property, _label, true);
+                EditorGUI.LabelField(_position, _label, new GUIContent(_property.propertyType.ToString()));
                 return;
             }
             EditorGUI.BeginProperty(_position, _label, _property);
-            AudioPickerField.Draw(_position, _property, _label, AudioPickerField.ElementType(fieldInfo.FieldType), null);
+            AudioPickerField.Draw(_position, _property, _label, AudioPickerField.AssetTypeOfObject(fieldInfo?.FieldType, _property.type), null);
             EditorGUI.EndProperty();
         }
 
-        public override VisualElement CreatePropertyGUI(SerializedProperty _property) {
-            SerializedProperty _copy = _property.Copy();
-            var _label = new GUIContent(_property.displayName, _property.tooltip);
-            return new IMGUIContainer(() => {
-                _copy.serializedObject.Update();
-                Rect _rect = EditorGUILayout.GetControlRect(true, EditorGUIUtility.singleLineHeight);
-                OnGUI(_rect, _copy, _label);
-                _copy.serializedObject.ApplyModifiedProperties();
-            });
-        }
+        public override VisualElement CreatePropertyGUI(SerializedProperty _property) => AudioPickerField.CreateGUI(_property, OnGUI);
     }
 }

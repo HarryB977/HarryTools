@@ -3,45 +3,31 @@ using System.Collections.Generic;
 using UnityEditor;
 using UnityEditor.IMGUI.Controls;
 using UnityEngine;
+using UnityEngine.UIElements;
 
 namespace HarryTools.Audio.Editor {
     /// <summary> Shared field drawing and item lookup of the asset and ref drawers. </summary>
     internal static class AudioPickerField {
+        // ==================== TYPES ===================
+        private sealed class ItemCache {
+            public readonly List<AudioCatalogItem> Items = new List<AudioCatalogItem>();
+            public readonly Dictionary<string, AudioCatalogItem> ById = new Dictionary<string, AudioCatalogItem>(StringComparer.Ordinal);
+            public readonly Dictionary<AudioCatalogItem, string> Text = new Dictionary<AudioCatalogItem, string>();
+        }
+
         // ==================== VARIABLES ===================
         private const float PlayWidth = 24f;
-        private static readonly Dictionary<Type, List<AudioCatalogItem>> cache = new Dictionary<Type, List<AudioCatalogItem>>();
+        private static readonly Dictionary<Type, ItemCache> cache = new Dictionary<Type, ItemCache>();
         private static readonly AdvancedDropdownState dropdownState = new AdvancedDropdownState();
         private static GUIStyle missingStyle;
 
         // ==================== ITEMS ===================
         /// <summary> Assets assignable to the type: the settings catalog, or an asset search when the project has no catalog. Cached until the catalog or the project changes. </summary>
-        internal static IReadOnlyList<AudioCatalogItem> GetItems(Type _type) {
-            if (cache.TryGetValue(_type, out List<AudioCatalogItem> _cached)) return _cached;
-            var _list = new List<AudioCatalogItem>();
-            AudioProjectSettings _settings = AudioSettingsProvider.FindSettings();
-            AudioCatalog _catalog = _settings != null ? _settings.Catalog : null;
-            if (_catalog != null) {
-                for (int _i = 0; _i < _catalog.Items.Count; _i++) {
-                    if (_catalog.Items[_i] != null && _type.IsInstanceOfType(_catalog.Items[_i])) _list.Add(_catalog.Items[_i]);
-                }
-            } else {
-                string[] _guids = AssetDatabase.FindAssets("t:" + _type.Name);
-                for (int _i = 0; _i < _guids.Length; _i++) {
-                    var _item = AssetDatabase.LoadAssetAtPath<AudioCatalogItem>(AssetDatabase.GUIDToAssetPath(_guids[_i]));
-                    if (_item != null && _type.IsInstanceOfType(_item)) _list.Add(_item);
-                }
-            }
-            cache[_type] = _list;
-            return _list;
-        }
+        internal static IReadOnlyList<AudioCatalogItem> GetItems(Type _type) => GetCache(_type).Items;
 
         internal static AudioCatalogItem Find(Type _type, string _id) {
-            if (string.IsNullOrEmpty(_id)) return null;
-            IReadOnlyList<AudioCatalogItem> _items = GetItems(_type);
-            for (int _i = 0; _i < _items.Count; _i++) {
-                if (_items[_i] != null && _items[_i].Id == _id) return _items[_i];
-            }
-            return null;
+            if (_type == null || string.IsNullOrEmpty(_id)) return null;
+            return GetCache(_type).ById.TryGetValue(_id, out AudioCatalogItem _item) ? _item : null;
         }
 
         /// <summary> Field type, or the element type when the field is an array or a list. </summary>
@@ -52,9 +38,34 @@ namespace HarryTools.Audio.Editor {
             return _fieldType;
         }
 
+        /// <summary> Asset type a ref struct points at, from the serialized type name ("SoundRef"); null when it is not a ref. </summary>
+        internal static Type AssetTypeOfRef(string _propertyType) {
+            switch (_propertyType) {
+                case "SoundRef": return typeof(SoundAsset);
+                case "MusicRef": return typeof(MusicAsset);
+                case "VoiceRef": return typeof(VoiceAsset);
+                case "ConversationRef": return typeof(ConversationAsset);
+                default: return null;
+            }
+        }
+
+        /// <summary> Asset type of an object reference field: the field type when known, else the serialized type name ("PPtr&lt;$SoundAsset&gt;"), else AudioCatalogItem. </summary>
+        internal static Type AssetTypeOfObject(Type _fieldType, string _propertyType) {
+            Type _element = ElementType(_fieldType);
+            if (_element != null && typeof(AudioCatalogItem).IsAssignableFrom(_element)) return _element;
+            if (!string.IsNullOrEmpty(_propertyType) && _propertyType.StartsWith("PPtr<$", StringComparison.Ordinal) && _propertyType.EndsWith(">", StringComparison.Ordinal)) {
+                string _name = _propertyType.Substring(6, _propertyType.Length - 7);
+                foreach (Type _type in TypeCache.GetTypesDerivedFrom<AudioCatalogItem>()) {
+                    if (_type.Name == _name) return _type;
+                }
+            }
+            return typeof(AudioCatalogItem);
+        }
+
         // ==================== DRAWING ===================
         /// <summary> Draws label, picker button and preview button. _refId is the id child of a ref struct, or null when the property is an object reference. </summary>
         internal static void Draw(Rect _position, SerializedProperty _property, GUIContent _label, Type _assetType, SerializedProperty _refId) {
+            if (_assetType == null) _assetType = typeof(AudioCatalogItem);
             bool _isRef = _refId != null;
             _position = EditorGUI.PrefixLabel(_position, GUIUtility.GetControlID(FocusType.Passive), _label);
             var _playRect = new Rect(_position.xMax - PlayWidth, _position.y, PlayWidth, _position.height);
@@ -69,10 +80,7 @@ namespace HarryTools.Audio.Editor {
             if (_mixed) _text = "—";
             else if (_missing) _text = $"Missing ({_id})";
             else if (_asset == null) _text = "None";
-            else {
-                string _group = AudioCodeGenerator.GetGroupPath(_asset, AudioCodeGenerator.GetOptions().Root);
-                _text = string.IsNullOrEmpty(_group) ? _asset.name : $"{_asset.name}   ({_group})";
-            }
+            else _text = DisplayText(_assetType, _asset);
 
             Event _event = Event.current;
             if (_event.type == EventType.DragUpdated || _event.type == EventType.DragPerform) HandleDrop(_fieldRect, _property, _assetType, _refId, _event);
@@ -98,7 +106,57 @@ namespace HarryTools.Audio.Editor {
             }
         }
 
+        /// <summary> Wraps a drawer's OnGUI in an IMGUIContainer for UI Toolkit inspectors. Draws nothing once the target is destroyed or the object disposed. </summary>
+        internal static VisualElement CreateGUI(SerializedProperty _property, Action<Rect, SerializedProperty, GUIContent> _draw) {
+            SerializedProperty _copy = _property.Copy();
+            var _label = new GUIContent(_property.displayName, _property.tooltip);
+            return new IMGUIContainer(() => {
+                try {
+                    if (_copy.serializedObject.targetObject == null) return;
+                    _copy.serializedObject.Update();
+                    Rect _rect = EditorGUILayout.GetControlRect(true, EditorGUIUtility.singleLineHeight);
+                    _draw(_rect, _copy, _label);
+                    _copy.serializedObject.ApplyModifiedProperties();
+                } catch (ObjectDisposedException) {
+                } catch (ArgumentNullException) {
+                } catch (NullReferenceException) {
+                }
+            });
+        }
+
         // ==================== PRIVATE ===================
+        private static ItemCache GetCache(Type _type) {
+            if (cache.TryGetValue(_type, out ItemCache _cached)) return _cached;
+            var _entry = new ItemCache();
+            AudioProjectSettings _settings = AudioSettingsProvider.FindSettings();
+            AudioCatalog _catalog = _settings != null ? _settings.Catalog : null;
+            if (_catalog != null) {
+                for (int _i = 0; _i < _catalog.Items.Count; _i++) {
+                    if (_catalog.Items[_i] != null && _type.IsInstanceOfType(_catalog.Items[_i])) _entry.Items.Add(_catalog.Items[_i]);
+                }
+            } else {
+                string[] _guids = AssetDatabase.FindAssets("t:" + _type.Name);
+                for (int _i = 0; _i < _guids.Length; _i++) {
+                    var _item = AssetDatabase.LoadAssetAtPath<AudioCatalogItem>(AssetDatabase.GUIDToAssetPath(_guids[_i]));
+                    if (_item != null && _type.IsInstanceOfType(_item)) _entry.Items.Add(_item);
+                }
+            }
+            for (int _i = 0; _i < _entry.Items.Count; _i++) {
+                if (!string.IsNullOrEmpty(_entry.Items[_i].Id)) _entry.ById[_entry.Items[_i].Id] = _entry.Items[_i];
+            }
+            cache[_type] = _entry;
+            return _entry;
+        }
+
+        private static string DisplayText(Type _type, AudioCatalogItem _asset) {
+            ItemCache _entry = GetCache(_type);
+            if (_entry.Text.TryGetValue(_asset, out string _text)) return _text;
+            string _group = AudioCodeGenerator.GetGroupPath(_asset, AudioCodeGenerator.GetOptions().Root);
+            _text = string.IsNullOrEmpty(_group) ? _asset.name : $"{_asset.name}   ({_group})";
+            _entry.Text[_asset] = _text;
+            return _text;
+        }
+
         private static void Open(Rect _rect, SerializedProperty _property, Type _assetType, bool _isRef) {
             UnityEngine.Object[] _targets = _property.serializedObject.targetObjects;
             string _path = _property.propertyPath;
@@ -109,13 +167,13 @@ namespace HarryTools.Audio.Editor {
         // The dropdown outlives the drawer call, so it edits through a fresh SerializedObject (keeps Undo and multi-object editing).
         private static void Assign(UnityEngine.Object[] _targets, string _path, bool _isRef, AudioCatalogItem _selected) {
             if (_selected != null && _isRef) AudioIdAssigner.EnsureId(_selected);
-            var _object = new SerializedObject(_targets);
-            SerializedProperty _property = _object.FindProperty(_path);
-            if (_property == null) return;
-            if (_isRef) _property.FindPropertyRelative("id").stringValue = _selected != null ? _selected.Id : string.Empty;
-            else _property.objectReferenceValue = _selected;
-            _object.ApplyModifiedProperties();
-            _object.Dispose();
+            using (var _object = new SerializedObject(_targets)) {
+                SerializedProperty _property = _object.FindProperty(_path);
+                if (_property == null) return;
+                if (_isRef) _property.FindPropertyRelative("id").stringValue = _selected != null ? _selected.Id : string.Empty;
+                else _property.objectReferenceValue = _selected;
+                _object.ApplyModifiedProperties();
+            }
         }
 
         private static void HandleDrop(Rect _rect, SerializedProperty _property, Type _assetType, SerializedProperty _refId, Event _event) {

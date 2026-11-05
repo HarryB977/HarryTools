@@ -60,7 +60,9 @@ namespace HarryTools.Audio.Editor {
         }
 
         private static void Tick() {
-            if (host == null || source == null || !source.isPlaying) Stop();
+            if (host != null && source != null && source.isPlaying) return;
+            Stop();
+            UnityEditorInternal.InternalEditorUtility.RepaintAllViews();
         }
 
         [InitializeOnLoadMethod]
