@@ -102,6 +102,10 @@ namespace HarryTools.Audio {
         internal void SetDelay(float _delay) => delay = Mathf.Max(0f, _delay);
         internal void SetVolumeRange(Vector2 _range) => volumeRange = _range;
         internal void SetPitchRange(Vector2 _range) => pitchRange = _range;
+        internal void SetPauseOptions(bool _ignorePause, bool _followTimeScale) {
+            ignorePause = _ignorePause;
+            followTimeScale = _followTimeScale;
+        }
         internal void SetFades(float _fadeIn, float _fadeOut) {
             fadeIn = Mathf.Max(0f, _fadeIn);
             fadeOut = Mathf.Max(0f, _fadeOut);

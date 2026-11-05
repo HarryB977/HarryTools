@@ -80,6 +80,17 @@ namespace HarryTools.Audio {
         /// <summary> Stops every sound. A negative fade uses each asset FadeOut. </summary>
         public static void StopAll(float _fade = 0f) => Live?.Voices.StopAll(null, _fade);
 
+        // ==================== PAUSE ===================
+        /// <summary> Pauses every sound whose asset does not have IgnorePause. Does not touch AudioListener.pause. </summary>
+        public static void Pause() => Runtime?.Voices.SetPaused(true);
+        public static void Resume() => Live?.Voices.SetPaused(false);
+        public static bool IsPaused => Live != null && runtime.Voices.IsPaused;
+
+        /// <summary> Pauses the sounds of a bus (Master pauses every bus). Combines with the global pause. </summary>
+        public static void Pause(AudioBus _bus) => Runtime?.Voices.SetBusPaused(_bus, true);
+        public static void Resume(AudioBus _bus) => Live?.Voices.SetBusPaused(_bus, false);
+        public static bool IsBusPaused(AudioBus _bus) => Live != null && runtime.Voices.IsBusPaused(_bus);
+
         // ==================== VOLUME ===================
         /// <summary> Sets the linear volume (0..1) of a bus. Saved to the store 0.5 s after the last change (and on shutdown). </summary>
         public static void SetVolume(AudioBus _bus, float _linear) {

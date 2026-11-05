@@ -31,6 +31,7 @@ namespace HarryTools.Audio {
         // ==================== VARIABLES ===================
         // Not reset on reload on purpose: generations keep growing across runtimes, so a handle from a previous runtime never matches a new voice.
         private static int generationSeed;
+        private static readonly int BusCount = Enum.GetValues(typeof(AudioBus)).Length;
 
         private readonly AudioRuntime runtime;
         private readonly Pool<AudioVoice> pool;
@@ -39,6 +40,8 @@ namespace HarryTools.Audio {
         private readonly List<List<Pending>> scratch = new List<List<Pending>>();
         private readonly Dictionary<AudioAsset, AssetState> states = new Dictionary<AudioAsset, AssetState>();
         private readonly System.Random rng = new System.Random();
+        private readonly bool[] busPaused = new bool[BusCount];
+        private bool globalPaused;
         private int scratchDepth;
 
         // ==================== CONSTRUCTOR ===================
@@ -52,6 +55,7 @@ namespace HarryTools.Audio {
         // ==================== PROPERTIES ===================
         /// <summary> Voices currently in use, oldest first. </summary>
         public IReadOnlyList<AudioVoice> ActiveVoices => active;
+        public bool IsPaused => globalPaused;
 
         // ==================== PUBLIC ===================
         public AudioHandle Start(in PlaybackRequest _request) {
@@ -92,6 +96,7 @@ namespace HarryTools.Audio {
             _voice.Begin(_asset, _clip, _position, _request.Follow, _baseVolume, UnityEngine.Random.Range(_pitchRange.x, _pitchRange.y), runtime.GetOutput(_asset));
             _voice.UpdateVolume(runtime.Mixer.GetSourceMultiplier(_voice.Bus), runtime.MultiplyOnSources);
             _voice.StartSource();
+            _voice.RefreshPause(IsSystemPaused(_voice));
 
             active.Add(_voice);
             _state.ActiveCount++;
@@ -121,7 +126,7 @@ namespace HarryTools.Audio {
             try {
                 for (int _i = 0; _i < active.Count; _i++) {
                     AudioVoice _voice = active[_i];
-                    if (_voice == null || _voice.Tick(_unscaledDelta, _mixer.GetSourceMultiplier(_voice.Bus), _onSource)) _finished.Add(new Pending(_voice));
+                    if (_voice == null || _voice.Tick(_unscaledDelta, _mixer.GetSourceMultiplier(_voice.Bus), _onSource, IsSystemPaused(_voice))) _finished.Add(new Pending(_voice));
                 }
                 for (int _i = 0; _i < _finished.Count; _i++) {
                     if (_finished[_i].Voice.Generation == _finished[_i].Generation) Release(_finished[_i].Voice);
@@ -135,7 +140,7 @@ namespace HarryTools.Audio {
         public void Stop(AudioVoice _voice, float _fade) {
             if (_voice == null || !_voice.IsActive) return;
             if (_fade < 0f) _fade = _voice.Asset != null ? _voice.Asset.FadeOut : 0f;
-            if (_fade <= 0f || _voice.UserPaused) Release(_voice);
+            if (_fade <= 0f || _voice.IsPaused) Release(_voice);
             else _voice.BeginFadeOut(_fade);
         }
 
@@ -152,6 +157,19 @@ namespace HarryTools.Audio {
             } finally {
                 ReturnScratch(_targets);
             }
+        }
+
+        /// <summary> Pauses or resumes every voice without IgnorePause. Voices started while paused start paused. </summary>
+        public void SetPaused(bool _paused) {
+            globalPaused = _paused;
+            RefreshPause();
+        }
+
+        public bool IsBusPaused(AudioBus _bus) => busPaused[(int)_bus];
+
+        public void SetBusPaused(AudioBus _bus, bool _paused) {
+            busPaused[(int)_bus] = _paused;
+            RefreshPause();
         }
 
         public void SetHandleVolume(AudioVoice _voice, float _linear, float _duration) {
@@ -174,6 +192,20 @@ namespace HarryTools.Audio {
         }
 
         // ==================== PRIVATE ===================
+        // Paused by Audio.Pause: globally, or through its bus (Master covers every bus). IgnorePause voices never are.
+        private bool IsSystemPaused(AudioVoice _voice) {
+            AudioAsset _asset = _voice.Asset;
+            if (ReferenceEquals(_asset, null) || _asset.IgnorePause) return false;
+            return globalPaused || busPaused[(int)_voice.Bus] || busPaused[(int)AudioBus.Master];
+        }
+
+        private void RefreshPause() {
+            for (int _i = 0; _i < active.Count; _i++) {
+                AudioVoice _voice = active[_i];
+                if (_voice != null) _voice.RefreshPause(IsSystemPaused(_voice));
+            }
+        }
+
         private void OnVoiceCreated(AudioVoice _voice) {
             _voice.Setup(voices.Count, ++generationSeed);
             _voice.name = "Voice " + voices.Count;

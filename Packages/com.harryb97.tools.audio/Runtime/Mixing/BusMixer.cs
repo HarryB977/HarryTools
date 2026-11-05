@@ -43,9 +43,11 @@ namespace HarryTools.Audio {
         public bool IsMuted(AudioBus _bus) => muted[(int)_bus];
 
         public void SetDuckOffsetDb(AudioBus _bus, float _db) {
-            duckDb[(int)_bus] = _db;
+            duckDb[(int)_bus] = float.IsNaN(_db) ? 0f : Mathf.Min(0f, _db);
             Apply(_bus);
         }
+
+        public float GetDuckOffsetDb(AudioBus _bus) => duckDb[(int)_bus];
 
         /// <summary> Volume, mute and duck of the bus and of Master (not counted twice for Master). Meant for sources when the mixer is not used. </summary>
         public float GetSourceMultiplier(AudioBus _bus) {

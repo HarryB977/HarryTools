@@ -26,6 +26,10 @@ namespace HarryTools.Audio {
         private float delay;
         private float elapsed;
         private int notPlayingTicks;
+        private bool followTimeScale;
+        private bool systemPaused;
+        private bool timePaused;
+        private bool sourcePaused;
 
         private float fadeInDuration;
         private float fadeInElapsed;
@@ -56,7 +60,10 @@ namespace HarryTools.Audio {
         public int Priority { get; private set; }
         public float BaseVolume { get; private set; }
         public float Pitch { get; private set; }
+        /// <summary> Paused through the handle. </summary>
         public bool UserPaused { get; private set; }
+        /// <summary> Paused by the handle or by Audio.Pause (global or bus). Not by the time-scale pause. </summary>
+        public bool IsPaused => UserPaused || systemPaused;
         public bool IsFadingOut => fadingOut;
         /// <summary> Current volume including fades, the handle multiplier and the bus multiplier. </summary>
         public float EffectiveVolume { get; private set; }
@@ -98,6 +105,10 @@ namespace HarryTools.Audio {
             Priority = _asset.Priority;
             BaseVolume = _baseVolume;
             UserPaused = false;
+            systemPaused = false;
+            timePaused = false;
+            sourcePaused = false;
+            followTimeScale = _asset.FollowTimeScale;
 
             followTarget = _follow;
             following = _follow != null;
@@ -120,6 +131,7 @@ namespace HarryTools.Audio {
             source.priority = Mathf.Clamp(256 - _asset.Priority * 256 / 100, 0, 256);
             source.outputAudioMixerGroup = _output;
             _asset.GetSpatial().ApplyTo(source);
+            source.ignoreListenerPause = _asset.IgnorePause;
             SetPitch(_pitch);
         }
 
@@ -129,7 +141,7 @@ namespace HarryTools.Audio {
         }
 
         /// <summary> Advances follow, fades and end detection. Returns true when the voice has finished and must be released. </summary>
-        public bool Tick(float _delta, float _busMultiplier, bool _multiplyOnSource) {
+        public bool Tick(float _delta, float _busMultiplier, bool _multiplyOnSource, bool _systemPaused) {
             if (following) {
                 if (followTarget != null) transform.position = followTarget.position;
                 else {
@@ -139,12 +151,17 @@ namespace HarryTools.Audio {
                 }
             }
 
-            if (UserPaused) {
+            RefreshPause(_systemPaused);
+            if (followTimeScale && !timePaused) ApplyPitch();
+
+            // Paused voices (explicitly, by bus, by time scale or by AudioListener.pause) do not advance and never end.
+            if (UserPaused || systemPaused || timePaused || (AudioListener.pause && !source.ignoreListenerPause)) {
                 UpdateVolume(_busMultiplier, _multiplyOnSource);
                 return false;
             }
 
-            elapsed += _delta;
+            // Elapsed time is audio time: it runs slower with the pitch the time scale gives.
+            elapsed += followTimeScale ? _delta * Time.timeScale : _delta;
             if (fadeInElapsed < fadeInDuration) fadeInElapsed += _delta;
             if (handleElapsed < handleDuration) {
                 handleElapsed += _delta;
@@ -201,7 +218,14 @@ namespace HarryTools.Audio {
 
         public void SetPitch(float _pitch) {
             Pitch = _pitch;
-            source.pitch = _pitch;
+            ApplyPitch();
+        }
+
+        /// <summary> Applies the pause from Audio.Pause (global or bus) and the time-scale pause, then pauses or resumes the source. </summary>
+        public void RefreshPause(bool _systemPaused) {
+            systemPaused = _systemPaused;
+            timePaused = followTimeScale && Time.timeScale <= 0f;
+            SyncSource();
         }
 
         public void SetPosition(Vector3 _position) {
@@ -219,14 +243,13 @@ namespace HarryTools.Audio {
         public void Pause() {
             if (UserPaused) return;
             UserPaused = true;
-            source.Pause();
+            SyncSource();
         }
 
         public void Resume() {
             if (!UserPaused) return;
             UserPaused = false;
-            notPlayingTicks = 0;
-            source.UnPause();
+            SyncSource();
         }
 
         /// <summary> Bumps the generation so every handle to the previous playback becomes stale. </summary>
@@ -243,12 +266,29 @@ namespace HarryTools.Audio {
             following = false;
             EndedCallback = null;
             UserPaused = false;
+            systemPaused = false;
+            timePaused = false;
+            sourcePaused = false;
             fadingOut = false;
             EffectiveVolume = 0f;
             TargetVolume = 0f;
         }
 
         // ==================== PRIVATE ===================
+        private void ApplyPitch() => source.pitch = followTimeScale ? Pitch * Time.timeScale : Pitch;
+
+        // Pauses or resumes the AudioSource when the combined pause state changed.
+        private void SyncSource() {
+            bool _paused = UserPaused || systemPaused || timePaused;
+            if (_paused == sourcePaused) return;
+            sourcePaused = _paused;
+            if (_paused) source.Pause();
+            else {
+                notPlayingTicks = 0;
+                source.UnPause();
+            }
+        }
+
         // Back to a clean AudioSource and disabled filters, whatever the last playback (or an effect) changed.
         private void ResetComponents() {
             if (source != null) {

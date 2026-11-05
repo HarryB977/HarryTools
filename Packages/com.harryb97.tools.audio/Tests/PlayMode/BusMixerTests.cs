@@ -66,6 +66,26 @@ namespace HarryTools.Audio.Tests {
         }
 
         [Test]
+        public void DuckOffset_PositiveIsClampedToZero() {
+            var _bus = new BusMixer(settings);
+            _bus.SetDuckOffsetDb(AudioBus.Music, 6f);
+            Assert.AreEqual(0f, _bus.GetDuckOffsetDb(AudioBus.Music));
+            mixer.GetFloat("MusicVolume", out float _db);
+            Assert.AreEqual(0f, _db, 0.01f);
+            Assert.AreEqual(1f, _bus.GetSourceMultiplier(AudioBus.Music), 0.0001f);
+        }
+
+        [Test]
+        public void DuckOffset_NaN_IsIgnored() {
+            var _bus = new BusMixer(settings);
+            _bus.SetDuckOffsetDb(AudioBus.Music, -6f);
+            _bus.SetDuckOffsetDb(AudioBus.Music, float.NaN);
+            Assert.AreEqual(0f, _bus.GetDuckOffsetDb(AudioBus.Music));
+            mixer.GetFloat("MusicVolume", out float _db);
+            Assert.IsFalse(float.IsNaN(_db));
+        }
+
+        [Test]
         public void Volume_Zero_NeverWritesInfinity() {
             var _bus = new BusMixer(settings);
             _bus.SetVolume(AudioBus.SFX, 0f);

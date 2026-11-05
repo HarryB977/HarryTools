@@ -28,8 +28,8 @@ namespace HarryTools.Audio {
 
         /// <summary> True while the playback is alive: playing, delayed, paused or fading out. </summary>
         public bool IsValid => TryGetVoice(out _);
-        public bool IsPlaying => TryGetVoice(out AudioVoice _voice) && !_voice.UserPaused && _voice.Source.isPlaying;
-        public bool IsPaused => TryGetVoice(out AudioVoice _voice) && _voice.UserPaused;
+        public bool IsPlaying => TryGetVoice(out AudioVoice _voice) && !_voice.IsPaused && _voice.Source.isPlaying;
+        public bool IsPaused => TryGetVoice(out AudioVoice _voice) && _voice.IsPaused;
         /// <summary> Asset being played, or null when the handle is no longer valid. </summary>
         public AudioAsset Asset => TryGetVoice(out AudioVoice _voice) ? _voice.Asset : null;
 
