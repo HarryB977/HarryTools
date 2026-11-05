@@ -1,6 +1,6 @@
 # Changelog
 
-## [1.0.0] - 2026-11-05
+## [1.0.0-beta.1] - 2026-11-05
 ### Añadido
 - Assets de audio: sonidos, música, voces, conversaciones, speakers y perfiles espaciales, con IDs estables y catálogo mantenido por el editor.
 - Clase de ids generada (`Sounds`, `Music`, `Voices`, `Conversations`) y referencias serializables (`SoundRef`, `MusicRef`, `VoiceRef`, `ConversationRef`).
