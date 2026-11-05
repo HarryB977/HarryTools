@@ -347,7 +347,7 @@ namespace HarryTools.Audio.Tests {
         public IEnumerator Ducking_VoiceEnds_RestoresAfterRelease() {
             Rebuild(new DuckingRule(AudioBus.Voice, AudioBus.Music, -6f, 0.05f, 0.2f));
             AudioHandle _voice = Audio.Play(MakeSound(0.4f, AudioBus.Voice));
-            yield return WaitFor(() => MusicOffsetDb < -5.9f, 1f);
+            yield return WaitFor(() => MusicOffsetDb <= -5.999f, 1f);
             Assert.AreEqual(-6f, MusicOffsetDb, 0.05f);
 
             yield return WaitFor(() => !_voice.IsValid, 2f);
@@ -380,7 +380,7 @@ namespace HarryTools.Audio.Tests {
         public IEnumerator Ducking_TimePausedTriggerVoice_Releases() {
             Rebuild(new DuckingRule(AudioBus.Voice, AudioBus.Music, -6f, 0.05f, 0.1f));
             Audio.Play(MakeSound(3f, AudioBus.Voice, _followTimeScale: true));
-            yield return WaitFor(() => MusicOffsetDb < -5.9f, 1f);
+            yield return WaitFor(() => MusicOffsetDb <= -5.999f, 1f);
             Assert.AreEqual(-6f, MusicOffsetDb, 0.05f);
             Time.timeScale = 0f;
             yield return WaitReal(0.4f);
@@ -391,7 +391,7 @@ namespace HarryTools.Audio.Tests {
         public IEnumerator Ducking_ListenerPausedTriggerVoice_Releases() {
             Rebuild(new DuckingRule(AudioBus.Voice, AudioBus.Music, -6f, 0.05f, 0.1f));
             Audio.Play(MakeSound(3f, AudioBus.Voice));
-            yield return WaitFor(() => MusicOffsetDb < -5.9f, 1f);
+            yield return WaitFor(() => MusicOffsetDb <= -5.999f, 1f);
             AudioListener.pause = true;
             yield return WaitReal(0.4f);
             Assert.AreEqual(0f, MusicOffsetDb, 0.01f);

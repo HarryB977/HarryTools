@@ -189,6 +189,25 @@ namespace HarryTools.Audio.Tests {
             Assert.IsFalse(_voice.HasEffectHighPass);
         }
 
+        [UnityTest]
+        public IEnumerator QueuedLine_EmitterDestroyed_2DUsesSpeakerDefault() {
+            settings.MaxVoices = 4;
+            settings.PrewarmVoices = 4;
+            Audio.InitializeForTests(settings);
+            SpeakerAsset _speaker = MakeSpeaker();
+            AudioEmitter _emitter = MakeEmitter(_speaker, MakePhone());
+            _emitter.Say(MakeVoice(_speaker, 0.2f));
+            AudioHandle _queued = _emitter.Say(MakeVoice(_speaker, 0.2f));
+            AssertPhone(VoiceOf(_queued));
+            Object.Destroy(_emitter.gameObject);
+
+            yield return WaitFor(() => _queued.IsPlaying, 2f);
+            AudioVoice _voice = VoiceOf(_queued);
+            Assert.AreEqual(0f, _voice.Source.spatialBlend);
+            AssertNoFilters(_voice);
+            Assert.IsFalse(_voice.HasEffectLowPass);
+        }
+
         [Test]
         public void NoMixer_EffectsNotApplied() {
             AudioPlatform.OverrideUsesMixer(false);

@@ -80,7 +80,7 @@ namespace HarryTools.Audio {
 
             AudioVoice _voice = pool.Get();
             if (_voice == null) {
-                float _score = _asset.Priority / 100f * _baseVolume * runtime.Mixer.GetSourceMultiplier(_asset.Bus) * Attenuation(_asset.GetSpatial(), _position);
+                float _score = _asset.Priority / 100f * _baseVolume * runtime.Mixer.GetSourceMultiplier(_asset.Bus) * (_request.Force2D ? 1f : Attenuation(_asset.GetSpatial(), _position));
                 AudioVoice _victim = FindLowestScore(out float _lowest);
                 if (_victim == null || _lowest >= _score) return AudioHandle.Invalid;
                 Release(_victim);
@@ -294,12 +294,18 @@ namespace HarryTools.Audio {
             for (int _i = 0; _i < active.Count; _i++) {
                 AudioVoice _voice = active[_i];
                 if (_voice == null || _voice.Asset == null) continue;
-                float _score = _voice.Priority / 100f * _voice.TargetVolume * Attenuation(_voice.Asset.GetSpatial(), _voice.transform.position);
+                float _score = _voice.Priority / 100f * _voice.TargetVolume * Attenuation(_voice);
                 if (_score >= _lowest) continue;
                 _lowest = _score;
                 _found = _voice;
             }
             return _found;
+        }
+
+        // Attenuation of a playing voice. A voice forced to 2D (a voice line without emitter) is not attenuated, whatever its asset says.
+        private float Attenuation(AudioVoice _voice) {
+            if (_voice.Source.spatialBlend <= 0f) return 1f;
+            return Attenuation(_voice.Asset.GetSpatial(), _voice.transform.position);
         }
 
         /// <summary> Gain of the spatial settings at the distance to the listener, estimated from the rolloff curve. 1 for 2D or without listener. </summary>

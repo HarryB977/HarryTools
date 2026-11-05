@@ -112,6 +112,12 @@ namespace HarryTools.Audio.Tests {
             return _emitter;
         }
 
+        private void Rebuild(int _maxVoices) {
+            settings.MaxVoices = _maxVoices;
+            settings.PrewarmVoices = _maxVoices;
+            Audio.InitializeForTests(settings);
+        }
+
         private static AudioVoice VoiceOf(AudioHandle _handle) {
             Assert.IsTrue(Audio.Runtime.Voices.TryGetVoice(_handle, out AudioVoice _voice), "Handle has no voice.");
             return _voice;
@@ -398,6 +404,100 @@ namespace HarryTools.Audio.Tests {
                 Audio.Voices.LineStarted -= _throwStarted;
                 Audio.Voices.LineEnded -= _throwEnded;
             }
+        }
+
+        [UnityTest]
+        public IEnumerator Emitter_Queue_SameVoiceMaxInstances1_DoesNotHang() {
+            SpeakerAsset _speaker = MakeSpeaker("A");
+            AudioEmitter _emitter = MakeEmitter(_speaker, Vector3.zero);
+            VoiceAsset _voice = MakeVoice(_speaker, 0.3f);
+            _voice.SetLimits(0f, 1, InstanceLimitPolicy.StealOldest);
+            AudioHandle _first = _emitter.Say(_voice);
+            // The conversation line is queued behind _first, and taking its voice steals _first (MaxInstances 1).
+            ConversationHandle _conversation = Audio.Voices.Play(MakeConversation(new ConversationLine { Voice = _voice }));
+
+            Assert.IsFalse(_first.IsValid);
+            Assert.AreEqual(1, ended.Count);
+            Assert.IsTrue(endedInterrupted[0], "A stolen line ends interrupted.");
+            Assert.IsTrue(_emitter.IsSpeaking, "The queued line must start when the steal ended the current one.");
+            Assert.AreEqual(2, started.Count);
+
+            yield return WaitFor(() => !_conversation.IsPlaying, 2f);
+            Assert.IsFalse(_conversation.IsPlaying, "The conversation must not hang on an orphaned queued line.");
+            _emitter.Say(_voice);
+            Assert.AreEqual(3, started.Count, "Later lines of the emitter still play.");
+        }
+
+        [UnityTest]
+        public IEnumerator Emitter_Queue_PoolPressureStealsCurrent_DoesNotHang() {
+            Rebuild(2);
+            var _sound = ScriptableObject.CreateInstance<SoundAsset>();
+            _sound.SetClips(new[] { new ClipEntry(MakeClip(2f)) });
+            _sound.SetPriority(100);
+            created.Add(_sound);
+            Assert.IsTrue(Audio.Play(_sound, Vector3.zero).IsValid);
+
+            SpeakerAsset _speaker = MakeSpeaker("A");
+            AudioEmitter _emitter = MakeEmitter(_speaker, Vector3.zero);
+            VoiceAsset _quiet = MakeVoice(_speaker, 2f);
+            _quiet.SetVolumeRange(new Vector2(0.05f, 0.05f));
+            AudioHandle _current = _emitter.Say(_quiet);
+            // The pool is full: reserving the queued line steals the quietest voice, the current line of the same emitter.
+            AudioHandle _queued = _emitter.Say(MakeVoice(_speaker, 0.2f));
+
+            Assert.IsFalse(_current.IsValid);
+            Assert.IsTrue(_queued.IsValid);
+            Assert.IsTrue(_emitter.IsSpeaking);
+            Assert.AreEqual(_queued, started[started.Count - 1].Handle);
+            yield return WaitFor(() => !_queued.IsValid, 2f);
+            Assert.IsFalse(_queued.IsValid);
+            Assert.IsFalse(endedInterrupted[endedInterrupted.Count - 1], "The queued line played to its end.");
+        }
+
+        [UnityTest]
+        public IEnumerator Steal_TwoDLine_IsNotAttenuatedByDistanceToOrigin() {
+            Rebuild(1);
+            listener.transform.position = new Vector3(100f, 0f, 0f);
+            var _sound = ScriptableObject.CreateInstance<SoundAsset>();
+            _sound.SetClips(new[] { new ClipEntry(MakeClip(2f)) });
+            _sound.SetSpatial(SpatialSettings.Default3D);
+            created.Add(_sound);
+            SpeakerAsset _speaker = MakeSpeaker("Nobody");
+
+            // A playing 2D line (3D asset without emitter) scores without distance: a weaker sound cannot steal it.
+            AudioHandle _line = Audio.Voices.Play(MakeVoice(_speaker, 2f));
+            Assert.IsTrue(_line.IsValid);
+            Assert.IsFalse(Audio.Play(_sound, listener.transform.position).IsValid);
+            Assert.IsTrue(_line.IsValid);
+
+            // An incoming 2D line scores without distance too: it steals the weaker sound.
+            Audio.StopAll();
+            yield return null;
+            AudioHandle _weaker = Audio.Play(_sound, listener.transform.position);
+            Assert.IsTrue(_weaker.IsValid);
+            AudioHandle _incoming = Audio.Voices.Play(MakeVoice(_speaker, 2f));
+            Assert.IsTrue(_incoming.IsValid);
+            Assert.IsFalse(_weaker.IsValid);
+        }
+
+        [UnityTest]
+        public IEnumerator StopAll_WithQueuedLine_NoSpuriousEvents() {
+            SpeakerAsset _speaker = MakeSpeaker("A");
+            AudioEmitter _emitter = MakeEmitter(_speaker, Vector3.zero);
+            ConversationHandle _conversation = Audio.Voices.Play(MakeConversation(new ConversationLine { Voice = MakeVoice(_speaker, 2f) }));
+            AudioHandle _queued = _emitter.Say(MakeVoice(_speaker, 2f));
+            Assert.AreEqual(1, started.Count);
+            Assert.IsTrue(_queued.IsValid);
+
+            Audio.Voices.StopAll();
+            Assert.IsFalse(_conversation.IsPlaying);
+            Assert.IsFalse(_queued.IsValid);
+            Assert.AreEqual(1, started.Count, "The queued line must not start while everything stops.");
+            Assert.AreEqual(1, ended.Count);
+            Assert.IsTrue(endedInterrupted[0]);
+            yield return new WaitForSecondsRealtime(0.3f);
+            Assert.AreEqual(1, started.Count);
+            Assert.AreEqual(1, ended.Count);
         }
 
         [UnityTest]

@@ -11,6 +11,8 @@ namespace HarryTools.Audio {
     /// their handles are valid at once (IsPlaying false until they start; Stop removes them); with Interrupt the current line
     /// fades out in 0.1 s and the new one starts.
     /// Queued lines hold a reserved voice from the pool: it is prepared (clip, emitter, effect) but not started until its turn.
+    /// The reservation counts toward MaxInstances and starts the Cooldown of the asset at queue time. A reserved voice can be
+    /// stolen like any other; the queued line is then dropped without LineStarted or LineEnded.
     /// If the emitter is destroyed or disabled, its current line ends at the last position and its queued lines look for
     /// another active emitter of their speaker, else play in 2D, still one at a time.
     /// </summary>
@@ -60,7 +62,8 @@ namespace HarryTools.Audio {
 
         /// <summary>
         /// Raised once for every line that raised LineStarted: when it finishes (interrupted = false), or when it is stopped, interrupted
-        /// or starts fading out (interrupted = true). Subscriptions survive a rebuild of the audio runtime.
+        /// or starts fading out (interrupted = true). A queued line that never started (stopped, or its reserved voice stolen) raises nothing.
+        /// Subscriptions survive a rebuild of the audio runtime.
         /// </summary>
         public event Action<VoiceLineInfo, bool> LineEnded {
             add => lineEnded += value;
@@ -114,12 +117,12 @@ namespace HarryTools.Audio {
 
         /// <summary> Stops every conversation and every voice line, queued ones included. </summary>
         public void StopAll(float _fade = 0.1f) {
-            Conversations.StopAll(_fade);
-            // Queued lines first, so stopping a current line does not start the next one.
+            // Queued lines first, so stopping a current line (of a conversation or not) does not start the next one.
             for (int _i = lines.Count - 1; _i >= 0; _i--) {
                 if (_i >= lines.Count || lines[_i].State != LineState.Queued) continue;
                 EndLine(_i, true, 0f, false);
             }
+            Conversations.StopAll(_fade);
             for (int _i = lines.Count - 1; _i >= 0; _i--) {
                 if (_i >= lines.Count) continue;
                 EndLine(_i, true, _fade, false);
@@ -199,7 +202,13 @@ namespace HarryTools.Audio {
                 State = _queue ? LineState.Queued : LineState.Started,
                 Duration = _source.ClipLength / Mathf.Max(0.01f, Mathf.Abs(_source.Pitch))
             });
-            if (!_queue && !_source.InDelay) MarkSounding(lines.Count - 1);
+            if (!_queue) {
+                if (!_source.InDelay) MarkSounding(lines.Count - 1);
+            } else if (FindCurrent(_emitter) < 0) {
+                // Taking the voice may have stolen the current line of this emitter (instance limit or full pool). Its end found
+                // nothing queued yet, so start the queue now instead of leaving the line waiting for an end that never comes.
+                Advance(_emitter);
+            }
             return _handle;
         }
 
@@ -248,6 +257,8 @@ namespace HarryTools.Audio {
                         _line.Emitter = null;
                         _voice.SetFollow(null);
                         _voice.Source.spatialBlend = 0f;
+                        // In 2D the line no longer comes from that emitter: use the speaker default effect, not the emitter one.
+                        EffectApplier.Apply(_voice, EffectOf(_line.Voice, null), runtime.GetOutput(_line.Voice));
                     }
                 }
 
