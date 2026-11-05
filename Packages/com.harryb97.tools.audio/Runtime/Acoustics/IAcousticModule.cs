@@ -14,9 +14,10 @@ namespace HarryTools.Audio {
         float UpdateInterval { get; }
 
         /// <summary>
-        /// Modifies the results in place, one per query (same index). The results arrive holding what the previous modules produced
-        /// (neutral for the first), so a module combines with them: multiply the volume, take the lowest low-pass, and so on.
-        /// A module skipped by its interval re-applies the output it had the last time it ran.
+        /// Writes the module's own output for each query (same index). The results arrive neutral: write the full output, not a
+        /// change on top of other modules. The simulator keeps the last output of every module per voice and, each tick, reduces all of them
+        /// in Order: volumes multiply, the lowest low-pass and the highest high-pass win, and the perceived position comes from the last
+        /// module that sets one. A module skipped by its interval keeps contributing its last output.
         /// </summary>
         void Evaluate(ReadOnlySpan<AcousticQuery> _queries, Span<AcousticResult> _results);
     }

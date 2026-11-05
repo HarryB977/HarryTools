@@ -336,7 +336,8 @@ namespace HarryTools.Audio {
         /// <summary> Moves the source to the perceived position, or back to the logical one. </summary>
         public void SetPerceivedPosition(bool _has, Vector3 _position) {
             hasPerceivedPosition = _has;
-            transform.position = _has ? _position : logicalPosition;
+            Vector3 _target = _has ? _position : logicalPosition;
+            if (transform.position != _target) transform.position = _target;
         }
 
         // ==================== PRIVATE ===================

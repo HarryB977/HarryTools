@@ -60,7 +60,10 @@ namespace HarryTools.Audio {
         private readonly bool[] selectedFresh;
         private readonly AcousticQuery[] queries;
         private readonly AcousticResult[] results;
-        private readonly AcousticResult[] backup;
+        private readonly AcousticResult[] evalResults;
+        private readonly AcousticQuery[] freshQueries;
+        private readonly AcousticResult[] freshResults;
+        private readonly int[] freshRows;
 
         // Per voice index: which playback and tick the stored contributions belong to.
         private readonly int[] rowGeneration;
@@ -85,7 +88,10 @@ namespace HarryTools.Audio {
             selectedFresh = new bool[maxSimulated];
             queries = new AcousticQuery[maxSimulated];
             results = new AcousticResult[maxSimulated];
-            backup = new AcousticResult[maxSimulated];
+            evalResults = new AcousticResult[maxSimulated];
+            freshQueries = new AcousticQuery[maxSimulated];
+            freshResults = new AcousticResult[maxSimulated];
+            freshRows = new int[maxSimulated];
             rowGeneration = new int[voiceCapacity];
             rowStamp = new int[voiceCapacity];
             syncedVersion = -1;
@@ -124,6 +130,8 @@ namespace HarryTools.Audio {
                 _count = Select(_active);
                 if (_count > 0) Evaluate(_count, _listener.position);
             }
+            // Do not keep references to voices that left the selection.
+            for (int _i = _count; _i < maxSimulated; _i++) selected[_i] = null;
 
             for (int _i = 0; _i < _count; _i++) {
                 AudioVoice _voice = selected[_i];
@@ -144,6 +152,9 @@ namespace HarryTools.Audio {
                     _voice.SetPerceivedPosition(false, Vector3.zero);
                 } else if (!_voice.IsFrozen && !_voice.InDelay) {
                     Apply(_voice, AcousticResult.Neutral, _alpha);
+                } else {
+                    // Frozen: nothing advances, but an effect applied meanwhile must not undo the module filters.
+                    ApplyFilters(_voice, in _state);
                 }
             }
         }
@@ -183,13 +194,12 @@ namespace HarryTools.Audio {
             return _count;
         }
 
+        // Every module writes its own full result per voice into the table (from neutral); the table is then reduced in Order.
+        // A module that is not due only runs for the voices without a stored result (new in the budget); the others keep theirs.
         private void Evaluate(int _count, Vector3 _listenerPosition) {
-            bool _anyFresh = false;
             for (int _i = 0; _i < _count; _i++) {
                 AudioVoice _voice = selected[_i];
                 queries[_i] = new AcousticQuery(new AudioHandle(_voice.Index, _voice.Generation), _voice.LogicalPosition, _listenerPosition, _voice.Asset);
-                results[_i] = AcousticResult.Neutral;
-                _anyFresh |= selectedFresh[_i];
             }
 
             float _now = Time.unscaledTime;
@@ -197,40 +207,45 @@ namespace HarryTools.Audio {
                 IAcousticModule _module = slots[_s];
                 if (_module == null) continue;
 
-                // A voice without a stored contribution makes the module run for everybody this tick.
-                if (_now < nextDue[_s] && !_anyFresh) {
-                    for (int _i = 0; _i < _count; _i++) Combine(ref results[_i], table[selected[_i].Index * slotCapacity + _s]);
-                    continue;
-                }
-
-                Array.Copy(results, backup, _count);
+                bool _due = _now >= nextDue[_s];
                 try {
-                    _module.Evaluate(new ReadOnlySpan<AcousticQuery>(queries, 0, _count), new Span<AcousticResult>(results, 0, _count));
-                    nextDue[_s] = _now + Mathf.Max(0f, _module.UpdateInterval);
-                    for (int _i = 0; _i < _count; _i++) table[selected[_i].Index * slotCapacity + _s] = Contribution(backup[_i], results[_i]);
+                    if (_due) {
+                        for (int _i = 0; _i < _count; _i++) evalResults[_i] = AcousticResult.Neutral;
+                        _module.Evaluate(new ReadOnlySpan<AcousticQuery>(queries, 0, _count), new Span<AcousticResult>(evalResults, 0, _count));
+                        for (int _i = 0; _i < _count; _i++) table[selected[_i].Index * slotCapacity + _s] = evalResults[_i];
+                        nextDue[_s] = _now + Mathf.Max(0f, _module.UpdateInterval);
+                    } else {
+                        int _fresh = 0;
+                        for (int _i = 0; _i < _count; _i++) {
+                            if (!selectedFresh[_i]) continue;
+                            freshQueries[_fresh] = queries[_i];
+                            freshResults[_fresh] = AcousticResult.Neutral;
+                            freshRows[_fresh] = selected[_i].Index * slotCapacity + _s;
+                            _fresh++;
+                        }
+                        if (_fresh == 0) continue;
+                        _module.Evaluate(new ReadOnlySpan<AcousticQuery>(freshQueries, 0, _fresh), new Span<AcousticResult>(freshResults, 0, _fresh));
+                        for (int _i = 0; _i < _fresh; _i++) table[freshRows[_i]] = freshResults[_i];
+                    }
                 } catch (Exception _exception) {
+                    // Its slot is skipped by the reduction (neutral); the other modules are unaffected.
                     Debug.LogException(_exception);
-                    Array.Copy(backup, results, _count);
                     slots[_s] = null;
                     Unregister(_module);
                 }
             }
-        }
 
-        // What a module added on top of its input. A module skipped by its interval re-applies this with Combine,
-        // so modules should combine with the results (multiply, lowest low-pass, highest high-pass) instead of overwriting them.
-        private static AcousticResult Contribution(in AcousticResult _before, in AcousticResult _after) {
-            AcousticResult _c = AcousticResult.Neutral;
-            _c.VolumeMultiplier = _before.VolumeMultiplier > 1e-6f ? _after.VolumeMultiplier / _before.VolumeMultiplier : _after.VolumeMultiplier;
-            if (_after.LowPassCutoff < _before.LowPassCutoff) _c.LowPassCutoff = _after.LowPassCutoff;
-            if (_after.HighPassCutoff > _before.HighPassCutoff) _c.HighPassCutoff = _after.HighPassCutoff;
-            if (_after.HasPerceivedPosition && (!_before.HasPerceivedPosition || _after.PerceivedPosition != _before.PerceivedPosition)) {
-                _c.HasPerceivedPosition = true;
-                _c.PerceivedPosition = _after.PerceivedPosition;
+            for (int _i = 0; _i < _count; _i++) {
+                int _row = selected[_i].Index * slotCapacity;
+                AcousticResult _reduced = AcousticResult.Neutral;
+                for (int _s = 0; _s < slotCount; _s++) {
+                    if (slots[_s] != null) Combine(ref _reduced, table[_row + _s]);
+                }
+                results[_i] = _reduced;
             }
-            return _c;
         }
 
+        // Volume multiplies, low-pass takes the lowest, high-pass the highest, the perceived position is the last one in Order.
         private static void Combine(ref AcousticResult _result, in AcousticResult _contribution) {
             _result.VolumeMultiplier *= _contribution.VolumeMultiplier;
             _result.LowPassCutoff = Mathf.Min(_result.LowPassCutoff, _contribution.LowPassCutoff);

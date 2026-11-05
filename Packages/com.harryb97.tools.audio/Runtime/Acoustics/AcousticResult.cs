@@ -1,7 +1,7 @@
 using UnityEngine;
 
 namespace HarryTools.Audio {
-    /// <summary> What the acoustic modules want for one voice. The default values of <see cref="Neutral"/> change nothing. </summary>
+    /// <summary> What one acoustic module wants for one voice. <see cref="Neutral"/> changes nothing. The simulator combines the results of all modules: volume multiplies, low-pass takes the lowest, high-pass the highest, perceived position the last. </summary>
     public struct AcousticResult {
         // ==================== VARIABLES ===================
         public const float NeutralLowPass = 22000f;

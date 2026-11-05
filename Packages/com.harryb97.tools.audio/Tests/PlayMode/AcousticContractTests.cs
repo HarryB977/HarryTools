@@ -44,6 +44,19 @@ namespace HarryTools.Audio.Tests {
             }
         }
 
+        // Low-pass proportional to the source x position: each voice gets its own value.
+        private sealed class PositionModule : IAcousticModule {
+            public int Order => 0;
+            public float UpdateInterval => 5f;
+            public void Evaluate(ReadOnlySpan<AcousticQuery> _queries, Span<AcousticResult> _results) {
+                for (int _i = 0; _i < _queries.Length; _i++) {
+                    AcousticResult _r = _results[_i];
+                    _r.LowPassCutoff = 100f * _queries[_i].SourcePosition.x;
+                    _results[_i] = _r;
+                }
+            }
+        }
+
         private sealed class AllocatingModule : IAcousticModule {
             public int Order => 0;
             public float UpdateInterval => 0f;
@@ -335,6 +348,69 @@ namespace HarryTools.Audio.Tests {
             _tick();
             int _count = CountAllocations(_tick);
             Assert.AreEqual(0, _count, "The acoustic simulator tick allocated managed memory.");
+        }
+
+        [UnityTest]
+        public IEnumerator ChainedModules_IntervalGated_KeepsTightening() {
+            FakeModule _a = Register(new FakeModule { OrderValue = 0, Volume = 1f, LowPass = 500f });
+            FakeModule _b = Register(new FakeModule { OrderValue = 1, Interval = 0.2f, Volume = 1f, LowPass = 1000f });
+            AudioVoice _voice = VoiceOf(Audio.Play(sound, new Vector3(2f, 0f, 0f)));
+            yield return Seconds(0.8f);
+            Assert.AreEqual(500f, _voice.LowPass.cutoffFrequency, 20f);
+
+            _a.LowPass = 5000f;
+            // B only runs every 0.2 s; between runs its stored 1000 must still tighten the opened A.
+            yield return Seconds(0.8f);
+            Assert.AreEqual(1000f, _voice.LowPass.cutoffFrequency, 30f);
+            Assert.Greater(_a.Calls, _b.Calls);
+        }
+
+        [UnityTest]
+        public IEnumerator BudgetChurn_ResultsFollowTheRightVoice() {
+            Build(1);
+            var _position = new PositionModule();
+            Audio.RegisterModule(_position);
+            registered.Add(_position);
+            AudioHandle _x = Audio.Play(sound, new Vector3(5f, 0f, 0f));
+            AudioHandle _y = Audio.Play(sound, new Vector3(20f, 0f, 0f));
+            AudioVoice _vx = VoiceOf(_x);
+            AudioVoice _vy = VoiceOf(_y);
+            yield return Seconds(0.8f);
+            Assert.AreEqual(500f, _vx.LowPass.cutoffFrequency, 20f);
+            Assert.IsFalse(_vy.LowPass.enabled);
+
+            _x.At(new Vector3(49f, 0f, 0f));
+            yield return Seconds(1.5f);
+            Assert.AreEqual(2000f, _vy.LowPass.cutoffFrequency, 60f, "Y enters the budget with its own result.");
+            Assert.IsFalse(_vx.LowPass.enabled, "X left the budget and must be back to neutral.");
+        }
+
+        [UnityTest]
+        public IEnumerator MultipleModules_Tick_ZeroGC() {
+            Register(new FakeModule { OrderValue = 0, Interval = 0f, SetPerceived = true, Perceived = new Vector3(0f, 3f, 0f) });
+            Register(new FakeModule { OrderValue = 1, Interval = 0.05f, LowPass = 800f });
+            Register(new FakeModule { OrderValue = 2, Interval = 10f, Volume = 0.8f });
+            for (int _i = 0; _i < 4; _i++) Audio.Play(sound, new Vector3(2f + _i, 0f, 0f));
+            yield return Seconds(0.3f);
+            AudioRuntime _runtime = Audio.Runtime;
+            Action _tick = () => { for (int _i = 0; _i < 100; _i++) _runtime.Acoustics.Tick(0.016f); };
+            _tick();
+            int _count = CountAllocations(_tick);
+            Assert.AreEqual(0, _count, "The acoustic simulator tick with several modules allocated managed memory.");
+        }
+
+        [UnityTest]
+        public IEnumerator MultipleModules_Tick_PositiveControl() {
+            var _alloc = new AllocatingModule();
+            Audio.RegisterModule(_alloc);
+            registered.Add(_alloc);
+            Register(new FakeModule { OrderValue = 1, Interval = 10f });
+            Register(new FakeModule { OrderValue = 2, Interval = 0.05f });
+            Audio.Play(sound, new Vector3(2f, 0f, 0f));
+            yield return Seconds(0.1f);
+            AudioRuntime _runtime = Audio.Runtime;
+            Action _tick = () => _runtime.Acoustics.Tick(0.016f);
+            Assert.Greater(CountAllocations(_tick), 0);
         }
 
         [UnityTest]
