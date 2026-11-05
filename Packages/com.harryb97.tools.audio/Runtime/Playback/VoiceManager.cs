@@ -36,7 +36,7 @@ namespace HarryTools.Audio {
         private readonly Pool<AudioVoice> pool;
         private readonly List<AudioVoice> voices = new List<AudioVoice>();
         private readonly List<AudioVoice> active = new List<AudioVoice>();
-        private readonly List<Pending> scratch = new List<Pending>();
+        private readonly List<List<Pending>> scratch = new List<List<Pending>>();
         private readonly Dictionary<AudioAsset, AssetState> states = new Dictionary<AudioAsset, AssetState>();
         private readonly System.Random rng = new System.Random();
         private int scratchDepth;
@@ -218,21 +218,21 @@ namespace HarryTools.Audio {
             float _lowest = float.MaxValue;
             for (int _i = 0; _i < active.Count; _i++) {
                 AudioVoice _voice = active[_i];
-                if (!ReferenceEquals(_voice.Asset, _asset) || _voice.EffectiveVolume >= _lowest) continue;
-                _lowest = _voice.EffectiveVolume;
+                if (!ReferenceEquals(_voice.Asset, _asset) || _voice.TargetVolume >= _lowest) continue;
+                _lowest = _voice.TargetVolume;
                 _found = _voice;
             }
             return _found;
         }
 
-        // Audibility score: Priority/100 × effective volume × estimated distance attenuation.
+        // Audibility score: Priority/100 × target volume (fade-in ignored, as for the new request) × estimated distance attenuation.
         private AudioVoice FindLowestScore(out float _lowest) {
             AudioVoice _found = null;
             _lowest = float.MaxValue;
             for (int _i = 0; _i < active.Count; _i++) {
                 AudioVoice _voice = active[_i];
                 if (_voice == null || _voice.Asset == null) continue;
-                float _score = _voice.Priority / 100f * _voice.EffectiveVolume * Attenuation(_voice.Asset.GetSpatial(), _voice.transform.position);
+                float _score = _voice.Priority / 100f * _voice.TargetVolume * Attenuation(_voice.Asset.GetSpatial(), _voice.transform.position);
                 if (_score >= _lowest) continue;
                 _lowest = _score;
                 _found = _voice;
@@ -261,7 +261,11 @@ namespace HarryTools.Audio {
         }
 
         // A nested Tick/StopAll (from an Ended callback) gets its own list so the outer iteration is not disturbed.
-        private List<Pending> RentScratch() => scratchDepth++ == 0 ? scratch : new List<Pending>();
+        // Lists are kept per nesting depth and reused, so nesting only allocates the first time a depth is reached.
+        private List<Pending> RentScratch() {
+            if (scratchDepth == scratch.Count) scratch.Add(new List<Pending>());
+            return scratch[scratchDepth++];
+        }
 
         private void ReturnScratch(List<Pending> _list) {
             _list.Clear();

@@ -140,5 +140,34 @@ namespace HarryTools.Audio.Tests {
             int _count = CountAllocations(_tick);
             Assert.AreEqual(0, _count, "The voice tick allocated managed memory.");
         }
+
+        [UnityTest]
+        public IEnumerator Play_WithoutPosition_SteadyState_ZeroGC() {
+            Action _run = () => { for (int _i = 0; _i < Plays; _i++) Audio.Play(sound).Stop(0f); };
+            for (int _i = 0; _i < 10; _i++) _run();
+            yield return null;
+            int _count = CountAllocations(_run);
+            Assert.AreEqual(0, _count, "Audio.Play following the listener allocated managed memory.");
+        }
+
+        [UnityTest]
+        public IEnumerator NestedStopAll_FromOnEnded_ZeroGC() {
+            var _other = ScriptableObject.CreateInstance<SoundAsset>();
+            _other.SetClips(new[] { new ClipEntry(sound.Clips[0].Clip) });
+            created.Add(_other);
+            Action<AudioHandle> _nested = _ => Audio.Stop(_other, 0f);
+            Vector3 _position = Vector3.one;
+            Action _run = () => {
+                for (int _i = 0; _i < Plays; _i++) {
+                    Audio.Play(_other, _position);
+                    Audio.Play(sound, _position).OnEnded(_nested);
+                    Audio.StopAll();
+                }
+            };
+            for (int _i = 0; _i < 10; _i++) _run();
+            yield return null;
+            int _count = CountAllocations(_run);
+            Assert.AreEqual(0, _count, "A StopAll nested in an OnEnded callback allocated managed memory.");
+        }
     }
 }

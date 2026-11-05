@@ -58,8 +58,10 @@ namespace HarryTools.Audio {
         public float Pitch { get; private set; }
         public bool UserPaused { get; private set; }
         public bool IsFadingOut => fadingOut;
-        /// <summary> Current volume including fades, the handle multiplier and the bus multiplier. Used to pick voices to steal. </summary>
+        /// <summary> Current volume including fades, the handle multiplier and the bus multiplier. </summary>
         public float EffectiveVolume { get; private set; }
+        /// <summary> Level the voice is heading to: base × handle volume × fade-out × bus, ignoring fade-in. Used to pick voices to steal, so a voice that is still fading in is not treated as silent. </summary>
+        public float TargetVolume { get; private set; }
         public Action<AudioHandle> EndedCallback { get; set; }
 
         // ==================== SETUP ===================
@@ -164,10 +166,11 @@ namespace HarryTools.Audio {
         }
 
         public void UpdateVolume(float _busMultiplier, bool _multiplyOnSource) {
-            float _fade = 1f;
-            if (fadeInDuration > 0f) _fade = Mathf.Clamp01(fadeInElapsed / fadeInDuration);
-            if (fadingOut) _fade *= Mathf.Clamp01(fadeOutRemaining / fadeOutDuration);
-            float _local = BaseVolume * _fade * handleVolume;
+            float _fadeIn = fadeInDuration > 0f ? Mathf.Clamp01(fadeInElapsed / fadeInDuration) : 1f;
+            float _fadeOut = fadingOut ? Mathf.Clamp01(fadeOutRemaining / fadeOutDuration) : 1f;
+            float _target = BaseVolume * handleVolume * _fadeOut;
+            float _local = _target * _fadeIn;
+            TargetVolume = _target * _busMultiplier;
             EffectiveVolume = _local * _busMultiplier;
             source.volume = _multiplyOnSource ? EffectiveVolume : _local;
         }
@@ -234,11 +237,7 @@ namespace HarryTools.Audio {
 
         void IPoolable.OnReleaseToPool() {
             IsActive = false;
-            if (source != null) {
-                source.Stop();
-                source.clip = null;
-                source.outputAudioMixerGroup = null;
-            }
+            ResetComponents();
             Asset = null;
             followTarget = null;
             following = false;
@@ -246,9 +245,41 @@ namespace HarryTools.Audio {
             UserPaused = false;
             fadingOut = false;
             EffectiveVolume = 0f;
+            TargetVolume = 0f;
         }
 
         // ==================== PRIVATE ===================
+        // Back to a clean AudioSource and disabled filters, whatever the last playback (or an effect) changed.
+        private void ResetComponents() {
+            if (source != null) {
+                source.Stop();
+                source.clip = null;
+                source.outputAudioMixerGroup = null;
+                source.loop = false;
+                source.pitch = 1f;
+                source.volume = 1f;
+                source.mute = false;
+                source.panStereo = 0f;
+                source.reverbZoneMix = 1f;
+                source.priority = 128;
+                source.ignoreListenerPause = false;
+                source.ignoreListenerVolume = false;
+                source.bypassEffects = false;
+                source.bypassListenerEffects = false;
+                source.bypassReverbZones = false;
+                source.spatialBlend = 0f;
+                source.rolloffMode = AudioRolloffMode.Logarithmic;
+                source.minDistance = 1f;
+                source.maxDistance = 500f;
+                source.spread = 0f;
+                source.dopplerLevel = 1f;
+            }
+            if (lowPass != null) lowPass.enabled = false;
+            if (highPass != null) highPass.enabled = false;
+            if (distortion != null) distortion.enabled = false;
+            if (echo != null) echo.enabled = false;
+        }
+
         // Delay plus the clip length at the current pitch, measured from Begin.
         private float EstimatedDuration => delay + clipLength / Mathf.Max(0.01f, Mathf.Abs(Pitch));
     }

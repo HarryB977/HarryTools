@@ -35,7 +35,15 @@ namespace HarryTools.Audio {
         /// <summary> The live runtime, created on first use. Null outside Play mode or while the application quits. </summary>
         internal static AudioRuntime Runtime {
             get {
-                if (runtime == null) Create(null);
+                if (Live == null) Create(null);
+                return runtime;
+            }
+        }
+
+        // The runtime if its host object is still alive. A host destroyed from outside shuts the runtime down so the next use rebuilds it.
+        private static AudioRuntime Live {
+            get {
+                if (runtime != null && !runtime.IsHostAlive) Shutdown();
                 return runtime;
             }
         }
@@ -47,11 +55,18 @@ namespace HarryTools.Audio {
         public static Transform Listener => Runtime?.ListenerTracker.Listener;
 
         // ==================== PLAY ===================
+        /// <summary> Plays the sound at the listener, following it (world origin when there is no listener). </summary>
         public static AudioHandle Play(SoundRef _sound) => Resolve(_sound, out SoundAsset _asset) ? Play(_asset) : AudioHandle.Invalid;
         public static AudioHandle Play(SoundRef _sound, Vector3 _position) => Resolve(_sound, out SoundAsset _asset) ? Play(_asset, _position) : AudioHandle.Invalid;
         public static AudioHandle Play(SoundRef _sound, Transform _follow) => Resolve(_sound, out SoundAsset _asset) ? Play(_asset, _follow) : AudioHandle.Invalid;
 
-        public static AudioHandle Play(SoundAsset _sound) => Start(new PlaybackRequest(_sound, Vector3.zero));
+        /// <summary> Plays the sound at the listener, following it (world origin when there is no listener). </summary>
+        public static AudioHandle Play(SoundAsset _sound) {
+            if (_sound == null) return AudioHandle.Invalid;
+            AudioRuntime _runtime = Runtime;
+            Transform _listener = _runtime != null ? _runtime.ListenerTracker.Listener : null;
+            return Start(new PlaybackRequest(_sound, Vector3.zero, _listener));
+        }
         public static AudioHandle Play(SoundAsset _sound, Vector3 _position) => Start(new PlaybackRequest(_sound, _position));
         public static AudioHandle Play(SoundAsset _sound, Transform _follow) => Start(new PlaybackRequest(_sound, Vector3.zero, _follow));
 
@@ -59,19 +74,19 @@ namespace HarryTools.Audio {
         /// <summary> Stops every instance of the sound. A negative fade uses the asset FadeOut; 0 stops at once. </summary>
         public static void Stop(SoundAsset _sound, float _fade = -1f) {
             if (_sound == null) return;
-            runtime?.Voices.StopAll(_sound, _fade);
+            Live?.Voices.StopAll(_sound, _fade);
         }
 
         /// <summary> Stops every sound. A negative fade uses each asset FadeOut. </summary>
-        public static void StopAll(float _fade = 0f) => runtime?.Voices.StopAll(null, _fade);
+        public static void StopAll(float _fade = 0f) => Live?.Voices.StopAll(null, _fade);
 
         // ==================== VOLUME ===================
-        /// <summary> Sets the linear volume (0..1) of a bus and saves it to the store. </summary>
+        /// <summary> Sets the linear volume (0..1) of a bus. Saved to the store 0.5 s after the last change (and on shutdown). </summary>
         public static void SetVolume(AudioBus _bus, float _linear) {
             AudioRuntime _runtime = Runtime;
             if (_runtime == null) return;
             _runtime.Mixer.SetVolume(_bus, _linear);
-            _runtime.Save();
+            _runtime.MarkVolumesChanged();
         }
 
         public static float GetVolume(AudioBus _bus) {
@@ -79,12 +94,12 @@ namespace HarryTools.Audio {
             return _runtime != null ? _runtime.Mixer.GetVolume(_bus) : 1f;
         }
 
-        /// <summary> Mutes or unmutes a bus without losing its volume, and saves it to the store. </summary>
+        /// <summary> Mutes or unmutes a bus without losing its volume. Saved like SetVolume. </summary>
         public static void SetMuted(AudioBus _bus, bool _muted) {
             AudioRuntime _runtime = Runtime;
             if (_runtime == null) return;
             _runtime.Mixer.SetMuted(_bus, _muted);
-            _runtime.Save();
+            _runtime.MarkVolumesChanged();
         }
 
         public static bool IsMuted(AudioBus _bus) {

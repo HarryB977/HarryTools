@@ -373,10 +373,12 @@ namespace HarryTools.Audio.Tests {
         }
 
         [Test]
-        public void Volume_IsSavedAndRestoredOnNextRuntime() {
+        public void Volume_PendingSaveIsFlushedOnShutdown_AndRestoredOnNextRuntime() {
             Audio.SetVolume(AudioBus.Voice, 0.3f);
             Audio.SetMuted(AudioBus.UI, true);
+            Assert.IsFalse(PlayerPrefs.HasKey(TestKey));
             Audio.InitializeForTests(settings);
+            Assert.IsTrue(PlayerPrefs.HasKey(TestKey), "Disposing the runtime must flush the pending save.");
             Assert.AreEqual(0.3f, Audio.GetVolume(AudioBus.Voice), 0.0001f);
             Assert.IsTrue(Audio.IsMuted(AudioBus.UI));
         }
@@ -418,6 +420,147 @@ namespace HarryTools.Audio.Tests {
             } finally {
                 AudioCatalog.Active = null;
             }
+        }
+
+        [Test]
+        public void PoolFull_FadingInHighPriority_NotStolenByLowPriority() {
+            SoundAsset _high = MakeSound(3f, 90);
+            _high.SetFades(1f, 0f);
+            var _highs = new AudioHandle[4];
+            for (int _i = 0; _i < 4; _i++) _highs[_i] = Audio.Play(_high);
+            Assert.IsFalse(Audio.Play(MakeSound(3f, 10)).IsValid, "A voice still fading in must be scored by its target level.");
+            for (int _i = 0; _i < 4; _i++) Assert.IsTrue(_highs[_i].IsValid);
+        }
+
+        [Test]
+        public void StealQuietest_WithFadeIn_StealsQuietestTarget() {
+            SoundAsset _sound = MakeSound(3f);
+            _sound.SetFades(1f, 0f);
+            _sound.SetLimits(0f, 2, InstanceLimitPolicy.StealQuietest);
+            AudioHandle _loud = Audio.Play(_sound);
+            AudioHandle _quiet = Audio.Play(_sound).WithVolume(0.2f, 0.2f);
+            AudioHandle _third = Audio.Play(_sound);
+            Assert.IsTrue(_loud.IsValid);
+            Assert.IsFalse(_quiet.IsValid);
+            Assert.IsTrue(_third.IsValid);
+        }
+
+        [Test]
+        public void Listener_SkipsDisabledAudioListener() {
+            listener.GetComponent<AudioListener>().enabled = false;
+            var _enabled = new GameObject("Enabled Listener", typeof(AudioListener));
+            try {
+                Audio.InitializeForTests(settings);
+                Assert.AreSame(_enabled.transform, Audio.Listener);
+            } finally {
+                Object.DestroyImmediate(_enabled);
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator PlayWithoutPosition_FollowsListener() {
+            listener.transform.position = new Vector3(2f, 1f, 0f);
+            SoundAsset _sound = MakeSound(3f);
+            _sound.SetSpatial(SpatialSettings.Default3D);
+            AudioHandle _handle = Audio.Play(_sound);
+            Assert.AreEqual(new Vector3(2f, 1f, 0f), VoiceOf(_handle).transform.position);
+            listener.transform.position = new Vector3(-4f, 0f, 3f);
+            yield return null;
+            yield return null;
+            Assert.AreEqual(new Vector3(-4f, 0f, 3f), VoiceOf(_handle).transform.position);
+        }
+
+        [UnityTest]
+        public IEnumerator ThrowingSubscribers_DoNotBreakPlayOrRelease() {
+            Action<AudioHandle> _throwStarted = _ => throw new InvalidOperationException("started subscriber");
+            Action<AudioHandle> _throwEnded = _ => throw new InvalidOperationException("ended subscriber");
+            Audio.Started += _throwStarted;
+            Audio.Ended += _throwEnded;
+            try {
+                LogAssert.Expect(LogType.Exception, new System.Text.RegularExpressions.Regex("started subscriber"));
+                LogAssert.Expect(LogType.Exception, new System.Text.RegularExpressions.Regex("started subscriber"));
+                SoundAsset _sound = MakeSound(0.1f);
+                AudioHandle _a = Audio.Play(_sound);
+                AudioHandle _b = Audio.Play(_sound);
+                Assert.IsTrue(_a.IsValid);
+                Assert.IsTrue(_b.IsValid);
+
+                LogAssert.Expect(LogType.Exception, new System.Text.RegularExpressions.Regex("ended subscriber"));
+                LogAssert.Expect(LogType.Exception, new System.Text.RegularExpressions.Regex("ended subscriber"));
+                yield return WaitFor(() => Audio.Runtime.Voices.ActiveVoices.Count == 0, 2f);
+                Assert.IsFalse(_a.IsValid);
+                Assert.IsFalse(_b.IsValid);
+                Assert.AreEqual(0, Audio.Runtime.Voices.ActiveVoices.Count);
+            } finally {
+                Audio.Started -= _throwStarted;
+                Audio.Ended -= _throwEnded;
+            }
+        }
+
+        [Test]
+        public void ReusedVoice_IsResetByRelease() {
+            AudioHandle _first = Audio.Play(MakeSound(3f));
+            AudioVoice _voice = VoiceOf(_first);
+            AudioSource _source = _voice.Source;
+            _source.mute = true;
+            _source.panStereo = 0.5f;
+            _source.reverbZoneMix = 0.3f;
+            _source.ignoreListenerPause = true;
+            _source.bypassEffects = true;
+            _source.bypassListenerEffects = true;
+            _source.bypassReverbZones = true;
+            _voice.LowPass.enabled = true;
+            _voice.HighPass.enabled = true;
+            _voice.Distortion.enabled = true;
+            _voice.Echo.enabled = true;
+            _first.Stop(0f);
+
+            Assert.IsNull(_source.clip);
+            Assert.IsFalse(_source.loop);
+            Assert.AreEqual(1f, _source.pitch);
+            Assert.AreEqual(1f, _source.volume);
+            Assert.AreEqual(0f, _source.spatialBlend);
+
+            AudioHandle _second = Audio.Play(MakeSound(3f));
+            Assert.AreEqual(_first.VoiceIndex, _second.VoiceIndex, "The released voice should be reused.");
+            Assert.IsFalse(_source.mute);
+            Assert.AreEqual(0f, _source.panStereo);
+            Assert.AreEqual(1f, _source.reverbZoneMix);
+            Assert.IsFalse(_source.ignoreListenerPause);
+            Assert.IsFalse(_source.bypassEffects);
+            Assert.IsFalse(_source.bypassListenerEffects);
+            Assert.IsFalse(_source.bypassReverbZones);
+            Assert.IsFalse(_voice.LowPass.enabled);
+            Assert.IsFalse(_voice.HighPass.enabled);
+            Assert.IsFalse(_voice.Distortion.enabled);
+            Assert.IsFalse(_voice.Echo.enabled);
+        }
+
+        [Test]
+        public void HostDestroyedExternally_NextCallRebuildsRuntime() {
+            AudioRuntime _old = Audio.Runtime;
+            Object.DestroyImmediate(_old.Host);
+            AudioHandle _handle = Audio.Play(MakeSound(3f), Vector3.zero);
+            Assert.IsTrue(_handle.IsValid);
+            Assert.AreNotSame(_old, Audio.Runtime);
+            Assert.IsTrue(_old.IsDisposed);
+            Assert.IsNotNull(Audio.Runtime.Host);
+            Assert.IsTrue(LoopSystem.HasLoop("HarryTools.Audio"));
+        }
+
+        [UnityTest]
+        public IEnumerator SetVolume_SaveIsDebounced() {
+            Audio.SetVolume(AudioBus.SFX, 0.2f);
+            Audio.SetVolume(AudioBus.SFX, 0.4f);
+            Assert.IsFalse(PlayerPrefs.HasKey(TestKey), "Saving must wait for the debounce.");
+            Assert.IsTrue(Audio.Runtime.HasPendingSave);
+            yield return new WaitForSecondsRealtime(0.25f);
+            Assert.IsFalse(PlayerPrefs.HasKey(TestKey));
+            yield return WaitFor(() => PlayerPrefs.HasKey(TestKey), 2f);
+            Assert.IsTrue(PlayerPrefs.HasKey(TestKey));
+            Assert.IsFalse(Audio.Runtime.HasPendingSave);
+            AudioVolumeData _saved = JsonUtility.FromJson<AudioVolumeData>(PlayerPrefs.GetString(TestKey));
+            Assert.AreEqual(0.4f, _saved.Volumes[(int)AudioBus.SFX], 0.0001f);
         }
 
         [Test]

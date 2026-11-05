@@ -15,6 +15,8 @@ namespace HarryTools.Audio {
         // ==================== VARIABLES ===================
         public const string LoopId = "HarryTools.Audio";
         public const string HostName = "HarryTools Audio";
+        /// <summary> Seconds without volume changes before they are saved. </summary>
+        public const float SaveDelay = 0.5f;
 
         private static readonly int BusCount = Enum.GetValues(typeof(AudioBus)).Length;
 
@@ -25,6 +27,8 @@ namespace HarryTools.Audio {
         private readonly Action<AudioHandle> onStarted;
         private readonly Action<AudioHandle> onEnded;
         private bool disposed;
+        private bool saveDirty;
+        private float lastChangeTime;
 
         // ==================== CONSTRUCTOR ===================
         public AudioRuntime(AudioProjectSettings _settings, Action<AudioHandle> _onStarted, Action<AudioHandle> _onEnded) {
@@ -61,6 +65,12 @@ namespace HarryTools.Audio {
         public AudioListenerTracker ListenerTracker { get; }
         public IAudioSettingsStore Store { get; private set; }
         public bool IsDisposed => disposed;
+        /// <summary> False when the host object was destroyed from outside; the runtime must then be rebuilt. </summary>
+        public bool IsHostAlive => host != null;
+        /// <summary> The "HarryTools Audio" object that owns the voices. </summary>
+        public GameObject Host => host;
+        /// <summary> True while a volume change is waiting to be saved. </summary>
+        public bool HasPendingSave => saveDirty;
 
         /// <summary> True when bus volumes must be multiplied on the audio sources: no mixer on this platform or none assigned. </summary>
         public bool MultiplyOnSources => !AudioPlatform.UsesMixer || Settings.Mixer == null;
@@ -80,15 +90,34 @@ namespace HarryTools.Audio {
             LoadFromStore().Forget();
         }
 
-        /// <summary> Saves the current bus volumes to the store. </summary>
-        public void Save() => Store.Save(Mixer.Capture()).Forget();
+        /// <summary> Schedules a save: the tick writes the volumes once SaveDelay seconds pass without another change. </summary>
+        public void MarkVolumesChanged() {
+            saveDirty = true;
+            lastChangeTime = Time.unscaledTime;
+        }
 
-        public void RaiseStarted(AudioHandle _handle) => onStarted?.Invoke(_handle);
-        public void RaiseEnded(AudioHandle _handle) => onEnded?.Invoke(_handle);
+        /// <summary> Saves the current bus volumes to the store now, if a change is pending. </summary>
+        public void FlushSave() {
+            if (!saveDirty) return;
+            saveDirty = false;
+            Store.Save(Mixer.Capture()).Forget();
+        }
+
+        // A throwing subscriber must not abort the release loop of a tick or make Play throw after the voice started.
+        public void RaiseStarted(AudioHandle _handle) {
+            if (onStarted == null) return;
+            try { onStarted(_handle); } catch (Exception _exception) { Debug.LogException(_exception); }
+        }
+
+        public void RaiseEnded(AudioHandle _handle) {
+            if (onEnded == null) return;
+            try { onEnded(_handle); } catch (Exception _exception) { Debug.LogException(_exception); }
+        }
 
         public void Dispose() {
             if (disposed) return;
             disposed = true;
+            FlushSave();
             if (LoopSystem.TryGetLoop(LoopId, out ILoopable _registered) && _registered == loop) LoopSystem.RemoveLoop(LoopId);
             loop.RemoveUpdateListener(tick);
             Voices.Dispose();
@@ -102,6 +131,7 @@ namespace HarryTools.Audio {
         private void Tick() {
             if (disposed) return;
             Voices.Tick(Time.unscaledDeltaTime);
+            if (saveDirty && Time.unscaledTime - lastChangeTime >= SaveDelay) FlushSave();
         }
 
         private void ReadBusGroups() {
