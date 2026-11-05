@@ -86,7 +86,7 @@ namespace HarryTools.Audio {
         public static void Resume() => Live?.Voices.SetPaused(false);
         public static bool IsPaused => Live != null && runtime.Voices.IsPaused;
 
-        /// <summary> Pauses the sounds of a bus (Master pauses every bus). Combines with the global pause. </summary>
+        /// <summary> Pauses the sounds of a bus. Pausing Master pauses every bus; IsBusPaused and Resume of another bus neither reflect nor lift it. Combines with the global pause. </summary>
         public static void Pause(AudioBus _bus) => Runtime?.Voices.SetBusPaused(_bus, true);
         public static void Resume(AudioBus _bus) => Live?.Voices.SetBusPaused(_bus, false);
         public static bool IsBusPaused(AudioBus _bus) => Live != null && runtime.Voices.IsBusPaused(_bus);

@@ -206,6 +206,41 @@ namespace HarryTools.Audio.Tests {
         }
 
         [UnityTest]
+        public IEnumerator HandlePause_SurvivesGlobalResume() {
+            AudioHandle _handle = Audio.Play(MakeSound(3f));
+            yield return null;
+            _handle.Pause();
+            Audio.Pause();
+            Audio.Resume();
+            yield return null;
+            Assert.IsTrue(_handle.IsPaused);
+            Assert.IsFalse(VoiceOf(_handle).Source.isPlaying);
+            _handle.Resume();
+            yield return null;
+            Assert.IsTrue(_handle.IsPlaying);
+        }
+
+        [UnityTest]
+        public IEnumerator Stop_WithFade_OnTimePausedVoice_ReleasesAtOnce() {
+            SoundAsset _sound = MakeSound(3f, _followTimeScale: true);
+            _sound.SetFades(0f, 1f);
+            AudioHandle _handle = Audio.Play(_sound);
+            yield return null;
+            Time.timeScale = 0f;
+            yield return null;
+            _handle.Stop(0.5f);
+            Assert.IsFalse(_handle.IsValid);
+        }
+
+        [Test]
+        public void BusPause_InvalidBus_IsIgnored() {
+            var _bad = (AudioBus)99;
+            Assert.DoesNotThrow(() => Audio.Pause(_bad));
+            Assert.DoesNotThrow(() => Audio.Resume(_bad));
+            Assert.IsFalse(Audio.IsBusPaused(_bad));
+        }
+
+        [UnityTest]
         public IEnumerator PausedByBus_DoesNotEnd() {
             AudioHandle _handle = Audio.Play(MakeSound(0.1f, AudioBus.Music));
             Audio.Pause(AudioBus.Music);
@@ -337,6 +372,37 @@ namespace HarryTools.Audio.Tests {
             Rebuild(new DuckingRule(AudioBus.Voice, AudioBus.Music, -6f, 0.05f, 0.1f));
             Audio.Play(MakeSound(3f, AudioBus.Voice));
             Audio.Pause();
+            yield return WaitReal(0.3f);
+            Assert.AreEqual(0f, MusicOffsetDb, 0.01f);
+        }
+
+        [UnityTest]
+        public IEnumerator Ducking_TimePausedTriggerVoice_Releases() {
+            Rebuild(new DuckingRule(AudioBus.Voice, AudioBus.Music, -6f, 0.05f, 0.1f));
+            Audio.Play(MakeSound(3f, AudioBus.Voice, _followTimeScale: true));
+            yield return WaitFor(() => MusicOffsetDb < -5.9f, 1f);
+            Assert.AreEqual(-6f, MusicOffsetDb, 0.05f);
+            Time.timeScale = 0f;
+            yield return WaitReal(0.4f);
+            Assert.AreEqual(0f, MusicOffsetDb, 0.01f);
+        }
+
+        [UnityTest]
+        public IEnumerator Ducking_ListenerPausedTriggerVoice_Releases() {
+            Rebuild(new DuckingRule(AudioBus.Voice, AudioBus.Music, -6f, 0.05f, 0.1f));
+            Audio.Play(MakeSound(3f, AudioBus.Voice));
+            yield return WaitFor(() => MusicOffsetDb < -5.9f, 1f);
+            AudioListener.pause = true;
+            yield return WaitReal(0.4f);
+            Assert.AreEqual(0f, MusicOffsetDb, 0.01f);
+        }
+
+        [UnityTest]
+        public IEnumerator Ducking_VoiceInDelay_DoesNotDuck() {
+            Rebuild(new DuckingRule(AudioBus.Voice, AudioBus.Music, -6f, 0.05f, 0.1f));
+            SoundAsset _sound = MakeSound(1f, AudioBus.Voice);
+            _sound.SetDelay(1f);
+            Audio.Play(_sound);
             yield return WaitReal(0.3f);
             Assert.AreEqual(0f, MusicOffsetDb, 0.01f);
         }

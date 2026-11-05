@@ -31,7 +31,7 @@ namespace HarryTools.Audio {
         // ==================== VARIABLES ===================
         // Not reset on reload on purpose: generations keep growing across runtimes, so a handle from a previous runtime never matches a new voice.
         private static int generationSeed;
-        private static readonly int BusCount = Enum.GetValues(typeof(AudioBus)).Length;
+        private static readonly int BusCount = BusMixer.BusCount;
 
         private readonly AudioRuntime runtime;
         private readonly Pool<AudioVoice> pool;
@@ -140,7 +140,7 @@ namespace HarryTools.Audio {
         public void Stop(AudioVoice _voice, float _fade) {
             if (_voice == null || !_voice.IsActive) return;
             if (_fade < 0f) _fade = _voice.Asset != null ? _voice.Asset.FadeOut : 0f;
-            if (_fade <= 0f || _voice.IsPaused) Release(_voice);
+            if (_fade <= 0f || _voice.IsFrozen) Release(_voice);
             else _voice.BeginFadeOut(_fade);
         }
 
@@ -165,9 +165,10 @@ namespace HarryTools.Audio {
             RefreshPause();
         }
 
-        public bool IsBusPaused(AudioBus _bus) => busPaused[(int)_bus];
+        public bool IsBusPaused(AudioBus _bus) => (uint)_bus < (uint)BusCount && busPaused[(int)_bus];
 
         public void SetBusPaused(AudioBus _bus, bool _paused) {
+            if ((uint)_bus >= (uint)BusCount) return;
             busPaused[(int)_bus] = _paused;
             RefreshPause();
         }

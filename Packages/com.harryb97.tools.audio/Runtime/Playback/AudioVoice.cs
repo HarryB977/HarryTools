@@ -64,6 +64,10 @@ namespace HarryTools.Audio {
         public bool UserPaused { get; private set; }
         /// <summary> Paused by the handle or by Audio.Pause (global or bus). Not by the time-scale pause. </summary>
         public bool IsPaused => UserPaused || systemPaused;
+        /// <summary> Not advancing: paused, paused by the time scale, or paused by AudioListener.pause. </summary>
+        public bool IsFrozen => IsPaused || timePaused || (AudioListener.pause && !source.ignoreListenerPause);
+        /// <summary> True while the PlayDelayed delay has not elapsed yet (nothing is audible). </summary>
+        public bool InDelay => elapsed < delay;
         public bool IsFadingOut => fadingOut;
         /// <summary> Current volume including fades, the handle multiplier and the bus multiplier. </summary>
         public float EffectiveVolume { get; private set; }
@@ -155,7 +159,7 @@ namespace HarryTools.Audio {
             if (followTimeScale && !timePaused) ApplyPitch();
 
             // Paused voices (explicitly, by bus, by time scale or by AudioListener.pause) do not advance and never end.
-            if (UserPaused || systemPaused || timePaused || (AudioListener.pause && !source.ignoreListenerPause)) {
+            if (IsFrozen) {
                 UpdateVolume(_busMultiplier, _multiplyOnSource);
                 return false;
             }

@@ -18,7 +18,7 @@ namespace HarryTools.Audio {
         /// <summary> Seconds without volume changes before they are saved. </summary>
         public const float SaveDelay = 0.5f;
 
-        private static readonly int BusCount = Enum.GetValues(typeof(AudioBus)).Length;
+        private static readonly int BusCount = BusMixer.BusCount;
 
         private readonly GameObject host;
         private readonly ILoopable loop;

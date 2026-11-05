@@ -5,7 +5,7 @@ namespace HarryTools.Audio {
     /// <summary> Per-bus volume, mute and ducking. Writes to the mixer, or exposes a multiplier for the audio sources when there is no mixer. </summary>
     internal sealed class BusMixer {
         // ==================== VARIABLES ===================
-        private static readonly int BusCount = System.Enum.GetValues(typeof(AudioBus)).Length;
+        internal static readonly int BusCount = System.Enum.GetValues(typeof(AudioBus)).Length;
 
         private readonly AudioProjectSettings settings;
         private readonly float[] volumes = new float[BusCount];

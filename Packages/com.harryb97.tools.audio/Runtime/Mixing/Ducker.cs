@@ -8,7 +8,7 @@ namespace HarryTools.Audio {
     /// </summary>
     internal sealed class Ducker {
         // ==================== VARIABLES ===================
-        private static readonly int BusCount = System.Enum.GetValues(typeof(AudioBus)).Length;
+        private static readonly int BusCount = BusMixer.BusCount;
 
         private readonly DuckingRule[] rules;
         private readonly float[] current;
@@ -44,7 +44,7 @@ namespace HarryTools.Audio {
             IReadOnlyList<AudioVoice> _active = _voices.ActiveVoices;
             for (int _i = 0; _i < _active.Count; _i++) {
                 AudioVoice _voice = _active[_i];
-                if (_voice == null || _voice.IsPaused) continue;
+                if (_voice == null || _voice.IsFrozen || _voice.InDelay) continue;
                 triggerActive[(int)_voice.Bus] = true;
             }
 
