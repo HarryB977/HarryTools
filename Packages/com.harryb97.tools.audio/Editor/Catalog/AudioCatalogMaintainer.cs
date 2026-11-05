@@ -42,8 +42,10 @@ namespace HarryTools.Audio.Editor {
         }
 
         // ==================== INTERNAL ===================
-        /// <summary> The catalog the maintainer updates. Task 4 redirects this to the project settings. </summary>
+        /// <summary> The catalog of the project settings. Falls back to the first catalog found only when the project has no settings. </summary>
         internal static AudioCatalog FindTargetCatalog() {
+            AudioProjectSettings _settings = AudioSettingsProvider.FindSettings();
+            if (_settings != null) return _settings.Catalog;
             string[] _guids = AssetDatabase.FindAssets("t:AudioCatalog");
             if (_guids.Length == 0) return null;
             return AssetDatabase.LoadAssetAtPath<AudioCatalog>(AssetDatabase.GUIDToAssetPath(_guids[0]));
@@ -68,7 +70,7 @@ namespace HarryTools.Audio.Editor {
             for (int _i = 0; _i < _paths.Length; _i++) {
                 if (!_paths[_i].EndsWith(".asset", StringComparison.OrdinalIgnoreCase)) continue;
                 Type _type = AssetDatabase.GetMainAssetTypeAtPath(_paths[_i]);
-                if (_type != null && typeof(AudioCatalogItem).IsAssignableFrom(_type)) return true;
+                if (_type != null && (typeof(AudioCatalogItem).IsAssignableFrom(_type) || typeof(AudioCatalog).IsAssignableFrom(_type))) return true;
             }
             return false;
         }

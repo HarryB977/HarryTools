@@ -10,10 +10,18 @@ namespace HarryTools.Audio {
         // ==================== VARIABLES ===================
         [SerializeField] private List<AudioCatalogItem> items = new List<AudioCatalogItem>();
         [NonSerialized] private Dictionary<string, AudioCatalogItem> lookup;
+        [ClearOnReload] private static AudioCatalog active;
 
         // ==================== PROPERTIES ===================
-        /// <summary> Catalog used to resolve asset references at runtime. </summary>
-        [field: ClearOnReload] internal static AudioCatalog Active { get; set; }
+        /// <summary> Catalog used to resolve asset references at runtime: the one set explicitly, else the catalog of the project settings. </summary>
+        internal static AudioCatalog Active {
+            get {
+                if (active != null) return active;
+                AudioProjectSettings _settings = AudioProjectSettings.Instance;
+                return _settings != null ? _settings.Catalog : null;
+            }
+            set => active = value;
+        }
 
         public IReadOnlyList<AudioCatalogItem> Items => items;
 

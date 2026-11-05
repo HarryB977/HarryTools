@@ -137,8 +137,16 @@ namespace HarryTools.Audio.Editor {
         }
 
         // ==================== INTERNAL ===================
-        /// <summary> Single source of the generator settings. Task 4 redirects this to the project settings. </summary>
-        internal static Options GetOptions() => new Options { Root = DefaultRoot, OutputPath = DefaultPath, Namespace = string.Empty };
+        /// <summary> Single source of the generator settings: the project settings, or defaults when the project has none. </summary>
+        internal static Options GetOptions() {
+            AudioProjectSettings _settings = AudioSettingsProvider.FindSettings();
+            if (_settings == null) return new Options { Root = DefaultRoot, OutputPath = DefaultPath, Namespace = string.Empty };
+            return new Options {
+                Root = string.IsNullOrEmpty(_settings.CategoryRootFolder) ? DefaultRoot : _settings.CategoryRootFolder,
+                OutputPath = string.IsNullOrEmpty(_settings.GeneratedFilePath) ? DefaultPath : _settings.GeneratedFilePath,
+                Namespace = _settings.GeneratedNamespace ?? string.Empty,
+            };
+        }
 
         // ==================== EDITOR HOOKS ===================
         [InitializeOnLoadMethod]
