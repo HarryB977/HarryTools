@@ -49,6 +49,7 @@ namespace HarryTools.Audio {
             AudioVoice _template = AudioVoice.CreateTemplate(host.transform);
             Voices = new VoiceManager(this, _template, host.transform, _settings.MaxVoices, _settings.PrewarmVoices);
             Music = new MusicChannel(this, host.transform);
+            VoiceChannel = new VoiceChannel(this);
 
             tick = Tick;
             if (LoopSystem.HasLoop(LoopId)) LoopSystem.RemoveLoop(LoopId);
@@ -65,6 +66,8 @@ namespace HarryTools.Audio {
         public BusMixer Mixer { get; }
         public VoiceManager Voices { get; }
         public MusicChannel Music { get; }
+        /// <summary> Voice lines, emitter queues and conversations. Null until the constructor creates it. </summary>
+        public VoiceChannel VoiceChannel { get; }
         public AudioListenerTracker ListenerTracker { get; }
         public Ducker Ducker { get; }
         public IAudioSettingsStore Store { get; private set; }
@@ -124,6 +127,7 @@ namespace HarryTools.Audio {
             FlushSave();
             if (LoopSystem.TryGetLoop(LoopId, out ILoopable _registered) && _registered == loop) LoopSystem.RemoveLoop(LoopId);
             loop.RemoveUpdateListener(tick);
+            VoiceChannel.Dispose();
             Voices.Dispose();
             Music.Dispose();
             Ducker.Reset();
@@ -137,6 +141,7 @@ namespace HarryTools.Audio {
         private void Tick() {
             if (disposed) return;
             Voices.Tick(Time.unscaledDeltaTime);
+            VoiceChannel.Tick();
             Music.Tick(Time.unscaledDeltaTime);
             Ducker.Tick(Time.unscaledDeltaTime, Voices);
             if (saveDirty && Time.unscaledTime - lastChangeTime >= SaveDelay) FlushSave();

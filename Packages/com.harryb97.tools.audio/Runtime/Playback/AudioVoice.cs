@@ -55,6 +55,8 @@ namespace HarryTools.Audio {
 
         /// <summary> True between Begin and the release back to the pool. </summary>
         public bool IsActive { get; private set; }
+        /// <summary> Prepared by Begin but not started: a queued voice line waiting for its emitter. It does not advance, sound or end. </summary>
+        public bool IsReserved { get; private set; }
         public AudioAsset Asset { get; private set; }
         public AudioBus Bus { get; private set; }
         public int Priority { get; private set; }
@@ -65,7 +67,7 @@ namespace HarryTools.Audio {
         /// <summary> Paused by the handle or by Audio.Pause (global or bus). Not by the time-scale pause. </summary>
         public bool IsPaused => UserPaused || systemPaused;
         /// <summary> Not advancing: paused, paused by the time scale, or paused by AudioListener.pause. </summary>
-        public bool IsFrozen => IsPaused || timePaused || (AudioListener.pause && !source.ignoreListenerPause);
+        public bool IsFrozen => IsReserved || IsPaused || timePaused || (AudioListener.pause && !source.ignoreListenerPause);
         /// <summary> True while the PlayDelayed delay has not elapsed yet (nothing is audible). </summary>
         public bool InDelay => elapsed < delay;
         public bool IsFadingOut => fadingOut;
@@ -74,6 +76,16 @@ namespace HarryTools.Audio {
         /// <summary> Level the voice is heading to: base × handle volume × fade-out × bus, ignoring fade-in. Used to pick voices to steal, so a voice that is still fading in is not treated as silent. </summary>
         public float TargetVolume { get; private set; }
         public Action<AudioHandle> EndedCallback { get; set; }
+        /// <summary> Length of the current clip in seconds. </summary>
+        public float ClipLength => clipLength;
+
+        #region Effect cutoffs
+        // The cutoffs the effect preset asked for, kept apart from the filters so the acoustic modules can combine them with their own.
+        public bool HasEffectLowPass { get; private set; }
+        public float EffectLowPassCutoff { get; private set; }
+        public bool HasEffectHighPass { get; private set; }
+        public float EffectHighPassCutoff { get; private set; }
+        #endregion
 
         // ==================== SETUP ===================
         /// <summary> Caches the components. Called once when the pool creates the instance. </summary>
@@ -104,6 +116,7 @@ namespace HarryTools.Audio {
         // ==================== PLAYBACK ===================
         public void Begin(AudioAsset _asset, AudioClip _clip, Vector3 _position, Transform _follow, float _baseVolume, float _pitch, AudioMixerGroup _output) {
             IsActive = true;
+            IsReserved = false;
             Asset = _asset;
             Bus = _asset.Bus;
             Priority = _asset.Priority;
@@ -139,6 +152,23 @@ namespace HarryTools.Audio {
             SetPitch(_pitch);
         }
 
+        /// <summary> Marks the prepared voice as waiting: it is not started until Activate. </summary>
+        public void Reserve() => IsReserved = true;
+
+        /// <summary> Starts a reserved voice. The caller then applies the current pause state with RefreshPause. </summary>
+        public void Activate() {
+            if (!IsReserved) return;
+            IsReserved = false;
+            StartSource();
+        }
+
+        public void SetEffectCutoffs(bool _lowPass, float _lowPassCutoff, bool _highPass, float _highPassCutoff) {
+            HasEffectLowPass = _lowPass;
+            EffectLowPassCutoff = _lowPassCutoff;
+            HasEffectHighPass = _highPass;
+            EffectHighPassCutoff = _highPassCutoff;
+        }
+
         public void StartSource() {
             if (delay > 0f) source.PlayDelayed(delay);
             else source.Play();
@@ -153,6 +183,13 @@ namespace HarryTools.Audio {
                     following = false;
                     followTarget = null;
                 }
+            }
+
+            // A reserved voice only follows its target until it is activated.
+            if (IsReserved) {
+                systemPaused = _systemPaused;
+                UpdateVolume(_busMultiplier, _multiplyOnSource);
+                return false;
             }
 
             RefreshPause(_systemPaused);
@@ -264,7 +301,9 @@ namespace HarryTools.Audio {
 
         void IPoolable.OnReleaseToPool() {
             IsActive = false;
+            IsReserved = false;
             ResetComponents();
+            SetEffectCutoffs(false, 0f, false, 0f);
             Asset = null;
             followTarget = null;
             following = false;
@@ -283,6 +322,8 @@ namespace HarryTools.Audio {
 
         // Pauses or resumes the AudioSource when the combined pause state changed.
         private void SyncSource() {
+            // A reserved source never played: pausing or resuming it is left to Activate.
+            if (IsReserved) return;
             bool _paused = UserPaused || systemPaused || timePaused;
             if (_paused == sourcePaused) return;
             sourcePaused = _paused;

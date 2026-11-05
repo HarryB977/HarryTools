@@ -57,6 +57,9 @@ namespace HarryTools.Audio {
         /// <summary> The music channel: one track at a time with crossfades, intro and loop points. Null outside Play mode. </summary>
         public static MusicChannel Music => Runtime?.Music;
 
+        /// <summary> Voice lines and conversations, said through AudioEmitters or in 2D. Null outside Play mode. </summary>
+        public static VoiceChannel Voices => Runtime?.VoiceChannel;
+
         // ==================== PLAY ===================
         /// <summary> Plays the sound at the listener, following it (world origin when there is no listener). </summary>
         public static AudioHandle Play(SoundRef _sound) => Resolve(_sound, out SoundAsset _asset) ? Play(_asset) : AudioHandle.Invalid;

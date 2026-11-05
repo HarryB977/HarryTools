@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using HarryUtils.ObjectPool;
 using UnityEngine;
+using UnityEngine.Audio;
 
 namespace HarryTools.Audio {
     /// <summary>
@@ -93,10 +94,11 @@ namespace HarryTools.Audio {
                 return AudioHandle.Invalid;
             }
             Vector2 _pitchRange = _asset.PitchRange;
-            _voice.Begin(_asset, _clip, _position, _request.Follow, _baseVolume, UnityEngine.Random.Range(_pitchRange.x, _pitchRange.y), runtime.GetOutput(_asset));
+            AudioMixerGroup _output = runtime.GetOutput(_asset);
+            _voice.Begin(_asset, _clip, _position, _request.Follow, _baseVolume, UnityEngine.Random.Range(_pitchRange.x, _pitchRange.y), _output);
+            if (_request.Force2D) _voice.Source.spatialBlend = 0f;
+            if (!ReferenceEquals(_request.Effect, null)) EffectApplier.Apply(_voice, _request.Effect, _output);
             _voice.UpdateVolume(runtime.Mixer.GetSourceMultiplier(_voice.Bus), runtime.MultiplyOnSources);
-            _voice.StartSource();
-            _voice.RefreshPause(IsSystemPaused(_voice));
 
             active.Add(_voice);
             _state.ActiveCount++;
@@ -104,8 +106,23 @@ namespace HarryTools.Audio {
             _state.LastPlayTime = _now;
 
             var _handle = new AudioHandle(_voice.Index, _voice.Generation);
+            if (_request.Reserve) {
+                // Started later by Activate; Started is raised then.
+                _voice.Reserve();
+                return _handle;
+            }
+            _voice.StartSource();
+            _voice.RefreshPause(IsSystemPaused(_voice));
             runtime.RaiseStarted(_handle);
             return _handle;
+        }
+
+        /// <summary> Starts a voice taken with PlaybackRequest.Reserve and raises Started. </summary>
+        public void Activate(AudioVoice _voice) {
+            if (_voice == null || !_voice.IsActive || !_voice.IsReserved) return;
+            _voice.Activate();
+            _voice.RefreshPause(IsSystemPaused(_voice));
+            runtime.RaiseStarted(new AudioHandle(_voice.Index, _voice.Generation));
         }
 
         /// <summary> The voice of the handle. False when the handle is invalid or stale (its generation does not match). </summary>
@@ -129,7 +146,9 @@ namespace HarryTools.Audio {
                     if (_voice == null || _voice.Tick(_unscaledDelta, _mixer.GetSourceMultiplier(_voice.Bus), _onSource, IsSystemPaused(_voice))) _finished.Add(new Pending(_voice));
                 }
                 for (int _i = 0; _i < _finished.Count; _i++) {
-                    if (_finished[_i].Voice.Generation == _finished[_i].Generation) Release(_finished[_i].Voice);
+                    // Finishing without a fade-out is the natural end; a completed fade-out means it was stopped.
+                    AudioVoice _done = _finished[_i].Voice;
+                    if (_done.Generation == _finished[_i].Generation) Release(_done, !_done.IsFadingOut);
                 }
             } finally {
                 ReturnScratch(_finished);
@@ -151,8 +170,13 @@ namespace HarryTools.Audio {
                 for (int _i = 0; _i < active.Count; _i++) {
                     if (ReferenceEquals(_asset, null) || ReferenceEquals(active[_i].Asset, _asset)) _targets.Add(new Pending(active[_i]));
                 }
-                for (int _i = 0; _i < _targets.Count; _i++) {
-                    if (_targets[_i].Voice.Generation == _targets[_i].Generation) Stop(_targets[_i].Voice, _fade);
+                // Reserved voices (queued lines) first, so stopping a current line does not start a queued one that is about to be stopped.
+                for (int _pass = 0; _pass < 2; _pass++) {
+                    for (int _i = 0; _i < _targets.Count; _i++) {
+                        AudioVoice _voice = _targets[_i].Voice;
+                        if (_voice.IsReserved != (_pass == 0)) continue;
+                        if (_voice.Generation == _targets[_i].Generation) Stop(_voice, _fade);
+                    }
                 }
             } finally {
                 ReturnScratch(_targets);
@@ -221,10 +245,13 @@ namespace HarryTools.Audio {
             return _state;
         }
 
-        private void Release(AudioVoice _voice) {
+        // _natural: the sound played to its end (not stopped, faded out or stolen).
+        private void Release(AudioVoice _voice, bool _natural = false) {
             if (ReferenceEquals(_voice, null) || !_voice.IsActive) return;
             var _handle = new AudioHandle(_voice.Index, _voice.Generation);
             Action<AudioHandle> _callback = _voice.EndedCallback;
+            // A reserved voice never raised Started, so it does not raise Ended either.
+            bool _announced = !_voice.IsReserved;
 
             active.Remove(_voice);
             AudioAsset _asset = _voice.Asset;
@@ -236,7 +263,9 @@ namespace HarryTools.Audio {
             if (_callback != null) {
                 try { _callback(_handle); } catch (Exception _exception) { Debug.LogException(_exception); }
             }
-            runtime.RaiseEnded(_handle);
+            if (_announced) runtime.RaiseEnded(_handle);
+            // Last: the voice channel may start the next queued line of an emitter from here.
+            runtime.VoiceChannel?.OnVoiceReleased(_handle, _natural);
         }
 
         private AudioVoice FindOldest(AudioAsset _asset) {

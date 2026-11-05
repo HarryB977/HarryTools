@@ -169,5 +169,45 @@ namespace HarryTools.Audio.Tests {
             int _count = CountAllocations(_run);
             Assert.AreEqual(0, _count, "A StopAll nested in an OnEnded callback allocated managed memory.");
         }
+
+        [UnityTest]
+        public IEnumerator EmitterQueue_SteadyState_ZeroGC() {
+            var _speaker = ScriptableObject.CreateInstance<SpeakerAsset>();
+            var _line = ScriptableObject.CreateInstance<VoiceAsset>();
+            _line.SetClips(new[] { new ClipEntry(sound.Clips[0].Clip) });
+            _line.SetSpeaker(_speaker);
+            var _effect = ScriptableObject.CreateInstance<AudioEffectPreset>();
+            _effect.LowPass = true;
+            created.Add(_speaker);
+            created.Add(_line);
+            created.Add(_effect);
+            var _go = new GameObject("Emitter");
+            created.Add(_go);
+            var _emitter = _go.AddComponent<AudioEmitter>();
+            _emitter.Speaker = _speaker;
+            _emitter.Effect = _effect;
+            int _started = 0;
+            Action<VoiceLineInfo> _onStarted = _ => _started++;
+            Audio.Voices.LineStarted += _onStarted;
+            VoiceChannel _channel = Audio.Voices;
+
+            // Say two lines (the second is queued), stop the first so the queued one starts, then stop it.
+            Action _run = () => {
+                for (int _i = 0; _i < Plays; _i++) {
+                    AudioHandle _first = _emitter.Say(_line);
+                    AudioHandle _second = _emitter.Say(_line);
+                    _first.Stop(0f);
+                    _channel.Tick();
+                    _second.Stop(0f);
+                }
+            };
+            for (int _i = 0; _i < 10; _i++) _run();
+            yield return null;
+            _started = 0;
+            int _count = CountAllocations(_run);
+            Audio.Voices.LineStarted -= _onStarted;
+            Assert.AreEqual(2 * Plays, _started, "Both lines must start on every iteration.");
+            Assert.AreEqual(0, _count, "Saying, queueing and starting queued lines allocated managed memory.");
+        }
     }
 }

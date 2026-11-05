@@ -27,6 +27,7 @@ namespace HarryTools.Audio {
 
         // ==================== INTERNAL ===================
         internal void SetDisplayName(string _name) => displayName = _name;
+        internal void SetDefaultEffect(AudioEffectPreset _effect) => defaultEffect = _effect;
         internal void AddExtension(IAudioAssetExtension _extension) => extensions.Add(_extension);
     }
 }
