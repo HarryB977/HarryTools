@@ -32,6 +32,10 @@ namespace HarryTools.Audio {
             bagPos = count;
         }
 
+        // ==================== PROPERTIES ===================
+        /// <summary> False when the asset had no valid clip; Next() then always returns null. </summary>
+        public bool HasClips => count > 0;
+
         // ==================== PUBLIC ===================
         /// <summary> Next clip according to the selection mode, or null when there are no valid clips. </summary>
         public AudioClip Next() {

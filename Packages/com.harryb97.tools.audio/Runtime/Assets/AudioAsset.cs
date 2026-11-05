@@ -97,5 +97,19 @@ namespace HarryTools.Audio {
         internal void SetSelection(ClipSelection _selection) => selection = _selection;
         internal void SetSpatial(SpatialSettings _spatial) => spatial = _spatial;
         internal void SetSpatialProfile(SpatialProfile _profile) => spatialProfile = _profile;
+        internal void SetPriority(int _priority) => priority = Mathf.Clamp(_priority, 0, 100);
+        internal void SetBus(AudioBus _bus) => bus = _bus;
+        internal void SetDelay(float _delay) => delay = Mathf.Max(0f, _delay);
+        internal void SetVolumeRange(Vector2 _range) => volumeRange = _range;
+        internal void SetPitchRange(Vector2 _range) => pitchRange = _range;
+        internal void SetFades(float _fadeIn, float _fadeOut) {
+            fadeIn = Mathf.Max(0f, _fadeIn);
+            fadeOut = Mathf.Max(0f, _fadeOut);
+        }
+        internal void SetLimits(float _cooldown, int _maxInstances, InstanceLimitPolicy _policy) {
+            cooldown = Mathf.Max(0f, _cooldown);
+            maxInstances = Mathf.Max(0, _maxInstances);
+            limitPolicy = _policy;
+        }
     }
 }

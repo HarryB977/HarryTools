@@ -40,12 +40,20 @@ namespace HarryTools.Audio {
             Doppler = 1f
         };
 
+        // ==================== PROPERTIES ===================
+        /// <summary> True when CustomRolloff has at least one key. </summary>
+        public bool HasCustomCurve => CustomRolloff != null && CustomRolloff.length > 0;
+
         // ==================== PUBLIC ===================
         public void ApplyTo(AudioSource _source) {
             _source.spatialBlend = SpatialBlend;
-            _source.rolloffMode = Rolloff;
-            if (Rolloff == AudioRolloffMode.Custom && CustomRolloff != null)
+            // A custom rolloff without keys would silence the source: fall back to logarithmic.
+            if (Rolloff == AudioRolloffMode.Custom && HasCustomCurve) {
+                _source.rolloffMode = AudioRolloffMode.Custom;
                 _source.SetCustomCurve(AudioSourceCurveType.CustomRolloff, CustomRolloff);
+            } else {
+                _source.rolloffMode = Rolloff == AudioRolloffMode.Custom ? AudioRolloffMode.Logarithmic : Rolloff;
+            }
             _source.minDistance = MinDistance;
             _source.maxDistance = MaxDistance;
             _source.spread = Spread;

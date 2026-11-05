@@ -40,6 +40,7 @@ namespace HarryTools.Audio.Editor {
             EditorUtility.SetDirty(_settings);
             AssetDatabase.SaveAssets();
             AudioCatalogMaintainer.Rebuild(_catalog);
+            AudioProjectSettings.ResetCache();
             return _settings;
         }
 

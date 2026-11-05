@@ -67,5 +67,28 @@ namespace HarryTools.Audio.Tests {
             Assert.AreEqual(AudioBus.Voice, _voice.Bus);
             Assert.AreEqual(90, _voice.Priority);
         }
+
+        [Test]
+        public void ApplyTo_CustomRolloffWithoutKeys_FallsBackToLogarithmic() {
+            var _go = new GameObject("ApplyTo Test");
+            try {
+                var _source = _go.AddComponent<AudioSource>();
+                SpatialSettings _spatial = SpatialSettings.Default3D;
+                _spatial.Rolloff = AudioRolloffMode.Custom;
+                _spatial.CustomRolloff = new AnimationCurve();
+                _spatial.ApplyTo(_source);
+                Assert.AreEqual(AudioRolloffMode.Logarithmic, _source.rolloffMode);
+
+                _spatial.CustomRolloff = null;
+                _spatial.ApplyTo(_source);
+                Assert.AreEqual(AudioRolloffMode.Logarithmic, _source.rolloffMode);
+
+                _spatial.CustomRolloff = AnimationCurve.Linear(0f, 1f, 1f, 0f);
+                _spatial.ApplyTo(_source);
+                Assert.AreEqual(AudioRolloffMode.Custom, _source.rolloffMode);
+            } finally {
+                Object.DestroyImmediate(_go);
+            }
+        }
     }
 }

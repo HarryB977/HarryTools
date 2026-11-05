@@ -10,6 +10,7 @@ namespace HarryTools.Audio {
         private const string ResourcePath = "HarryTools/AudioProjectSettings";
 
         [ClearOnReload] private static AudioProjectSettings instance;
+        [ClearOnReload] private static bool loadAttempted;
 
         [Header("Mixer")]
         [Tooltip("Mixer with one exposed volume parameter per bus. Leave empty to multiply volumes on the audio sources instead.")]
@@ -55,10 +56,13 @@ namespace HarryTools.Audio {
         public string PersistenceKey = "HarryTools.Audio.Volumes";
 
         // ==================== PROPERTIES ===================
-        /// <summary> Settings loaded from Resources, or null when the project has none. </summary>
+        /// <summary> Settings loaded from Resources, or null when the project has none. A miss is cached until ResetCache. </summary>
         public static AudioProjectSettings Instance {
             get {
-                if (instance == null) instance = Resources.Load<AudioProjectSettings>(ResourcePath);
+                if (instance == null && !loadAttempted) {
+                    loadAttempted = true;
+                    instance = Resources.Load<AudioProjectSettings>(ResourcePath);
+                }
                 return instance;
             }
         }
@@ -67,6 +71,12 @@ namespace HarryTools.Audio {
         public IReadOnlyList<DuckingRule> Ducking => ducking;
 
         // ==================== INTERNAL ===================
+        /// <summary> Forgets the cached instance or miss so the next Instance call loads again (e.g. after the asset is created). </summary>
+        internal static void ResetCache() {
+            instance = null;
+            loadAttempted = false;
+        }
+
         internal void SetBuses(List<BusConfig> _buses) => buses = _buses;
         internal void SetDucking(List<DuckingRule> _ducking) => ducking = _ducking;
     }
