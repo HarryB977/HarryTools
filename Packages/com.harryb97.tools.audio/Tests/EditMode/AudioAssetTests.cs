@@ -90,5 +90,24 @@ namespace HarryTools.Audio.Tests {
                 Object.DestroyImmediate(_go);
             }
         }
+
+        [Test]
+        public void NewBusConfig_DefaultVolumeIsOne() {
+            Assert.AreEqual(1f, new BusConfig().DefaultVolume);
+        }
+
+        [Test]
+        public void Refs_NullAndEmptyId_AreEqual() {
+            Assert.IsTrue(default(SoundRef) == new SoundRef(""));
+            Assert.AreEqual(default(SoundRef).GetHashCode(), new SoundRef("").GetHashCode());
+            Assert.IsFalse(new SoundRef("").IsValid);
+            Assert.IsTrue(default(MusicRef) == new MusicRef(""));
+            Assert.AreEqual(default(MusicRef).GetHashCode(), new MusicRef("").GetHashCode());
+            Assert.IsTrue(default(VoiceRef) == new VoiceRef(""));
+            Assert.AreEqual(default(VoiceRef).GetHashCode(), new VoiceRef("").GetHashCode());
+            Assert.IsTrue(default(ConversationRef) == new ConversationRef(""));
+            Assert.AreEqual(default(ConversationRef).GetHashCode(), new ConversationRef("").GetHashCode());
+            Assert.IsFalse(new SoundRef("a") == new SoundRef(""));
+        }
     }
 }

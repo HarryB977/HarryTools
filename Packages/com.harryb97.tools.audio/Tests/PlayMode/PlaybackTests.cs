@@ -531,7 +531,11 @@ namespace HarryTools.Audio.Tests {
             _source.bypassListenerEffects = true;
             _source.bypassReverbZones = true;
             _voice.LowPass.enabled = true;
+            _voice.LowPass.cutoffFrequency = 800f;
+            _voice.LowPass.lowpassResonanceQ = 4f;
             _voice.HighPass.enabled = true;
+            _voice.HighPass.cutoffFrequency = 3000f;
+            _voice.HighPass.highpassResonanceQ = 4f;
             _voice.Distortion.enabled = true;
             _voice.Echo.enabled = true;
             _first.Stop(0f);
@@ -552,7 +556,11 @@ namespace HarryTools.Audio.Tests {
             Assert.IsFalse(_source.bypassListenerEffects);
             Assert.IsFalse(_source.bypassReverbZones);
             Assert.IsFalse(_voice.LowPass.enabled);
+            Assert.AreEqual(AcousticResult.NeutralLowPass, _voice.LowPass.cutoffFrequency, 1f);
+            Assert.AreEqual(1f, _voice.LowPass.lowpassResonanceQ, 0.001f);
             Assert.IsFalse(_voice.HighPass.enabled);
+            Assert.AreEqual(AcousticResult.NeutralHighPass, _voice.HighPass.cutoffFrequency, 0.1f);
+            Assert.AreEqual(1f, _voice.HighPass.highpassResonanceQ, 0.001f);
             Assert.IsFalse(_voice.Distortion.enabled);
             Assert.IsFalse(_voice.Echo.enabled);
         }

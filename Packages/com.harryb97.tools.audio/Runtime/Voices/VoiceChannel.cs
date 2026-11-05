@@ -13,8 +13,8 @@ namespace HarryTools.Audio {
     /// Queued lines hold a reserved voice from the pool: it is prepared (clip, emitter, effect) but not started until its turn.
     /// The reservation counts toward MaxInstances and starts the Cooldown of the asset at queue time. A reserved voice can be
     /// stolen like any other; the queued line is then dropped without LineStarted or LineEnded.
-    /// If the emitter is destroyed or disabled, its current line ends at the last position and its queued lines look for
-    /// another active emitter of their speaker, else play in 2D, still one at a time.
+    /// If the emitter is destroyed, its current line ends at the last position; if it is only disabled, the current line keeps
+    /// following it. Either way its queued lines look for another active emitter of their speaker, else play in 2D, still one at a time.
     /// </summary>
     public sealed class VoiceChannel {
         private enum LineState : byte {
@@ -97,7 +97,7 @@ namespace HarryTools.Audio {
             if (_current >= 0 || FindFirstQueued(_emitter) >= 0) {
                 if (_emitter.BusyPolicy == EmitterBusyPolicy.Queue) return StartLine(_voice, _emitter, true);
                 // Interrupt: the queued lines keep waiting behind the new one.
-                if (_current >= 0) EndLine(_current, true, InterruptFade, false);
+                if (_current >= 0) EndLine(_current, true, true, InterruptFade, false);
             }
             return StartLine(_voice, _emitter, false);
         }
@@ -111,21 +111,22 @@ namespace HarryTools.Audio {
 
         /// <summary>
         /// Plays the lines in order. Each one is said by the active emitter of its speaker at that moment (else 2D) and is followed by its
-        /// PauseAfter, in unscaled seconds that do not count while Audio (or the bus of the line) is paused. The first line starts at once.
+        /// PauseAfter, in unscaled seconds that do not count while Audio (or the bus of the line) or AudioListener is paused, unless the
+        /// line ignores pause. The first line starts at once.
         /// </summary>
         public ConversationHandle Play(ConversationAsset _conversation) => Conversations.Start(_conversation);
 
-        /// <summary> Stops every conversation and every voice line, queued ones included. </summary>
+        /// <summary> Stops every conversation and every voice line, queued ones included. A negative fade uses each asset FadeOut. </summary>
         public void StopAll(float _fade = 0.1f) {
             // Queued lines first, so stopping a current line (of a conversation or not) does not start the next one.
             for (int _i = lines.Count - 1; _i >= 0; _i--) {
                 if (_i >= lines.Count || lines[_i].State != LineState.Queued) continue;
-                EndLine(_i, true, 0f, false);
+                EndLine(_i, true, true, 0f, false);
             }
             Conversations.StopAll(_fade);
             for (int _i = lines.Count - 1; _i >= 0; _i--) {
                 if (_i >= lines.Count) continue;
-                EndLine(_i, true, _fade, false);
+                EndLine(_i, true, true, _fade, false);
             }
         }
 
@@ -133,11 +134,11 @@ namespace HarryTools.Audio {
         /// <summary> True while the emitter has a line started (in its delay or audible). Queued lines do not count. </summary>
         internal bool IsSpeaking(AudioEmitter _emitter) => !ReferenceEquals(_emitter, null) && FindCurrent(_emitter) >= 0;
 
-        /// <summary> Stops a line with the fade, raising LineEnded (interrupted) if it was audible, and moves its emitter queue on. </summary>
+        /// <summary> Stops a line with the fade (negative: the asset FadeOut), raising LineEnded (interrupted) if it was audible, and moves its emitter queue on. </summary>
         internal void StopLine(AudioHandle _handle, float _fade) {
             int _index = Find(_handle);
             if (_index >= 0) {
-                EndLine(_index, true, _fade, true);
+                EndLine(_index, true, true, _fade, true);
                 return;
             }
             if (runtime.Voices.TryGetVoice(_handle, out AudioVoice _voice)) runtime.Voices.Stop(_voice, _fade);
@@ -146,7 +147,7 @@ namespace HarryTools.Audio {
         /// <summary> Called by VoiceManager after it released a voice. _natural: it played to its end. </summary>
         internal void OnVoiceReleased(AudioHandle _handle, bool _natural) {
             int _index = Find(_handle);
-            if (_index >= 0) EndLine(_index, !_natural, -1f, true);
+            if (_index >= 0) EndLine(_index, !_natural, false, 0f, true);
         }
 
         /// <summary> Raises LineStarted for lines whose delay ended, and ends the lines that started fading out (stopped through their handle). </summary>
@@ -157,12 +158,12 @@ namespace HarryTools.Audio {
                 if (_line.State == LineState.Queued) continue;
                 if (!_voices.TryGetVoice(_line.Handle, out AudioVoice _voice)) {
                     // Released without notice (should not happen): end it as finished.
-                    EndLine(_i, false, -1f, true);
+                    EndLine(_i, false, false, 0f, true);
                     _i = -1;
                     continue;
                 }
                 if (_voice.IsFadingOut) {
-                    EndLine(_i, true, -1f, true);
+                    EndLine(_i, true, false, 0f, true);
                     _i = -1;
                     continue;
                 }
@@ -212,11 +213,12 @@ namespace HarryTools.Audio {
             return _handle;
         }
 
-        // Removes the line. _fade >= 0 also stops its voice; LineEnded is raised if it was audible; _advance starts the next queued line of its emitter.
-        private void EndLine(int _index, bool _interrupted, float _fade, bool _advance) {
+        // Removes the line. _stopVoice also stops its voice with _fade (negative: the asset FadeOut); false leaves the voice alone (it is
+        // already released or fading out). LineEnded is raised if it was audible; _advance starts the next queued line of its emitter.
+        private void EndLine(int _index, bool _interrupted, bool _stopVoice, float _fade, bool _advance) {
             Line _line = lines[_index];
             lines.RemoveAt(_index);
-            if (_fade >= 0f && runtime.Voices.TryGetVoice(_line.Handle, out AudioVoice _voice)) runtime.Voices.Stop(_voice, _fade);
+            if (_stopVoice && runtime.Voices.TryGetVoice(_line.Handle, out AudioVoice _voice)) runtime.Voices.Stop(_voice, _fade);
             if (_line.State == LineState.Sounding) RaiseEnded(Info(_line), _interrupted);
             if (_advance && _line.State != LineState.Queued && !ReferenceEquals(_line.Key, null)) Advance(_line.Key);
         }

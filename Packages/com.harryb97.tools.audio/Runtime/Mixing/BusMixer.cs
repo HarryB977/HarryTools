@@ -20,6 +20,7 @@ namespace HarryTools.Audio {
             if (_settings == null) return;
             IReadOnlyList<BusConfig> _buses = _settings.Buses;
             for (int _i = 0; _i < _buses.Count; _i++) {
+                if (_buses[_i] == null) continue;
                 int _index = (int)_buses[_i].Bus;
                 if ((uint)_index >= (uint)BusCount) continue;
                 volumes[_index] = Mathf.Clamp01(_buses[_i].DefaultVolume);

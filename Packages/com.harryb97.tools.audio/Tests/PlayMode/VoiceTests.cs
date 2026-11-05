@@ -54,6 +54,7 @@ namespace HarryTools.Audio.Tests {
 
         [TearDown]
         public void TearDown() {
+            AudioListener.pause = false;
             VoiceChannel _channel = Audio.Current?.VoiceChannel;
             if (_channel != null) {
                 _channel.LineStarted -= onStarted;
@@ -513,6 +514,114 @@ namespace HarryTools.Audio.Tests {
             Audio.Resume(AudioBus.Voice);
             yield return WaitFor(() => started.Count > 1, 2f);
             Assert.AreEqual(2, started.Count);
+            yield return WaitFor(() => !_handle.IsPlaying, 2f);
+        }
+
+        [UnityTest]
+        public IEnumerator ConversationStop_NegativeFade_StopsVoice() {
+            SpeakerAsset _speaker = MakeSpeaker("A");
+            VoiceAsset _voice = MakeVoice(_speaker, 2f, false);
+            _voice.SetFades(0f, 0.1f);
+            ConversationHandle _handle = Audio.Voices.Play(MakeConversation(
+                new ConversationLine { Voice = _voice },
+                new ConversationLine { Voice = MakeVoice(_speaker, 2f, false) }));
+            AudioHandle _line = started[0].Handle;
+            yield return new WaitForSecondsRealtime(0.1f);
+
+            _handle.Stop(-1f);
+            Assert.IsFalse(_handle.IsPlaying);
+            Assert.AreEqual(1, ended.Count);
+            Assert.IsTrue(endedInterrupted[0]);
+            yield return WaitFor(() => !_line.IsValid, 1f);
+            Assert.IsFalse(_line.IsValid, "A negative fade must stop the voice with the asset FadeOut.");
+            Assert.AreEqual(1, started.Count);
+        }
+
+        [UnityTest]
+        public IEnumerator VoicesStopAll_NegativeFade_StopsVoices() {
+            SpeakerAsset _speaker = MakeSpeaker("A");
+            AudioEmitter _emitter = MakeEmitter(_speaker, Vector3.zero);
+            AudioHandle _current = _emitter.Say(MakeVoice(_speaker, 2f));
+            AudioHandle _queued = _emitter.Say(MakeVoice(_speaker, 2f));
+            AudioHandle _flat = Audio.Voices.Play(MakeVoice(MakeSpeaker("B"), 2f, false));
+            Assert.IsTrue(_current.IsValid);
+            Assert.IsTrue(_flat.IsValid);
+
+            Audio.Voices.StopAll(-1f);
+            Assert.IsFalse(_queued.IsValid);
+            yield return WaitFor(() => !_current.IsValid && !_flat.IsValid, 1f);
+            Assert.IsFalse(_current.IsValid, "A negative fade must stop the emitter line.");
+            Assert.IsFalse(_flat.IsValid, "A negative fade must stop the 2D line.");
+            Assert.AreEqual(2, started.Count, "The queued line never starts.");
+        }
+
+        [UnityTest]
+        public IEnumerator AudioStopAll_StopsConversations() {
+            SpeakerAsset _speaker = MakeSpeaker("A");
+            ConversationHandle _handle = Audio.Voices.Play(MakeConversation(
+                new ConversationLine { Voice = MakeVoice(_speaker, 2f, false) },
+                new ConversationLine { Voice = MakeVoice(_speaker, 2f, false) }));
+            AudioHandle _line = started[0].Handle;
+            yield return new WaitForSecondsRealtime(0.1f);
+
+            Audio.StopAll();
+            Assert.IsFalse(_line.IsValid);
+            Assert.IsFalse(_handle.IsPlaying, "Audio.StopAll stops conversations too.");
+            yield return new WaitForSecondsRealtime(0.3f);
+            Assert.AreEqual(1, started.Count, "No line plays after Audio.StopAll.");
+            Assert.AreEqual(1, ended.Count);
+        }
+
+        [Test]
+        public void PoolFull_DistantHighPriorityLine_NotStolenByNearLowPrioritySfx() {
+            Rebuild(1);
+            SpeakerAsset _speaker = MakeSpeaker("Far");
+            MakeEmitter(_speaker, new Vector3(20f, 0f, 0f));
+            VoiceAsset _voice = MakeVoice(_speaker, 2f);
+            _voice.SetPriority(90);
+            AudioHandle _line = Audio.Voices.Play(_voice);
+            Assert.IsTrue(_line.IsValid);
+
+            var _sound = ScriptableObject.CreateInstance<SoundAsset>();
+            _sound.SetClips(new[] { new ClipEntry(MakeClip(2f)) });
+            _sound.SetSpatial(SpatialSettings.Default3D);
+            _sound.SetPriority(50);
+            created.Add(_sound);
+
+            // The line scores ~0.045 (far away) and the sound 0.5, but a lower priority never steals a higher one.
+            Assert.IsFalse(Audio.Play(_sound, listener.transform.position).IsValid);
+            Assert.IsTrue(_line.IsValid);
+        }
+
+        [UnityTest]
+        public IEnumerator Conversation_PauseAfter_WaitsWhileListenerPaused() {
+            SpeakerAsset _speaker = MakeSpeaker("A");
+            ConversationHandle _handle = Audio.Voices.Play(MakeConversation(
+                new ConversationLine { Voice = MakeVoice(_speaker, 0.1f, false), PauseAfter = 0.3f },
+                new ConversationLine { Voice = MakeVoice(_speaker, 0.1f, false) }));
+            yield return WaitFor(() => ended.Count > 0, 2f);
+            AudioListener.pause = true;
+            yield return new WaitForSecondsRealtime(0.5f);
+            Assert.AreEqual(1, started.Count, "PauseAfter must not count while AudioListener.pause is set.");
+            AudioListener.pause = false;
+            yield return WaitFor(() => started.Count > 1, 2f);
+            Assert.AreEqual(2, started.Count);
+            yield return WaitFor(() => !_handle.IsPlaying, 2f);
+        }
+
+        [UnityTest]
+        public IEnumerator Conversation_PauseAfter_IgnorePauseLine_CountsWhileListenerPaused() {
+            SpeakerAsset _speaker = MakeSpeaker("A");
+            VoiceAsset _first = MakeVoice(_speaker, 0.1f, false);
+            _first.SetPauseOptions(true, false);
+            ConversationHandle _handle = Audio.Voices.Play(MakeConversation(
+                new ConversationLine { Voice = _first, PauseAfter = 0.2f },
+                new ConversationLine { Voice = MakeVoice(_speaker, 0.1f, false) }));
+            yield return WaitFor(() => ended.Count > 0, 2f);
+            AudioListener.pause = true;
+            yield return WaitFor(() => started.Count > 1, 1f);
+            Assert.AreEqual(2, started.Count, "A line with IgnorePause keeps its PauseAfter counting.");
+            AudioListener.pause = false;
             yield return WaitFor(() => !_handle.IsPlaying, 2f);
         }
     }

@@ -33,7 +33,7 @@ namespace HarryTools.Audio {
         public int MaxVoices = 32;
         [Min(0), Tooltip("Voices created up front.")]
         public int PrewarmVoices = 16;
-        [Min(1), Tooltip("Maximum number of voices sounding at the same time.")]
+        [Min(1), Tooltip("Voices the acoustic modules simulate per tick (does not limit playback).")]
         public int MaxSimulated = 10;
 
         [Header("Mix")]

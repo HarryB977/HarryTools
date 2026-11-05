@@ -98,8 +98,17 @@ namespace HarryTools.Audio {
             Live?.Voices.StopAll(_sound, _fade);
         }
 
-        /// <summary> Stops every sound. A negative fade uses each asset FadeOut. </summary>
-        public static void StopAll(float _fade = 0f) => Live?.Voices.StopAll(null, _fade);
+        /// <summary>
+        /// Stops every sound, voice line and conversation (queued lines included). Music keeps playing: stop it with Music.Stop.
+        /// A negative fade uses each asset FadeOut.
+        /// </summary>
+        public static void StopAll(float _fade = 0f) {
+            AudioRuntime _runtime = Live;
+            if (_runtime == null) return;
+            // Lines and conversations first, so a stopped line neither starts the next queued line nor lets its conversation go on.
+            _runtime.VoiceChannel.StopAll(_fade);
+            _runtime.Voices.StopAll(null, _fade);
+        }
 
         // ==================== PAUSE ===================
         /// <summary> Pauses every sound whose asset does not have IgnorePause. Does not touch AudioListener.pause. </summary>

@@ -29,6 +29,7 @@ namespace HarryTools.Audio {
         private bool disposed;
         private bool saveDirty;
         private float lastChangeTime;
+        private bool appliedOnFirstTick;
 
         // ==================== CONSTRUCTOR ===================
         public AudioRuntime(AudioProjectSettings _settings, Action<AudioHandle> _onStarted, Action<AudioHandle> _onEnded) {
@@ -142,6 +143,11 @@ namespace HarryTools.Audio {
         // ==================== PRIVATE ===================
         private void Tick() {
             if (disposed) return;
+            // The runtime is built before the first scene loads, and the mixer snapshot can overwrite the bus volumes written then.
+            if (!appliedOnFirstTick) {
+                appliedOnFirstTick = true;
+                Mixer.Apply();
+            }
             // Before the voices: they apply the smoothed acoustic volume in the same tick.
             Acoustics.Tick(Time.unscaledDeltaTime);
             Voices.Tick(Time.unscaledDeltaTime);
@@ -154,6 +160,7 @@ namespace HarryTools.Audio {
         private void ReadBusGroups() {
             IReadOnlyList<BusConfig> _buses = Settings.Buses;
             for (int _i = 0; _i < _buses.Count; _i++) {
+                if (_buses[_i] == null) continue;
                 int _index = (int)_buses[_i].Bus;
                 if ((uint)_index < (uint)BusCount) busGroups[_index] = _buses[_i].Group;
             }

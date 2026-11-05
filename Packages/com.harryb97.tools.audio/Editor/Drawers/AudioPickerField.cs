@@ -165,8 +165,9 @@ namespace HarryTools.Audio.Editor {
         }
 
         // The dropdown outlives the drawer call, so it edits through a fresh SerializedObject (keeps Undo and multi-object editing).
+        // In Play mode the item is not saved with a new id: the reference takes the id it already has.
         private static void Assign(UnityEngine.Object[] _targets, string _path, bool _isRef, AudioCatalogItem _selected) {
-            if (_selected != null && _isRef) AudioIdAssigner.EnsureId(_selected);
+            if (_selected != null && _isRef && !EditorApplication.isPlayingOrWillChangePlaymode) AudioIdAssigner.EnsureId(_selected);
             using (var _object = new SerializedObject(_targets)) {
                 SerializedProperty _property = _object.FindProperty(_path);
                 if (_property == null) return;
@@ -187,7 +188,7 @@ namespace HarryTools.Audio.Editor {
             if (_event.type != EventType.DragPerform) return;
             DragAndDrop.AcceptDrag();
             if (_refId != null) {
-                AudioIdAssigner.EnsureId(_dropped);
+                if (!EditorApplication.isPlayingOrWillChangePlaymode) AudioIdAssigner.EnsureId(_dropped);
                 _refId.stringValue = _dropped.Id;
             } else _property.objectReferenceValue = _dropped;
             GUI.changed = true;

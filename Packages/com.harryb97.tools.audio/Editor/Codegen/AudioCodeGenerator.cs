@@ -158,6 +158,10 @@ namespace HarryTools.Audio.Editor {
         [MenuItem("Tools/HarryTools/Audio/Regenerate Ids")]
         private static void RegenerateMenu() => Regenerate();
 
+        // Regenerating writes assets and a script: not while playing.
+        [MenuItem("Tools/HarryTools/Audio/Regenerate Ids", true)]
+        private static bool CanRegenerate() => !EditorApplication.isPlayingOrWillChangePlaymode;
+
         // ==================== PRIVATE ===================
         private static int CompareEntries(Entry _a, Entry _b) {
             int _result = _a.Root.CompareTo(_b.Root);

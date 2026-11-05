@@ -28,9 +28,10 @@ namespace HarryTools.Audio {
             return _catalog.TryGet(id, out _asset);
         }
 
-        public bool Equals(MusicRef _other) => string.Equals(id, _other.id, StringComparison.Ordinal);
+        /// <summary> Null and empty ids are the same (no reference). </summary>
+        public bool Equals(MusicRef _other) => string.Equals(id ?? string.Empty, _other.id ?? string.Empty, StringComparison.Ordinal);
         public override bool Equals(object _obj) => _obj is MusicRef _other && Equals(_other);
-        public override int GetHashCode() => id == null ? 0 : id.GetHashCode();
+        public override int GetHashCode() => string.IsNullOrEmpty(id) ? 0 : id.GetHashCode();
         public override string ToString() => id ?? string.Empty;
 
         public static bool operator ==(MusicRef _a, MusicRef _b) => _a.Equals(_b);

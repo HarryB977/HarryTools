@@ -7,7 +7,8 @@ namespace HarryTools.Audio {
     /// <summary>
     /// Runs conversations: one async loop per conversation that says each line through VoiceChannel (the emitter of its speaker,
     /// else 2D), waits for it to end and then waits PauseAfter in unscaled seconds that only count while Audio is not paused
-    /// (globally, through the bus of the line or through Master). Conversations live in reusable slots addressed by
+    /// (globally, through the bus of the line or through Master) and AudioListener.pause is off. A line whose asset has IgnorePause
+    /// counts its PauseAfter regardless, as its voice keeps playing. Conversations live in reusable slots addressed by
     /// ConversationHandle (slot + generation).
     /// </summary>
     internal sealed class ConversationRunner {
@@ -94,12 +95,11 @@ namespace HarryTools.Audio {
                         _slot.Line = AudioHandle.Invalid;
                     }
 
-                    AudioBus _bus = _line.Voice != null ? _line.Voice.Bus : AudioBus.Voice;
                     float _remaining = _line.PauseAfter;
                     while (_remaining > 0f) {
                         await UniTask.Yield(PlayerLoopTiming.Update);
                         if (!IsCurrent(_slot, _generation)) return;
-                        if (!IsPaused(_bus)) _remaining -= Time.unscaledDeltaTime;
+                        if (!IsPaused(_line.Voice)) _remaining -= Time.unscaledDeltaTime;
                     }
                 }
                 if (IsCurrent(_slot, _generation)) Finish(_slot);
@@ -111,7 +111,11 @@ namespace HarryTools.Audio {
 
         private bool IsCurrent(Slot _slot, int _generation) => !disposed && _slot.Alive && _slot.Generation == _generation;
 
-        private bool IsPaused(AudioBus _bus) {
+        // Same rule as the voices: Audio.Pause (global, bus of the line or Master) and AudioListener.pause, unless the line ignores pause.
+        private bool IsPaused(VoiceAsset _voice) {
+            if (_voice != null && _voice.IgnorePause) return false;
+            if (AudioListener.pause) return true;
+            AudioBus _bus = _voice != null ? _voice.Bus : AudioBus.Voice;
             VoiceManager _voices = runtime.Voices;
             return _voices.IsPaused || _voices.IsBusPaused(_bus) || _voices.IsBusPaused(AudioBus.Master);
         }

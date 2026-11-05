@@ -81,7 +81,7 @@ namespace HarryTools.Audio {
             AudioVoice _voice = pool.Get();
             if (_voice == null) {
                 float _score = _asset.Priority / 100f * _baseVolume * runtime.Mixer.GetSourceMultiplier(_asset.Bus) * (_request.Force2D ? 1f : Attenuation(_asset.GetSpatial(), _position));
-                AudioVoice _victim = FindLowestScore(out float _lowest);
+                AudioVoice _victim = FindLowestScore(_asset.Priority, out float _lowest);
                 if (_victim == null || _lowest >= _score) return AudioHandle.Invalid;
                 Release(_victim);
                 _voice = pool.Get();
@@ -287,13 +287,14 @@ namespace HarryTools.Audio {
             return _found;
         }
 
-        // Audibility score: Priority/100 × target volume (fade-in ignored, as for the new request) × estimated distance attenuation.
-        private AudioVoice FindLowestScore(out float _lowest) {
+        // Steal candidate with the lowest audibility score: Priority/100 × target volume (fade-in ignored, as for the new request) × estimated
+        // distance attenuation. Only voices whose priority is not above the request's can be stolen, however quiet or far they are.
+        private AudioVoice FindLowestScore(int _maxPriority, out float _lowest) {
             AudioVoice _found = null;
             _lowest = float.MaxValue;
             for (int _i = 0; _i < active.Count; _i++) {
                 AudioVoice _voice = active[_i];
-                if (_voice == null || _voice.Asset == null) continue;
+                if (_voice == null || _voice.Asset == null || _voice.Priority > _maxPriority) continue;
                 float _score = AudibilityScore(_voice);
                 if (_score >= _lowest) continue;
                 _lowest = _score;

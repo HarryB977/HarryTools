@@ -66,6 +66,8 @@ El mixer es opcional: si no hay, el volumen se multiplica en cada `AudioSource`.
 
 Los sonidos, músicas y voces comparten estos ajustes: selección de clip (Random, RandomNoRepeat, Shuffle, Sequence), rango de volumen y pitch aleatorios, delay, **Cooldown**, **Max Instances** con su política (StealOldest, StealQuietest, Ignore), prioridad, bus, salida de mixer propia, ajustes espaciales, loop, FadeIn/FadeOut, *Ignore Pause* y *Follow Time Scale*.
 
+Con el pool lleno, un sonido nuevo quita la voz menos audible (prioridad × volumen × atenuación estimada por distancia) entre las de prioridad igual o menor a la suya, y solo si es menos audible que él; si no, no suena. Una voz de prioridad mayor nunca se quita, por lejos que esté.
+
 ### IDs y clase generada
 
 Cada asset recibe un ID estable. Si lo duplicas con Ctrl+D, el duplicado recibe uno nuevo y el original no cambia. El editor mantiene el catálogo y genera un fichero de ids (por defecto `Assets/HarryTools/Audio/AudioIds.g.cs`) con las clases `Sounds`, `Music`, `Voices` y `Conversations`, agrupadas por subcarpeta:
@@ -102,7 +104,7 @@ await h.WaitForEnd(token);
 
 Audio.Started += _h => { };  Audio.Ended += _h => { };
 Audio.Stop(Sounds.Ambience.Wind);
-Audio.StopAll(0.5f);
+Audio.StopAll(0.5f);      // sonidos, voces y conversaciones; la música sigue (Audio.Music.Stop)
 ```
 
 `IsValid`, `IsPlaying`, `IsPaused` y `Asset` consultan el estado actual. Si el transform que sigue un sonido se destruye, el sonido continúa en su última posición y termina con normalidad.
@@ -138,11 +140,11 @@ c.Stop();
 int linea = c.CurrentLine;
 
 Audio.Voices.LineStarted += _info => { };
-Audio.Voices.LineEnded += (_info, _completed) => { };
+Audio.Voices.LineEnded += (_info, _interrupted) => { };
 Audio.Voices.StopAll();
 ```
 
-- Una conversación reproduce sus líneas en orden, con la `PauseAfter` de cada una. Esa pausa no cuenta mientras el audio (o el bus Voice) está en pausa.
+- Una conversación reproduce sus líneas en orden, con la `PauseAfter` de cada una. Esa pausa no cuenta mientras el audio (o el bus de la línea) o `AudioListener.pause` están en pausa, salvo que la voz tenga *Ignore Pause*.
 - Las líneas en cola reservan una voz del pool: dimensiona **Max Voices** teniendo en cuenta las conversaciones que puedan estar activas a la vez.
 - Si a una línea en cola le roban su voz, se descarta sin lanzar eventos.
 - La reserva cuenta para `MaxInstances` y arranca el `Cooldown` del asset.

@@ -387,8 +387,17 @@ namespace HarryTools.Audio {
                 source.spread = 0f;
                 source.dopplerLevel = 1f;
             }
-            if (lowPass != null) lowPass.enabled = false;
-            if (highPass != null) highPass.enabled = false;
+            // Neutral cutoffs and resonance: an acoustic module that later enables a filter only writes the cutoff.
+            if (lowPass != null) {
+                lowPass.enabled = false;
+                lowPass.cutoffFrequency = AcousticResult.NeutralLowPass;
+                lowPass.lowpassResonanceQ = 1f;
+            }
+            if (highPass != null) {
+                highPass.enabled = false;
+                highPass.cutoffFrequency = AcousticResult.NeutralHighPass;
+                highPass.highpassResonanceQ = 1f;
+            }
             if (distortion != null) distortion.enabled = false;
             if (echo != null) echo.enabled = false;
         }

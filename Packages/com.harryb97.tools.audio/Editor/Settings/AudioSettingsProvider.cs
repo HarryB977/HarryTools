@@ -19,10 +19,10 @@ namespace HarryTools.Audio.Editor {
         /// <summary> The settings asset if the project has one; never creates it. </summary>
         internal static AudioProjectSettings FindSettings() => AssetDatabase.LoadAssetAtPath<AudioProjectSettings>(SettingsPath);
 
-        /// <summary> The settings asset, created with a default catalog and mixer when missing. </summary>
+        /// <summary> The settings asset, created with a default catalog and mixer when missing. Never creates assets in Play mode (returns null then). </summary>
         internal static AudioProjectSettings GetOrCreateSettings() {
             var _settings = FindSettings();
-            if (_settings != null) return _settings;
+            if (_settings != null || EditorApplication.isPlayingOrWillChangePlaymode) return _settings;
 
             EnsureFolder(Path.GetDirectoryName(SettingsPath).Replace('\\', '/'));
             _settings = ScriptableObject.CreateInstance<AudioProjectSettings>();
@@ -61,6 +61,10 @@ namespace HarryTools.Audio.Editor {
         // ==================== PRIVATE ===================
         private static void Draw() {
             var _settings = GetOrCreateSettings();
+            if (_settings == null) {
+                EditorGUILayout.HelpBox("The audio settings asset is created when this page is opened outside Play mode.", MessageType.Info);
+                return;
+            }
             if (serialized == null || serializedTarget != _settings) {
                 serialized = new SerializedObject(_settings);
                 serializedTarget = _settings;
@@ -79,7 +83,7 @@ namespace HarryTools.Audio.Editor {
             if (_changed) AssignMissingGroups(_settings);
 
             EditorGUILayout.Space();
-            using (new EditorGUI.DisabledScope(_settings.Catalog == null)) {
+            using (new EditorGUI.DisabledScope(_settings.Catalog == null || EditorApplication.isPlayingOrWillChangePlaymode)) {
                 if (GUILayout.Button("Rebuild Catalog and Ids")) AudioCatalogMaintainer.Rebuild(_settings.Catalog);
             }
             if (_settings.Catalog == null) EditorGUILayout.HelpBox("Assign a catalog to resolve audio references.", MessageType.Warning);
@@ -92,11 +96,10 @@ namespace HarryTools.Audio.Editor {
             bool _dirty = false;
             for (int _i = 0; _i < _buses.Count; _i++) {
                 BusConfig _config = _buses[_i];
-                if (_config.Group != null) continue;
+                if (_config == null || _config.Group != null) continue;
                 AudioMixerGroup[] _found = _settings.Mixer.FindMatchingGroups(_config.Bus.ToString());
                 if (_found.Length == 0) continue;
                 _config.Group = _found[0];
-                _buses[_i] = _config;
                 _dirty = true;
             }
             if (!_dirty) return;

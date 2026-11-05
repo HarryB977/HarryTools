@@ -26,7 +26,7 @@ namespace HarryTools.Audio {
         public int CurrentLine => TryGetRunner(out ConversationRunner _runner) ? _runner.GetCurrentLine(slot, generation) : -1;
 
         // ==================== PUBLIC ===================
-        /// <summary> Stops the current line with the fade (LineEnded with interrupted = true) and plays no further lines. </summary>
+        /// <summary> Stops the current line with the fade (negative: its asset FadeOut; LineEnded with interrupted = true) and plays no further lines. </summary>
         public void Stop(float _fade = 0.1f) {
             if (TryGetRunner(out ConversationRunner _runner)) _runner.Stop(slot, generation, _fade);
         }
