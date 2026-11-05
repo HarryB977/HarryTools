@@ -23,6 +23,13 @@
   ],
   "hideInEditor": true,
   "license": "MIT",
+  "samples": [
+    {
+      "displayName": "Subtitles",
+      "description": "Subtítulos localizados para los sonidos del catálogo, con eventos para pintarlos con la UI que prefieras. Requiere Unity Localization.",
+      "path": "Samples~/Subtitles"
+    }
+  ],
   "dependencies": {
     "com.cysharp.unitask": "2.5.10",
     "com.harryb97.harryutils": "2.1.0",

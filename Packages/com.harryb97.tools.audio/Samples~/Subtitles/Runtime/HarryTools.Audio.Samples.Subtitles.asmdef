@@ -1,0 +1,21 @@
+{
+    "name": "HarryTools.Audio.Samples.Subtitles",
+    "rootNamespace": "HarryTools.Audio.Subtitles",
+    "references": [
+        "GUID:c85f48641bf49bd458b1adbdee201d0b",
+        "GUID:eec0964c48f6f4e40bc3ec2257ccf8c5",
+        "GUID:5565c121f675aca498b9a3c20e681d52",
+        "GUID:e9438e756332f8b49902de137df9187b",
+        "GUID:5a48a51724773b745ac570afd65b9606",
+        "GUID:ce4097fb1cd381e499cd9508a42275ce"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
