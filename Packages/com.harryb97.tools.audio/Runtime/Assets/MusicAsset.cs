@@ -23,5 +23,13 @@ namespace HarryTools.Audio {
         public bool UseLoopPoints => useLoopPoints;
         public double LoopStart => loopStart;
         public double LoopEnd => loopEnd;
+
+        // ==================== INTERNAL ===================
+        internal void SetIntro(AudioClip _intro) => intro = _intro;
+        internal void SetLoopPoints(bool _use, double _start, double _end) {
+            useLoopPoints = _use;
+            loopStart = System.Math.Max(0d, _start);
+            loopEnd = System.Math.Max(0d, _end);
+        }
     }
 }

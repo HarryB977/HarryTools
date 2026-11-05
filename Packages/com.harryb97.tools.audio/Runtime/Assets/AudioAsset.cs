@@ -99,6 +99,7 @@ namespace HarryTools.Audio {
         internal void SetSpatialProfile(SpatialProfile _profile) => spatialProfile = _profile;
         internal void SetPriority(int _priority) => priority = Mathf.Clamp(_priority, 0, 100);
         internal void SetBus(AudioBus _bus) => bus = _bus;
+        internal void SetLoop(bool _loop) => loop = _loop;
         internal void SetDelay(float _delay) => delay = Mathf.Max(0f, _delay);
         internal void SetVolumeRange(Vector2 _range) => volumeRange = _range;
         internal void SetPitchRange(Vector2 _range) => pitchRange = _range;

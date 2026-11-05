@@ -54,6 +54,9 @@ namespace HarryTools.Audio {
         /// <summary> Transform sounds are heard from: the one set with SetListener, else the active AudioListener. </summary>
         public static Transform Listener => Runtime?.ListenerTracker.Listener;
 
+        /// <summary> The music channel: one track at a time with crossfades, intro and loop points. Null outside Play mode. </summary>
+        public static MusicChannel Music => Runtime?.Music;
+
         // ==================== PLAY ===================
         /// <summary> Plays the sound at the listener, following it (world origin when there is no listener). </summary>
         public static AudioHandle Play(SoundRef _sound) => Resolve(_sound, out SoundAsset _asset) ? Play(_asset) : AudioHandle.Invalid;
