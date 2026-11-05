@@ -423,6 +423,27 @@ namespace HarryTools.Audio.Tests {
         }
 
         [Test]
+        public void StopByRef_StopsAllInstances() {
+            SoundAsset _sound = MakeSound(3f);
+            _sound.SetId("fedcba9876543210fedcba9876543210");
+            var _catalog = ScriptableObject.CreateInstance<AudioCatalog>();
+            created.Add(_catalog);
+            _catalog.SetItems(new List<AudioCatalogItem> { _sound });
+            AudioCatalog.Active = _catalog;
+            try {
+                AudioHandle _a = Audio.Play(_sound);
+                AudioHandle _b = Audio.Play(_sound);
+                Audio.Stop(new SoundRef("00000000000000000000000000000000"), 0f);
+                Assert.IsTrue(_a.IsValid);
+                Audio.Stop(new SoundRef(_sound.Id), 0f);
+                Assert.IsFalse(_a.IsValid);
+                Assert.IsFalse(_b.IsValid);
+            } finally {
+                AudioCatalog.Active = null;
+            }
+        }
+
+        [Test]
         public void PoolFull_FadingInHighPriority_NotStolenByLowPriority() {
             SoundAsset _high = MakeSound(3f, 90);
             _high.SetFades(1f, 0f);

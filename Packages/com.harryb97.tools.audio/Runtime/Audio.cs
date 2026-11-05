@@ -87,6 +87,11 @@ namespace HarryTools.Audio {
         public static void UnregisterModule(IAcousticModule _module) => AcousticSimulator.Unregister(_module);
 
         // ==================== STOP ===================
+        /// <summary> Stops every instance of the sound the reference points to. Does nothing when it is not in the catalog. A negative fade uses the asset FadeOut. </summary>
+        public static void Stop(SoundRef _sound, float _fade = -1f) {
+            if (_sound.TryResolve(out SoundAsset _asset)) Stop(_asset, _fade);
+        }
+
         /// <summary> Stops every instance of the sound. A negative fade uses the asset FadeOut; 0 stops at once. </summary>
         public static void Stop(SoundAsset _sound, float _fade = -1f) {
             if (_sound == null) return;

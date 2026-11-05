@@ -77,7 +77,7 @@ Audio.Voices.Play(Voices.Npc.Greeting);
 ```
 
 - Puedes forzar la regeneración con **Tools > HarryTools > Audio > Regenerate Ids**.
-- La ubicación del fichero se cambia en Project Settings. Se compila en el assembly de la carpeta donde esté: si el juego usa sus propios asmdef, ponlo dentro de la carpeta de uno de ellos.
+- La ubicación del fichero y el namespace de las clases (por defecto el global) se cambian en Project Settings. Se compila en el assembly de la carpeta donde esté: si el juego usa sus propios asmdef, ponlo dentro de la carpeta de uno de ellos.
 - Renombrar o borrar un asset hace que el código que lo usaba deje de compilar. Es a propósito: así no quedan referencias rotas en silencio.
 - Los campos `SoundRef`, `MusicRef`, `VoiceRef` y `ConversationRef` guardan el ID, no el asset. Una referencia a un asset que todavía no está en el catálogo se muestra como "Missing" hasta que el catálogo se reconstruye.
 - El selector del inspector busca por nombre y tiene un botón ▶ para previsualizar el audio.
@@ -123,9 +123,9 @@ Audio.Music.Changed += _asset => { };
 
 ### Zonas de música
 
-Añade un **MusicZone** (Add Component > HarryTools > Audio > Music Zone) a un objeto con collider en modo trigger. Mientras el listener esté dentro, suena su música; si hay zonas solapadas gana la de mayor `Priority` y, en empate, la última en la que se entró.
+Añade un **MusicZone** (Add Component > HarryTools > Audio > Music Zone) a un objeto con un collider (se recomienda trigger): Box, Sphere, Capsule o MeshCollider convexo. Mientras el listener esté dentro, suena su música; si hay zonas solapadas gana la de mayor `Priority` y, en empate, la última en la que se entró.
 
-- Usa `MeshCollider` convexos: la zona se comprueba con `ClosestPoint`.
+- Los `MeshCollider` tienen que ser convexos: la zona se comprueba con `ClosestPoint`.
 - Al salir de todas las zonas se restaura la música previa a la primera zona, aunque se haya llamado a `Audio.Music.Play` estando dentro.
 
 ## Voces y conversaciones
@@ -152,10 +152,12 @@ Audio.Voices.StopAll();
 El componente **AudioEmitter** representa a un personaje: tiene un `Speaker`, un `Effect` opcional (si está vacío, usa el `DefaultEffect` del speaker) y una `BusyPolicy` (Queue: las líneas esperan su turno; Interrupt: una línea nueva corta la actual).
 
 ```csharp
-emisor.Say(voz);       // línea de diálogo a través del emisor
-emisor.Play(sonido);   // sonido a través del emisor, con su efecto
+emisor.Say(voz);       // VoiceAsset (p. ej. asignado en el inspector)
+emisor.Play(sonido);   // SoundAsset, con el efecto del emisor
 bool habla = emisor.IsSpeaking;
 ```
+
+`Say` y `Play` del emisor reciben assets (`VoiceAsset`, `SoundAsset`), no las referencias generadas. Con una referencia, usa `Audio.Voices.Play(Voices.Npc.Greeting, emisor)`.
 
 Si se destruye el GameObject del emisor en mitad de una línea, la conversación continúa en 2D.
 
@@ -183,9 +185,20 @@ El volumen 0 se traduce a -80 dB (nunca `-Infinity`) y quitar el mute restaura e
 
 ### Persistencia
 
-Los volúmenes y el mute se guardan en `PlayerPrefs` por defecto (clave `PersistenceKey` en los ajustes), con un guardado diferido para no escribir en cada cambio. Para otro sistema de guardado, implementa `IAudioSettingsStore` (por ejemplo, un adaptador para `localdata`) y regístralo antes de usar el audio:
+Los volúmenes y el mute se guardan en `PlayerPrefs` por defecto (clave `PersistenceKey` en los ajustes), con un guardado diferido para no escribir en cada cambio. Para otro sistema de guardado, implementa `IAudioSettingsStore` (por ejemplo, un adaptador para `localdata`) y asígnalo con `Audio.SetStore`, que carga los datos al asignarlo:
 
 ```csharp
+public sealed class MiStore : IAudioSettingsStore {
+    public async UniTask<AudioVolumeData?> Load() {
+        // devuelve null si todavía no hay nada guardado
+        return null;
+    }
+
+    public async UniTask Save(AudioVolumeData _data) {
+        // guarda _data donde corresponda
+    }
+}
+
 Audio.SetStore(new MiStore());
 ```
 
@@ -237,7 +250,7 @@ En WebGL no hay efectos ni parámetros de mixer, así que:
 ## Limitaciones
 
 - El audio no se pausa solo con `Time.timeScale`; hay que llamar a `Audio.Pause()`.
-- Las zonas de música requieren colliders convexos.
+- Las zonas de música no admiten `MeshCollider` cóncavos.
 - Los puntos de loop necesitan un rango de al menos 0,5 s y la música no admite pitch.
 - Una conversación necesita voces libres en el pool para las líneas en cola.
 - Todavía no hay integración con Timeline, colisiones, partículas, sonidos de UI ni el puente con `signals`, ni registro en `serviceprovider`.
