@@ -7,7 +7,7 @@ namespace HarryTools.Audio {
     /// Plays its music while the listener is inside the collider. Checked every 0.25 s by the audio runtime with
     /// Collider.ClosestPoint, which needs a Box, Sphere, Capsule or convex Mesh collider (a trigger is recommended).
     /// Overlapping zones: the highest Priority wins, then the last one entered. Leaving every zone brings back the music
-    /// that was playing before the first one (or stops it).
+    /// that was current before the first one (or stops it), even if Audio.Music.Play was called while inside a zone.
     /// </summary>
     [RequireComponent(typeof(Collider))]
     [AddComponentMenu("HarryTools/Audio/Music Zone")]
@@ -20,7 +20,7 @@ namespace HarryTools.Audio {
         public MusicAsset Music;
         [Tooltip("Higher wins when zones overlap. On a tie, the zone entered last wins.")]
         public int Priority;
-        [Tooltip("Crossfade in seconds when entering or leaving. Negative uses the default crossfade of the settings.")]
+        [Tooltip("Crossfade in seconds when entering or leaving. Negative uses the music channel default: the asset FadeIn when nothing is sounding, else DefaultCrossfade of the settings; when leaving to silence, the FadeOut of the playing asset.")]
         public float Crossfade = -1f;
 
         private Collider zoneCollider;

@@ -1,12 +1,15 @@
 using System;
 using System.Collections.Generic;
+using HarryTools.DomainReload;
 using UnityEngine;
 
 namespace HarryTools.Audio {
     /// <summary>
     /// The music player: one current track on two decks that crossfade. Intro→loop and loop points are chained sample-accurately
     /// with PlayScheduled (WebGL: Play and a full loop). Music follows Audio.Pause and the pause of its bus unless the asset has
-    /// IgnorePause. Pitch is always 1: PitchRange and FollowTimeScale do not apply to music. Also drives the MusicZone components.
+    /// IgnorePause. Pitch is always 1: PitchRange and FollowTimeScale do not apply to music. Loop points need a range of at least
+    /// 0.5 s; shorter ranges loop the whole clip. Also drives the MusicZone components: leaving every zone restores the track
+    /// that was current before the first zone was entered, even if Play was called while inside a zone.
     /// </summary>
     public sealed class MusicChannel {
         // ==================== VARIABLES ===================
@@ -21,7 +24,8 @@ namespace HarryTools.Audio {
         private readonly bool[] reported = new bool[BusCount];
         private int current = -1;
         private bool userPaused;
-        private Action<MusicAsset> changed;
+        // Static so subscribers survive a runtime rebuild (the host destroyed from outside).
+        [ClearOnReload] private static Action<MusicAsset> changed;
 
         #region Zones
         private readonly List<MusicZone> inside = new List<MusicZone>(8);
@@ -40,7 +44,7 @@ namespace HarryTools.Audio {
         }
 
         // ==================== EVENTS ===================
-        /// <summary> Raised when the current track changes, with the new track (null after Stop or when a non-looping track ends). </summary>
+        /// <summary> Raised when the current track changes, with the new track (null after Stop or when a non-looping track ends). Subscriptions survive a rebuild of the audio runtime. </summary>
         public event Action<MusicAsset> Changed {
             add => changed += value;
             remove => changed -= value;
@@ -67,8 +71,8 @@ namespace HarryTools.Audio {
         }
 
         /// <summary>
-        /// Crossfades to the track. A negative crossfade uses DefaultCrossfade of the settings (or the asset FadeIn when nothing is
-        /// sounding); 0 switches at once. Does nothing when the track is already current; a track that is fading out comes back
+        /// Crossfades to the track. A negative crossfade uses DefaultCrossfade of the settings when another track is sounding
+        /// (current or still fading out), and the asset FadeIn of the new track when nothing is sounding; 0 switches at once. Does nothing when the track is already current; a track that is fading out comes back
         /// from where it is instead of restarting. Null stops the music with that fade.
         /// </summary>
         public void Play(MusicAsset _music, float _crossfade = -1f) {
@@ -132,9 +136,14 @@ namespace HarryTools.Audio {
                 MusicDeck _deck = decks[_i];
                 if (!_deck.IsActive) continue;
                 if (_deck.Tick(_delta, _mixer.GetSourceMultiplier(_deck.Bus), _onSource, IsFrozen(_deck.Asset))) {
-                    // Clear the current track first so Changed still sees which track ended.
-                    if (_i == current) SetCurrent(-1);
+                    // Stop the deck before raising Changed: a handler may play again (same or another track) and must get a free deck.
+                    MusicAsset _ended = _deck.Asset;
+                    bool _wasCurrent = _i == current;
                     _deck.Stop();
+                    if (_wasCurrent) {
+                        current = -1;
+                        RaiseChanged(_ended, null);
+                    }
                     continue;
                 }
                 if (!_deck.IsPaused) activity[(int)_deck.Bus] = true;
@@ -166,8 +175,9 @@ namespace HarryTools.Audio {
             inside.Clear();
             activeZone = null;
             beforeZones = null;
-            changed = null;
         }
+
+        internal static void ClearChangedForTests() => changed = null;
 
         // ==================== ZONES ===================
         // The zones the listener is in form a stack in entry order. The highest Priority wins; on a tie, the last one entered.
@@ -252,21 +262,25 @@ namespace HarryTools.Audio {
             return _victim;
         }
 
-        // Fades the deck out from its current level. A deck already fading out keeps its (shorter) fade; 0 or a paused deck stops at once.
+        // Fades the deck out from its current level over the duration. A deck already fading out keeps its fade unless the new
+        // duration is shorter than what remains; 0 or a paused deck stops at once.
         private static void FadeOutDeck(MusicDeck _deck, float _duration) {
             if (!_deck.IsActive) return;
             if (_duration <= 0f || _deck.IsPaused) {
                 _deck.Stop();
                 return;
             }
-            if (!_deck.IsFadingOut) _deck.FadeTo(0f, _duration);
+            if (!_deck.IsFadingOut || _duration < _deck.FadeRemaining) _deck.FadeTo(0f, _duration);
         }
 
         private void SetCurrent(int _index) {
             if (_index == current) return;
             MusicAsset _before = Current;
             current = _index;
-            MusicAsset _after = Current;
+            RaiseChanged(_before, Current);
+        }
+
+        private static void RaiseChanged(MusicAsset _before, MusicAsset _after) {
             if (ReferenceEquals(_before, _after) || changed == null) return;
             try { changed(_after); } catch (Exception _exception) { Debug.LogException(_exception); }
         }

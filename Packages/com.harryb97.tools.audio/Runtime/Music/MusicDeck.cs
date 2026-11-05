@@ -26,8 +26,8 @@ namespace HarryTools.Audio {
         internal const double ScheduleLead = 0.1;
         /// <summary> The next loop-point segment is scheduled when less than this many seconds remain. </summary>
         internal const double ScheduleAhead = 1.0;
-        /// <summary> Loop-point ranges shorter than this are ignored (full loop): the two sources could not alternate in time. </summary>
-        internal const double MinLoopLength = 0.1;
+        /// <summary> Loop-point ranges (LoopEnd − LoopStart) shorter than this many seconds are ignored and the whole clip loops instead: the two sources need time to alternate. </summary>
+        internal const double MinLoopLength = 0.5;
         // Time after a segment end before its source is considered free, to never cut the last DSP buffer of the segment.
         private const double FreeMargin = 0.03;
 
@@ -84,6 +84,8 @@ namespace HarryTools.Audio {
         /// <summary> Base volume × fade level, without the bus multiplier. </summary>
         public float Volume => BaseVolume * level;
         public float FadeLevel => level;
+        /// <summary> Seconds left of the running fade (0 when none). </summary>
+        public float FadeRemaining => Mathf.Max(0f, fadeDuration - fadeElapsed);
 
         // ==================== PUBLIC ===================
         public AudioSource GetSource(int _index) => tracks[_index].Source;
@@ -324,7 +326,7 @@ namespace HarryTools.Audio {
             if (_end > _clip.samples) _end = _clip.samples;
             long _start = (long)Math.Round(_asset.LoopStart * _frequency);
             if ((_end - _start) / (double)_frequency < MinLoopLength) {
-                HarryTools.LoggerTool.Logger.LogWarning("Audio", "Music '" + _asset.name + "': loop points shorter than " + MinLoopLength + " s are ignored; looping the whole clip.");
+                HarryTools.LoggerTool.Logger.LogWarning("Audio", "Music '" + _asset.name + "': loop range (LoopEnd - LoopStart) is shorter than the minimum of " + MinLoopLength + " s, so the loop points are ignored and the whole clip loops.");
                 return false;
             }
             loopStartSamples = (int)_start;

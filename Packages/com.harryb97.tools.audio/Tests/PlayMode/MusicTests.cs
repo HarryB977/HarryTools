@@ -39,6 +39,7 @@ namespace HarryTools.Audio.Tests {
             Audio.Resume();
             Audio.Resume(AudioBus.Music);
             Audio.ShutdownForTests();
+            MusicChannel.ClearChangedForTests();
             AudioPlatform.OverrideUsesMixer(null);
             PlayerPrefs.DeleteKey(TestKey);
             if (listener != null) Object.DestroyImmediate(listener);
@@ -310,33 +311,34 @@ namespace HarryTools.Audio.Tests {
             double _expected = (_dsp - _loopStart) * Frequency;
             double _drift = _position - _expected;
             double _tolerance = 2.0 * _bufferLength * Frequency / AudioSettings.outputSampleRate;
-            Debug.Log($"[MusicTests] Intro->loop: scheduled gap {_scheduledGap:0.###} samples; loop position {_position} vs expected {_expected:0.#} from dspTime (drift {_drift:0.#} samples, tolerance {_tolerance:0.#}, buffer {_bufferLength} @ {AudioSettings.outputSampleRate} Hz).");
+            TestContext.WriteLine($"[MusicTests] Intro->loop: scheduled gap {_scheduledGap:0.###} samples; loop position {_position} vs expected {_expected:0.#} from dspTime (drift {_drift:0.#} samples, tolerance {_tolerance:0.#}, buffer {_bufferLength} @ {AudioSettings.outputSampleRate} Hz).");
             Assert.AreEqual(0d, _drift, _tolerance);
         }
 
         [UnityTest]
         public IEnumerator LoopPoints_WrapsToLoopStart() {
-            MusicAsset _music = MakeMusic(1f);
-            _music.SetLoopPoints(true, 0.2, 0.5);
+            // Loop range 0.2–0.8 (the minimum range is 0.5 s): segment 0 plays 0→0.8 from t0 = +0.1, then 0.2→0.8 from +0.9.
+            MusicAsset _music = MakeMusic(1.5f);
+            _music.SetLoopPoints(true, 0.2, 0.8);
             Music.Play(_music, 0f);
             MusicDeck _deck = CurrentDeck;
 
-            yield return WaitReal(0.8f);
+            yield return WaitReal(1.2f);
             int _playing = 0;
             for (int _i = 0; _i < 2; _i++) {
                 AudioSource _source = _deck.GetSource(_i);
                 if (!_source.isPlaying) continue;
                 _playing++;
-                Assert.That(_source.time, Is.InRange(0.19f, 0.51f), "Source " + _i + " left the loop range.");
+                Assert.That(_source.time, Is.InRange(0.19f, 0.81f), "Source " + _i + " left the loop range.");
             }
             Assert.Greater(_playing, 0, "No source is playing.");
 
             // Keep sampling over a few more wraps: no source ever plays past LoopEnd.
-            float _end = Time.realtimeSinceStartup + 1.2f;
+            float _end = Time.realtimeSinceStartup + 1.8f;
             while (Time.realtimeSinceStartup < _end) {
                 for (int _i = 0; _i < 2; _i++) {
                     AudioSource _source = _deck.GetSource(_i);
-                    if (_source.isPlaying) Assert.That(_source.time, Is.InRange(0.19f, 0.51f));
+                    if (_source.isPlaying) Assert.That(_source.time, Is.InRange(0.19f, 0.81f));
                 }
                 yield return null;
             }
@@ -499,24 +501,24 @@ namespace HarryTools.Audio.Tests {
 
         [UnityTest]
         public IEnumerator LoopPoints_PauseResume_StaysInRange() {
-            MusicAsset _music = MakeMusic(1f);
-            _music.SetLoopPoints(true, 0.2, 0.5);
+            MusicAsset _music = MakeMusic(1.5f);
+            _music.SetLoopPoints(true, 0.2, 0.8);
             Music.Play(_music, 0f);
             MusicDeck _deck = CurrentDeck;
-            yield return WaitReal(0.75f);
+            yield return WaitReal(1.2f);
             Music.Pause();
             Assert.IsFalse(AnyPlaying(_deck));
             yield return WaitReal(0.3f);
             Music.Resume();
 
             int _playingFrames = 0;
-            float _end = Time.realtimeSinceStartup + 1.2f;
+            float _end = Time.realtimeSinceStartup + 1.8f;
             while (Time.realtimeSinceStartup < _end) {
                 for (int _i = 0; _i < 2; _i++) {
                     AudioSource _source = _deck.GetSource(_i);
                     if (!_source.isPlaying) continue;
                     _playingFrames++;
-                    Assert.That(_source.time, Is.InRange(0.19f, 0.51f), "Source " + _i + " left the loop range after resuming.");
+                    Assert.That(_source.time, Is.InRange(0.19f, 0.81f), "Source " + _i + " left the loop range after resuming.");
                 }
                 yield return null;
             }
@@ -536,6 +538,137 @@ namespace HarryTools.Audio.Tests {
             yield return WaitReal(0.2f);
             Assert.IsFalse(_deck.IsPaused);
             Assert.IsTrue(AnyPlaying(_deck));
+
+            MusicAsset _ignore = MakeMusic(3f);
+            _ignore.SetPauseOptions(true, false);
+            Music.Play(_ignore, 0f);
+            MusicDeck _ignoreDeck = CurrentDeck;
+            AudioSource _source = _ignoreDeck.GetSource(0);
+            yield return WaitReal(0.2f);
+            AudioListener.pause = true;
+            yield return null;
+            int _before = _source.timeSamples;
+            yield return WaitReal(0.2f);
+            Assert.IsFalse(_ignoreDeck.IsPaused, "IgnorePause music must not freeze with AudioListener.pause.");
+            Assert.IsTrue(Music.IsPlaying);
+            Assert.IsTrue(_source.isPlaying);
+            Assert.Greater(_source.timeSamples, _before, "IgnorePause music stopped advancing under AudioListener.pause.");
+        }
+
+        // ==================== RE-ENTRANCY AND EDGE CASES ===================
+        [UnityTest]
+        public IEnumerator ChangedHandler_ReplaysSameTrack_KeepsPlaying() {
+            MusicAsset _music = MakeMusic(0.3f);
+            _music.SetLoop(false);
+            int _replays = 0;
+            Music.Changed += _m => {
+                if (_m != null || _replays > 0) return;
+                _replays++;
+                Music.Play(_music, 0f);
+            };
+            Music.Play(_music, 0f);
+            yield return WaitFor(() => _replays > 0, 2f);
+            Assert.AreEqual(1, _replays);
+            Assert.AreSame(_music, Music.Current);
+            Assert.IsTrue(Music.IsPlaying);
+            yield return WaitReal(0.15f);
+            Assert.AreSame(_music, Music.Current);
+            Assert.IsTrue(CurrentDeck.IsActive);
+            Assert.IsTrue(AnyPlaying(CurrentDeck), "The replayed track is silent.");
+        }
+
+        [UnityTest]
+        public IEnumerator ChangedHandler_PlaysOtherTrack_KeepsPlaying() {
+            MusicAsset _long = MakeMusic(4f);
+            MusicAsset _short = MakeMusic(0.3f);
+            _short.SetLoop(false);
+            MusicAsset _next = MakeMusic(3f);
+            // The long track is still fading out when the short one ends, so both decks are busy at that moment.
+            Music.Play(_long, 0f);
+            Music.Play(_short, 3f);
+            bool _played = false;
+            Music.Changed += _m => {
+                if (_m != null || _played) return;
+                _played = true;
+                Music.Play(_next, 0f);
+            };
+            yield return WaitFor(() => _played, 2f);
+            Assert.IsTrue(_played);
+            Assert.AreSame(_next, Music.Current);
+            yield return WaitReal(0.2f);
+            Assert.AreSame(_next, Music.Current);
+            Assert.IsTrue(CurrentDeck.IsActive);
+            Assert.IsTrue(AnyPlaying(CurrentDeck), "The next track is silent.");
+        }
+
+        [UnityTest]
+        public IEnumerator Changed_SurvivesRuntimeRebuild() {
+            int _changed = 0;
+            Music.Changed += _ => _changed++;
+            AudioRuntime _old = Audio.Runtime;
+            Object.DestroyImmediate(_old.Host);
+            Music.Play(MakeMusic(2f), 0f);
+            Assert.AreNotSame(_old, Audio.Runtime);
+            Assert.AreEqual(1, _changed, "The subscriber was lost when the runtime was rebuilt.");
+            yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator Stop_DuringCrossfade_StopsBoth() {
+            Music.Play(MakeMusic(4f), 0f);
+            yield return null;
+            Music.Play(MakeMusic(4f), 5f);
+            yield return WaitReal(0.2f);
+            Music.Stop(0.1f);
+            Assert.IsNull(Music.Current);
+            yield return WaitReal(0.3f);
+            Assert.IsFalse(Music.GetDeck(0).IsActive, "Deck 1 kept its long fade-out.");
+            Assert.IsFalse(Music.GetDeck(1).IsActive, "Deck 2 kept its long fade-out.");
+            Assert.IsFalse(AnyPlaying(Music.GetDeck(0)) || AnyPlaying(Music.GetDeck(1)));
+        }
+
+        [UnityTest]
+        public IEnumerator PlayABA_DuringCrossfade_BringsBackA() {
+            MusicAsset _a = MakeMusic(4f);
+            MusicAsset _b = MakeMusic(4f);
+            Music.Play(_a, 0f);
+            MusicDeck _deckA = CurrentDeck;
+            AudioSource _sourceA = _deckA.GetSource(0);
+            yield return WaitFor(() => _sourceA.timeSamples > 8000, 1f);
+            AssertAudioAdvances(_sourceA, 8000);
+            Music.Play(_b, 1f);
+            MusicDeck _deckB = CurrentDeck;
+            yield return WaitReal(0.3f);
+            int _before = _sourceA.timeSamples;
+
+            Music.Play(_a, 0.5f);
+            Assert.AreSame(_a, Music.Current);
+            Assert.AreSame(_deckA, CurrentDeck, "A should come back on its own deck.");
+            yield return WaitReal(0.8f);
+            Assert.Greater(_sourceA.timeSamples, _before, "A restarted.");
+            Assert.AreEqual(1f, _deckA.Volume, 0.001f);
+            Assert.IsFalse(_deckB.IsActive, "B should have faded out.");
+        }
+
+        [UnityTest]
+        public IEnumerator DeckReuse_LoopPointsThenPlainTrack_PlaysUnbounded() {
+            MusicAsset _loopPoints = MakeMusic(1.5f);
+            _loopPoints.SetLoopPoints(true, 0.2, 0.8);
+            Music.Play(_loopPoints, 0f);
+            MusicDeck _first = CurrentDeck;
+            yield return WaitReal(0.3f);
+            // Move to the other deck, then back to the first one with a plain track while its old end times are still ahead.
+            Music.Play(MakeMusic(3f), 0f);
+            MusicAsset _plain = MakeMusic(3f);
+            Music.Play(_plain, 0f);
+            Assert.AreSame(_first, CurrentDeck, "The plain track should reuse the loop-points deck.");
+            yield return WaitReal(1.6f);
+            for (int _i = 0; _i < 2; _i++) {
+                AudioSource _source = _first.GetSource(_i);
+                if (_source.clip == null) continue;
+                Assert.IsTrue(_source.isPlaying, "A stale scheduled end time cut the plain track (source " + _i + ").");
+                Assert.Greater(_source.time, 1.2f);
+            }
         }
 
         // ==================== DUCKING ===================
@@ -617,7 +750,7 @@ namespace HarryTools.Audio.Tests {
         [UnityTest]
         public IEnumerator Tick_SteadyState_ZeroGC() {
             MusicAsset _music = MakeMusic(1f, 0.2f);
-            _music.SetLoopPoints(true, 0.2, 0.6);
+            _music.SetLoopPoints(true, 0.2, 0.8);
             MakeZone(new Vector3(20f, 0f, 0f), MakeMusic(1f));
             MakeZone(new Vector3(-20f, 0f, 0f), MakeMusic(1f));
             Music.Play(_music, 0.5f);
