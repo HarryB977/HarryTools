@@ -110,7 +110,7 @@ Audio.Stop(Sounds.Ambience.Wind);
 Audio.StopAll(0.5f);      // sonidos, voces y conversaciones; la música sigue (Audio.Music.Stop)
 ```
 
-`IsValid`, `IsPlaying`, `IsPaused` y `Asset` consultan el estado actual. Si el transform que sigue un sonido se destruye, el sonido continúa en su última posición y termina con normalidad.
+`IsValid`, `IsPlaying`, `IsPaused` y `Asset` consultan el estado actual. `InDelay` es `true` mientras no ha pasado el `Delay` del asset: la reproducción existe (y `Audio.Started` ya se lanzó) pero todavía no se oye. Si el transform que sigue un sonido se destruye, el sonido continúa en su última posición y termina con normalidad.
 
 ## Música
 
@@ -263,12 +263,12 @@ Sample opcional (Package Manager > HarryTools Audio > Samples > Subtitles) que a
 1. Instala **Unity Localization** (`com.unity.localization`) **antes** de importar el sample; si no, el sample no compila.
 2. Importa el sample desde el Package Manager.
 3. La demo necesita unos ajustes de localización que un sample no puede traer. Una sola vez: **Edit > Project Settings > Localization > Create** para crear los *Localization Settings*, y en **Locale Generator** añade `English (en)` y `Spanish (es)`. Sin ellos la demo avisa una vez por consola y no muestra textos.
-4. Abre `Demo/SubtitlesDemo.unity`. La demo lee el teclado con el **Input System**. Si tu escena ya tiene un `AudioListener`, desactívalo: la demo trae el suyo.
+4. Abre `Demo/SubtitlesDemo.unity`. La demo lee el teclado con el **Input System** (`com.unity.inputsystem`); sin ese paquete los scripts de la demo no se compilan (el resto del sample sí) y la escena no hace nada. Si tu escena ya tiene un `AudioListener`, desactívalo: la demo trae el suyo.
 
 ### Uso
 
 1. Añade a un asset de audio la extensión **Subtitle Extension** (lista *Extensions*, es un `[SerializeReference]`). Los speakers llevan la **Speaker Subtitle Extension** con el nombre localizado.
-2. Cada **entrada** tiene un texto localizado (`LocalizedString`), un tipo (**Dialogue**, texto hablado, o **Caption**, descripción de un sonido), un `Delay` desde que empieza el sonido y una `Duration` (0 dura hasta la siguiente entrada del mismo tipo o hasta el final del audio).
+2. Cada **entrada** tiene un texto localizado (`LocalizedString`), un tipo (**Dialogue**, texto hablado, o **Caption**, descripción de un sonido), un `Delay` desde que el sonido empieza a oírse y una `Duration` (0 dura hasta la siguiente entrada del mismo tipo o hasta el final del audio).
 3. Una **excepción por clip** (`ClipOverrides`) sustituye a las entradas del asset cuando suena ese clip. Es útil con assets de varios clips (un grito, un paso) cuyo texto cambia según el clip.
 4. **Distancia:** un sonido 3D solo muestra sus subtítulos si el oyente está dentro de su distancia de escucha (15 m por defecto). Se cambia por asset (*Override Hearing Distance*) o globalmente con un `SubtitleSettings` (`Subtitles.Settings`, que también lleva el margen de salida para que no parpadee en el borde).
 5. Engánchate a los eventos:
@@ -288,11 +288,13 @@ Cada `Started` recibe exactamente un `Ended` con el mismo `Id`. `SubtitleInfo` l
 ### Detalles a tener en cuenta
 
 - El texto llega tal cual sale de la tabla: no se interpretan marcas. Un `[wait=1]` en la tabla llega literal al evento (la demo incluye uno).
+- Los subtítulos empiezan cuando el sonido empieza a oírse: si el asset tiene su propio `Delay`, ninguna línea sale antes de que pase, y si el sonido se para dentro de ese `Delay` no sale ninguna.
+- Un sonido 3D decide si está a distancia de escucha en el primer frame después de `Play`, así que un `.At()` o `.Follow()` encadenado ya cuenta. Por eso sus líneas con `Delay` 0 aparecen un frame después del sonido; las de un sonido 2D salen en el mismo `Play`.
 - Dos entradas del mismo tipo con el mismo `Delay`: la anterior no llega a mostrarse. Entradas de tipos distintos pueden coincidir.
 - Con *End On Stop* desactivado, al parar el audio las líneas siguen el tiempo que les quedaba. Ese tiempo corre en tiempo no escalado, también con la pausa global.
 - Para el hablante solo se usa `VoiceAsset.Speaker`; el speaker de un `AudioEmitter` no cuenta.
 - Con una distancia de escucha `<= 0`, un sonido 3D nunca muestra sus subtítulos.
-- **Música:** una pista con la extensión muestra sus subtítulos siempre (sin filtro de distancia). No hay `AudioHandle` (`Handle` no es válido). Al pasar del intro al loop la línea de tiempo no se reinicia; al cambiar de pista (crossfade incluido) o pararla, las líneas de la anterior terminan.
+- **Música:** una pista con la extensión muestra sus subtítulos siempre (sin filtro de distancia). No hay `AudioHandle` (`Handle` no es válido). Al pasar del intro al loop la línea de tiempo no se reinicia; al cambiar de pista o pararla, las líneas de la anterior terminan como al parar un sonido: con *End On Stop* activado terminan en ese momento (en un crossfade, cuando empieza); con *End On Stop* desactivado siguen el tiempo que les quedaba.
 - **Opciones del jugador:** `Subtitles.ShowDialogue` y `Subtitles.ShowCaptions` (activadas por defecto) ocultan cada tipo. Se guardan en `PlayerPrefs`; para guardarlas en otro sitio implementa `ISubtitleSettingsStore` (`Load` y `Save`) y pásalo a `Subtitles.SetStore`.
 - Otra fuente de textos distinta de Unity Localization: implementa `ISubtitleTextSource` y pásala a `Subtitles.SetTextSource`.
 
