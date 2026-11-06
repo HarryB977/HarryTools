@@ -260,6 +260,21 @@ namespace HarryTools.Audio.Tests {
         }
 
         [UnityTest]
+        public IEnumerator Stop_Zero_FiresChangedWithNull() {
+            MusicAsset _music = MakeMusic(3f);
+            Music.Play(_music, 0f);
+            int _changed = 0;
+            MusicAsset _changedTo = _music;
+            Music.Changed += _m => { _changed++; _changedTo = _m; };
+            yield return null;
+
+            Music.Stop(0f);
+
+            Assert.AreEqual(1, _changed, "An immediate stop must raise Changed like a faded one.");
+            Assert.IsNull(_changedTo);
+        }
+
+        [UnityTest]
         public IEnumerator Changed_ThrowingSubscriber_IsIsolated() {
             Music.Changed += _ => throw new InvalidOperationException("test");
             LogAssert.Expect(LogType.Exception, new System.Text.RegularExpressions.Regex("test"));

@@ -109,12 +109,16 @@ namespace HarryTools.Audio {
 
         /// <summary> Stops the music. A negative fade uses the asset FadeOut; 0 (or paused music) stops at once. </summary>
         public void Stop(float _fade = -1f) {
+            // Read before the decks stop: an immediate stop clears the deck asset, and SetCurrent would see no change.
+            MusicAsset _before = Current;
             for (int _i = 0; _i < decks.Length; _i++) {
                 MusicDeck _deck = decks[_i];
                 if (!_deck.IsActive) continue;
                 FadeOutDeck(_deck, _fade >= 0f ? _fade : _deck.Asset.FadeOut);
             }
-            SetCurrent(-1);
+            if (current < 0) return;
+            current = -1;
+            RaiseChanged(_before, null);
         }
 
         /// <summary> Pauses the music, including IgnorePause tracks. Fades and scheduled joins freeze with it. </summary>
