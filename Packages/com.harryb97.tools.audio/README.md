@@ -9,6 +9,7 @@ Sistema de audio para Unity, inspirado en [JSAM](https://github.com/Jacky-Yang/J
 - Volumen, mute, pausa y ducking por bus, con persistencia.
 - Módulos acústicos enchufables (oclusión, reverb...) y compatibilidad con WebGL.
 - Acciones opcionales para `actions` y un selector con búsqueda y previsualización en el inspector.
+- Sample opcional de subtítulos localizados (requiere Unity Localization), con eventos para pintarlos con tu propia UI.
 
 > **Beta:** la API aún puede cambiar antes de la 1.0.0.
 
@@ -250,6 +251,62 @@ En WebGL no hay efectos ni parámetros de mixer, así que:
 - El volumen, el mute y el ducking por bus se aplican a `AudioSource.volume`.
 - Los presets de efecto, los filtros y los módulos acústicos no se aplican.
 - No se usa `PlayScheduled`.
+
+## Sample de subtítulos
+
+Sample opcional (Package Manager > HarryTools Audio > Samples > Subtitles) que añade subtítulos localizados a los sonidos, las voces y la música del catálogo. No pinta nada: lanza eventos y tu UI decide cómo mostrarlos. El núcleo no depende del sample ni de Unity Localization.
+
+> **Beta:** el sample forma parte de la `1.0.0-beta.2` y su API puede cambiar antes de la 1.0.0.
+
+### Instalación
+
+1. Instala **Unity Localization** (`com.unity.localization`) **antes** de importar el sample; si no, el sample no compila.
+2. Importa el sample desde el Package Manager.
+3. La demo necesita unos ajustes de localización que un sample no puede traer. Una sola vez: **Edit > Project Settings > Localization > Create** para crear los *Localization Settings*, y en **Locale Generator** añade `English (en)` y `Spanish (es)`. Sin ellos la demo avisa una vez por consola y no muestra textos.
+4. Abre `Demo/SubtitlesDemo.unity`. La demo lee el teclado con el **Input System**. Si tu escena ya tiene un `AudioListener`, desactívalo: la demo trae el suyo.
+
+### Uso
+
+1. Añade a un asset de audio la extensión **Subtitle Extension** (lista *Extensions*, es un `[SerializeReference]`). Los speakers llevan la **Speaker Subtitle Extension** con el nombre localizado.
+2. Cada **entrada** tiene un texto localizado (`LocalizedString`), un tipo (**Dialogue**, texto hablado, o **Caption**, descripción de un sonido), un `Delay` desde que empieza el sonido y una `Duration` (0 dura hasta la siguiente entrada del mismo tipo o hasta el final del audio).
+3. Una **excepción por clip** (`ClipOverrides`) sustituye a las entradas del asset cuando suena ese clip. Es útil con assets de varios clips (un grito, un paso) cuyo texto cambia según el clip.
+4. **Distancia:** un sonido 3D solo muestra sus subtítulos si el oyente está dentro de su distancia de escucha (15 m por defecto). Se cambia por asset (*Override Hearing Distance*) o globalmente con un `SubtitleSettings` (`Subtitles.Settings`, que también lleva el margen de salida para que no parpadee en el borde).
+5. Engánchate a los eventos:
+
+```csharp
+using HarryTools.Audio.Subtitles;
+
+Subtitles.Started += _info => Mostrar(_info.Id, _info.SpeakerName, _info.Text, _info.Kind);
+Subtitles.TextChanged += _info => Cambiar(_info.Id, _info.Text);   // cambio de idioma con la línea visible
+Subtitles.Ended += _info => Quitar(_info.Id);
+```
+
+Cada `Started` recibe exactamente un `Ended` con el mismo `Id`. `SubtitleInfo` lleva `Text`, `Kind`, `Speaker`, `SpeakerName`, `Asset`, `Handle`, `Duration`, `Position` e `Is3D`.
+
+**La UI debe fiarse de `Ended`, no de `Duration`.** `Duration` es el tiempo previsto (`-1` si dura hasta que un sonido en loop pare) y puede no cumplirse: el audio puede pararse antes, o la distancia o las opciones del jugador pueden ocultar la línea.
+
+### Detalles a tener en cuenta
+
+- El texto llega tal cual sale de la tabla: no se interpretan marcas. Un `[wait=1]` en la tabla llega literal al evento (la demo incluye uno).
+- Dos entradas del mismo tipo con el mismo `Delay`: la anterior no llega a mostrarse. Entradas de tipos distintos pueden coincidir.
+- Con *End On Stop* desactivado, al parar el audio las líneas siguen el tiempo que les quedaba. Ese tiempo corre en tiempo no escalado, también con la pausa global.
+- Para el hablante solo se usa `VoiceAsset.Speaker`; el speaker de un `AudioEmitter` no cuenta.
+- Con una distancia de escucha `<= 0`, un sonido 3D nunca muestra sus subtítulos.
+- **Música:** una pista con la extensión muestra sus subtítulos siempre (sin filtro de distancia). No hay `AudioHandle` (`Handle` no es válido). Al pasar del intro al loop la línea de tiempo no se reinicia; al cambiar de pista (crossfade incluido) o pararla, las líneas de la anterior terminan.
+- **Opciones del jugador:** `Subtitles.ShowDialogue` y `Subtitles.ShowCaptions` (activadas por defecto) ocultan cada tipo. Se guardan en `PlayerPrefs`; para guardarlas en otro sitio implementa `ISubtitleSettingsStore` (`Load` y `Save`) y pásalo a `Subtitles.SetStore`.
+- Otra fuente de textos distinta de Unity Localization: implementa `ISubtitleTextSource` y pásala a `Subtitles.SetTextSource`.
+
+### Demo
+
+`SubtitlesDemo.unity` no tiene UI: `SubtitleConsoleLogger` escribe en la consola cada `Started`, `TextChanged` y `Ended`, por ejemplo `[Dialogue] Mara: Hey you! Over here. (2.2s) #2`. Mueve el oyente con WASD o las flechas (hacia la lluvia, a 20 m, para entrar en su distancia de 15 m) y usa las teclas:
+
+| Tecla | Acción |
+|---|---|
+| 1 | El NPC dice un diálogo de dos entradas escalonadas |
+| 2 | Sonido "attention call" con tres clips y excepciones por clip |
+| 3 | Cambia de idioma (en/es) |
+| 4 | Alterna `ShowDialogue` |
+| 5 | Alterna `ShowCaptions` |
 
 ## Limitaciones
 

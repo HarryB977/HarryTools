@@ -1,0 +1,86 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 42b82b6279389bc43b2a04ca025bda16, type: 3}
+  m_Name: NpcGreeting
+  m_EditorClassIdentifier: HarryTools.Audio::HarryTools.Audio.VoiceAsset
+  id: 9415fb8db422c2844a2a462b3eba1812
+  groupOverride: 
+  extensions:
+  - rid: 275326654523113708
+  clips:
+  - clip: {fileID: 8300000, guid: 17b607a62c48f1e4092b8af0e2e7dd27, type: 3}
+    weight: 1
+  selection: 1
+  volumeRange: {x: 1, y: 1}
+  pitchRange: {x: 1, y: 1}
+  delay: 0
+  cooldown: 0
+  maxInstances: 0
+  limitPolicy: 0
+  priority: 90
+  bus: 4
+  outputOverride: {fileID: 0}
+  spatialProfile: {fileID: 0}
+  spatial:
+    SpatialBlend: 1
+    Rolloff: 0
+    CustomRolloff:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    MinDistance: 1
+    MaxDistance: 50
+    Spread: 0
+    Doppler: 1
+  loop: 0
+  fadeIn: 0
+  fadeOut: 0
+  ignorePause: 0
+  followTimeScale: 0
+  speaker: {fileID: 11400000, guid: c0547f82ac02b804db79a2a4ca8c4348, type: 2}
+  references:
+    version: 2
+    RefIds:
+    - rid: 275326654523113708
+      type: {class: SubtitleExtension, ns: HarryTools.Audio.Subtitles, asm: HarryTools.Audio.Samples.Subtitles}
+      data:
+        Entries:
+        - Text:
+            m_TableReference:
+              m_TableCollectionName: GUID:3901da698e5520847b51f9996c3449ae
+            m_TableEntryReference:
+              m_KeyId: 0
+              m_Key: greeting_1
+            m_FallbackState: 0
+            m_WaitForCompletion: 0
+            m_LocalVariables: []
+          Kind: 0
+          Delay: 0
+          Duration: 2.2
+        - Text:
+            m_TableReference:
+              m_TableCollectionName: GUID:3901da698e5520847b51f9996c3449ae
+            m_TableEntryReference:
+              m_KeyId: 0
+              m_Key: greeting_2
+            m_FallbackState: 0
+            m_WaitForCompletion: 0
+            m_LocalVariables: []
+          Kind: 0
+          Delay: 2.4
+          Duration: 0
+        ClipOverrides: []
+        EndOnStop: 1
+        OverrideHearingDistance: 0
+        HearingDistance: 0

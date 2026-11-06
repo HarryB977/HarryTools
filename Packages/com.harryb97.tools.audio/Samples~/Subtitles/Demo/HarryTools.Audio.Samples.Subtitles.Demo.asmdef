@@ -1,0 +1,21 @@
+{
+    "name": "HarryTools.Audio.Samples.Subtitles.Demo",
+    "rootNamespace": "HarryTools.Audio.Subtitles.Demo",
+    "references": [
+        "HarryTools.Audio",
+        "HarryTools.Audio.Samples.Subtitles",
+        "HarryTools.Logger",
+        "Unity.Localization",
+        "Unity.ResourceManager",
+        "Unity.InputSystem"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
