@@ -25,6 +25,8 @@ namespace HarryTools.Audio.Subtitles {
         /// <summary> Seconds of audio played: the handle Elapsed while it lives, then advanced by unscaled time after a stop. </summary>
         private float clock;
         private bool audioEnded;
+        /// <summary> The listener is close enough to read this playback. Always true for 2D sounds and music. </summary>
+        private bool audible;
         /// <summary> Request currently resolving the speaker name; 0 when it is resolved. </summary>
         private int nameRequest;
         #endregion
@@ -64,6 +66,7 @@ namespace HarryTools.Audio.Subtitles {
             position = _handle.Position;
             clock = 0f;
             audioEnded = false;
+            audible = false;
 
             int _count = entries != null ? entries.Count : 0;
             EnsureCapacity(_count);
@@ -91,7 +94,8 @@ namespace HarryTools.Audio.Subtitles {
         }
 
         public void Advance() {
-            timeline.Advance(clock, Subtitles.DialogueShown, Subtitles.CaptionsShown, this);
+            UpdateAudible();
+            timeline.Advance(clock, Subtitles.ShowDialogue && audible, Subtitles.ShowCaptions && audible, this);
         }
 
         /// <summary>
@@ -109,6 +113,8 @@ namespace HarryTools.Audio.Subtitles {
                 if (!timeline.IsVisible(_i) || announced[_i]) continue;
                 textRequests[_i] = 0;
                 cancelled[_i] = true;
+                // Never announced for the listener's ears: a later kind toggle must not bring it back as a new Started.
+                everAnnounced[_i] = false;
             }
         }
 
@@ -140,6 +146,7 @@ namespace HarryTools.Audio.Subtitles {
             speakerName = string.Empty;
             nameRequest = 0;
             audioEnded = true;
+            audible = false;
             timeline.Reset(null, 0f, false);
         }
 
@@ -169,6 +176,27 @@ namespace HarryTools.Audio.Subtitles {
         }
 
         // ==================== PRIVATE ===================
+        /// <summary> Hysteresis: a 3D sound becomes audible at the hearing distance and stays so until distance x (1 + exit margin). No listener, not audible. </summary>
+        private void UpdateAudible() {
+            if (!is3D) {
+                audible = true;
+                return;
+            }
+            Transform _listener = Audio.Listener;
+            if (_listener == null) {
+                audible = false;
+                return;
+            }
+            SubtitleSettings _settings = Subtitles.Settings;
+            float _distance = extension.OverrideHearingDistance ? extension.HearingDistance
+                : _settings != null ? _settings.HearingDistance : Subtitles.DefaultHearingDistance;
+            if (audible) {
+                float _margin = _settings != null ? _settings.ExitMargin : Subtitles.DefaultExitMargin;
+                _distance *= 1f + _margin;
+            }
+            audible = (_listener.position - position).sqrMagnitude <= _distance * _distance;
+        }
+
         private void ResolveText(int _entry) {
             int _request = Subtitles.NextRequest();
             textRequests[_entry] = _request;

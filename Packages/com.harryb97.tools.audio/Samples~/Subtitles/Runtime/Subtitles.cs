@@ -29,7 +29,9 @@ namespace HarryTools.Audio.Subtitles {
         private static SubtitleSettings settings;
         private static int nextId;
         private static int nextRequest;
-        // Player options; Task 5 adds ShowDialogue/ShowCaptions and their store.
+        private static ISubtitleSettingsStore store;
+        // The store is read the first time an option is used, so booting never touches PlayerPrefs.
+        private static bool preferencesLoaded;
         private static bool showDialogue = true;
         private static bool showCaptions = true;
 
@@ -63,14 +65,32 @@ namespace HarryTools.Audio.Subtitles {
             set => settings = value;
         }
 
-        internal static bool DialogueShown {
-            get => showDialogue;
-            set => showDialogue = value;
+        /// <summary> Player option: show dialogue lines. On by default; saved in the store when it changes. </summary>
+        public static bool ShowDialogue {
+            get {
+                EnsurePreferences();
+                return showDialogue;
+            }
+            set {
+                EnsurePreferences();
+                if (showDialogue == value) return;
+                showDialogue = value;
+                SavePreferences();
+            }
         }
 
-        internal static bool CaptionsShown {
-            get => showCaptions;
-            set => showCaptions = value;
+        /// <summary> Player option: show captions (sound effects, ambience). On by default; saved in the store when it changes. </summary>
+        public static bool ShowCaptions {
+            get {
+                EnsurePreferences();
+                return showCaptions;
+            }
+            set {
+                EnsurePreferences();
+                if (showCaptions == value) return;
+                showCaptions = value;
+                SavePreferences();
+            }
         }
 
         /// <summary> Text source in use; created on first use so Localization is not touched until a subtitle needs it. </summary>
@@ -89,6 +109,12 @@ namespace HarryTools.Audio.Subtitles {
         public static void SetTextSource(ISubtitleTextSource _source) {
             // Null is resolved lazily by Source, so clearing the source never touches Localization.
             UseSource(_source);
+        }
+
+        /// <summary> Where the player options are saved. Null uses PlayerPrefs. The saved values are loaded now (nothing saved keeps the current ones). </summary>
+        public static void SetStore(ISubtitleSettingsStore _store) {
+            store = _store ?? new PlayerPrefsSubtitleStore();
+            LoadPreferences();
         }
 
         // ==================== LIFECYCLE ===================
@@ -117,6 +143,8 @@ namespace HarryTools.Audio.Subtitles {
             settings = null;
             nextId = 0;
             nextRequest = 0;
+            store = null;
+            preferencesLoaded = false;
             showDialogue = true;
             showCaptions = true;
         }
@@ -207,6 +235,23 @@ namespace HarryTools.Audio.Subtitles {
         internal static void RaiseTextChanged(SubtitleInfo _info) => Raise(textChanged, _info);
 
         // ==================== PRIVATE ===================
+        private static void EnsurePreferences() {
+            if (!preferencesLoaded) LoadPreferences();
+        }
+
+        private static void LoadPreferences() {
+            preferencesLoaded = true;
+            if (store == null) store = new PlayerPrefsSubtitleStore();
+            SubtitlePreferences? _saved = store.Load();
+            if (!_saved.HasValue) return;
+            showDialogue = _saved.Value.ShowDialogue;
+            showCaptions = _saved.Value.ShowCaptions;
+        }
+
+        private static void SavePreferences() {
+            store.Save(new SubtitlePreferences { ShowDialogue = showDialogue, ShowCaptions = showCaptions });
+        }
+
         private static void UseSource(ISubtitleTextSource _source) {
             if (source == _source) return;
             if (source != null) source.LanguageChanged -= onLanguageChanged;
