@@ -22,6 +22,10 @@ namespace HarryTools.Audio.Subtitles {
         private bool loop;
         private bool is3D;
         private Vector3 position;
+        /// <summary> Music has no handle: its time comes from Audio.Music.Elapsed while this asset is the current track. </summary>
+        private MusicAsset music;
+        /// <summary> Channel the track was started on, read without going through Audio so a shut down runtime is never rebuilt by the tick. </summary>
+        private MusicChannel musicChannel;
         /// <summary> Seconds of audio played: the handle Elapsed while it lives, then advanced by unscaled time after a stop. </summary>
         private float clock;
         private bool audioEnded;
@@ -51,19 +55,39 @@ namespace HarryTools.Audio.Subtitles {
 
         // ==================== PROPERTIES ===================
         public AudioHandle Handle => handle;
+        public bool IsMusic => music != null;
+        /// <summary> The audio (or music track) has gone: stopped, finished or replaced. </summary>
+        public bool AudioEnded => audioEnded;
         /// <summary> True when the audio is gone and no line can show any more: the playback can go back to the pool. </summary>
         public bool IsFinished => audioEnded && timeline.IsDone;
 
         // ==================== PUBLIC ===================
         public void Begin(AudioHandle _handle, AudioAsset _asset, SubtitleExtension _extension) {
             handle = _handle;
+            music = null;
+            Setup(_asset, _extension, _extension.GetEntries(_handle.Clip), _handle.Duration, _handle.IsLooping, _handle.Is3D, _handle.Position);
+        }
+
+        /// <summary> Tracks the music track the channel just made current. Its length is intro + loop clip when it does not loop. </summary>
+        public void BeginMusic(MusicChannel _channel, MusicAsset _asset, SubtitleExtension _extension) {
+            handle = AudioHandle.Invalid;
+            music = _asset;
+            musicChannel = _channel;
+            AudioClip _loopClip = _asset.Clips.Count > 0 && _asset.Clips[0] != null ? _asset.Clips[0].Clip : null;
+            AudioClip _intro = _asset.Intro;
+            float _length = (_intro != null ? _intro.length : 0f) + (_loopClip != null ? _loopClip.length : 0f);
+            Setup(_asset, _extension, _extension.GetEntries(_intro != null ? _intro : _loopClip), _length, _asset.Loop, false, Vector3.zero);
+        }
+
+        private void Setup(AudioAsset _asset, SubtitleExtension _extension, IReadOnlyList<SubtitleEntry> _entries, float _duration, bool _loop,
+                           bool _is3D, Vector3 _position) {
             asset = _asset;
             extension = _extension;
-            entries = _extension.GetEntries(_handle.Clip);
-            duration = _handle.Duration;
-            loop = _handle.IsLooping;
-            is3D = _handle.Is3D;
-            position = _handle.Position;
+            entries = _entries;
+            duration = _duration;
+            loop = _loop;
+            is3D = _is3D;
+            position = _position;
             clock = 0f;
             audioEnded = false;
             audible = false;
@@ -86,6 +110,13 @@ namespace HarryTools.Audio.Subtitles {
                 Advance();
                 return true;
             }
+            if (music != null) {
+                // A disposed channel has no current track: the lines end.
+                if (musicChannel.Current != music) return false;
+                clock = musicChannel.Elapsed;
+                Advance();
+                return true;
+            }
             if (!handle.IsValid) return false;
             clock = handle.Elapsed;
             position = handle.Position;
@@ -102,10 +133,10 @@ namespace HarryTools.Audio.Subtitles {
         /// The audio ended. A non-looping playback whose last seen time is within the tolerance of its duration finished:
         /// every line ends. Otherwise it was stopped and the extension EndOnStop decides.
         /// </summary>
-        public void OnAudioEnded(float _naturalEndTolerance) {
+        public void OnAudioEnded(float _naturalEndTolerance, bool _forceStop = false) {
             if (audioEnded) return;
             audioEnded = true;
-            if (!loop && duration - clock <= _naturalEndTolerance) timeline.Finish(this);
+            if (!_forceStop && !loop && duration - clock <= _naturalEndTolerance) timeline.Finish(this);
             else timeline.Stop(extension.EndOnStop, this);
 
             // A line kept by Stop whose text had not arrived yet would start after the audio: drop it.
@@ -139,6 +170,8 @@ namespace HarryTools.Audio.Subtitles {
             int _count = entries != null ? entries.Count : 0;
             for (int _i = 0; _i < _count; _i++) ClearEntry(_i);
             handle = AudioHandle.Invalid;
+            music = null;
+            musicChannel = null;
             asset = null;
             extension = null;
             entries = null;

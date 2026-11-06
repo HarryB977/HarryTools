@@ -24,7 +24,11 @@ namespace HarryTools.Audio.Subtitles {
         private static readonly Action onLanguageChanged = HandleLanguageChanged;
         private static readonly LoopSystem.LoopDelegate tick = Tick;
 
+        private static readonly Action<MusicAsset> onMusicChanged = HandleMusicChanged;
+
         private static ILoopable loop;
+        // Changed is static in the core: any channel instance removes the subscription, so Shutdown never needs a live runtime.
+        private static MusicChannel musicChannel;
         private static ISubtitleTextSource source;
         private static SubtitleSettings settings;
         private static int nextId;
@@ -120,7 +124,9 @@ namespace HarryTools.Audio.Subtitles {
         // ==================== LIFECYCLE ===================
         // Before the first scene loads, like the core: sounds started in the first scene's Awake/OnEnable must get subtitles.
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
-        private static void Bootstrap() {
+        private static void Bootstrap() => Boot(true);
+
+        private static void Boot(bool _music) {
             Audio.Started -= onAudioStarted;
             Audio.Started += onAudioStarted;
             Audio.Ended -= onAudioEnded;
@@ -130,6 +136,15 @@ namespace HarryTools.Audio.Subtitles {
             loop = new Loop(LoopId);
             loop.AddUpdateListener(tick);
             LoopSystem.AddLoop(loop);
+
+            // Reading Audio.Music creates the runtime if needed, as the first Play would.
+            if (_music) {
+                musicChannel = Audio.Music;
+                if (musicChannel != null) {
+                    musicChannel.Changed -= onMusicChanged;
+                    musicChannel.Changed += onMusicChanged;
+                }
+            }
         }
 
         [ExecuteOnReload]
@@ -150,15 +165,19 @@ namespace HarryTools.Audio.Subtitles {
         }
 
         /// <summary> Ends every open line, drops the tracking and the pool, and subscribes again. Keeps listeners and the text source. </summary>
-        internal static void ResetForTests() {
+        internal static void ResetForTests(bool _subscribeToMusic = true) {
             Shutdown();
-            Bootstrap();
+            Boot(_subscribeToMusic);
         }
 
         /// <summary> Ends every open line (each Started gets its Ended), stops listening to the audio and removes the loop. </summary>
         private static void Shutdown() {
             Audio.Started -= onAudioStarted;
             Audio.Ended -= onAudioEnded;
+            if (musicChannel != null) {
+                musicChannel.Changed -= onMusicChanged;
+                musicChannel = null;
+            }
             if (loop != null) {
                 if (LoopSystem.TryGetLoop(LoopId, out ILoopable _registered) && _registered == loop) LoopSystem.RemoveLoop(LoopId);
                 loop.RemoveUpdateListener(tick);
@@ -194,17 +213,37 @@ namespace HarryTools.Audio.Subtitles {
 
         private static void HandleEnded(AudioHandle _handle) {
             for (int _i = 0; _i < playbacks.Count; _i++) {
-                if (playbacks[_i].Handle != _handle) continue;
+                if (playbacks[_i].IsMusic || playbacks[_i].Handle != _handle) continue;
                 playbacks[_i].OnAudioEnded(NaturalEndTolerance);
                 return;
             }
+        }
+
+        /// <summary>
+        /// The current track changed. The previous track's lines end as a stop (a crossfade included); a non-looping track that
+        /// ended on its own (null) is a natural end. A new track with subtitles starts being tracked.
+        /// </summary>
+        private static void HandleMusicChanged(MusicAsset _asset) {
+            for (int _i = 0; _i < playbacks.Count; _i++) {
+                SubtitlePlayback _playback = playbacks[_i];
+                if (_playback.IsMusic && !_playback.AudioEnded) _playback.OnAudioEnded(NaturalEndTolerance, _asset != null);
+            }
+            if (_asset == null) return;
+            SubtitleExtension _extension = _asset.GetExtension<SubtitleExtension>();
+            if (_extension == null) return;
+
+            SubtitlePlayback _new = pool.Count > 0 ? pool.Pop() : new SubtitlePlayback();
+            playbacks.Add(_new);
+            // Changed means the runtime is alive; after a rebuild this is the new channel.
+            _new.BeginMusic(Audio.Music, _asset, _extension);
+            _new.Advance();
         }
 
         private static void HandleLanguageChanged() {
             for (int _i = 0; _i < playbacks.Count; _i++) playbacks[_i].OnLanguageChanged();
         }
 
-        private static void Tick() {
+        internal static void Tick() {
             float _deltaTime = Time.unscaledDeltaTime;
             // By index: a subscriber may start sounds (appended) while the list is walked. Removal waits for the sweep below.
             for (int _i = 0; _i < playbacks.Count; _i++) {
