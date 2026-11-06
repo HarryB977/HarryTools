@@ -224,18 +224,23 @@ namespace HarryTools.Audio.Subtitles {
         /// ended on its own (null) is a natural end. A new track with subtitles starts being tracked.
         /// </summary>
         private static void HandleMusicChanged(MusicAsset _asset) {
-            for (int _i = 0; _i < playbacks.Count; _i++) {
+            // Ended subscribers may play other music (a nested call that appends its own tracking): only the playbacks that existed are ended.
+            int _existing = playbacks.Count;
+            for (int _i = 0; _i < _existing && _i < playbacks.Count; _i++) {
                 SubtitlePlayback _playback = playbacks[_i];
                 if (_playback.IsMusic && !_playback.AudioEnded) _playback.OnAudioEnded(NaturalEndTolerance, _asset != null);
             }
             if (_asset == null) return;
+            // A subscriber changed the track meanwhile: its own call tracks the new one.
+            MusicChannel _channel = Audio.Music;
+            if (_channel == null || _channel.Current != _asset) return;
             SubtitleExtension _extension = _asset.GetExtension<SubtitleExtension>();
             if (_extension == null) return;
 
             SubtitlePlayback _new = pool.Count > 0 ? pool.Pop() : new SubtitlePlayback();
             playbacks.Add(_new);
             // Changed means the runtime is alive; after a rebuild this is the new channel.
-            _new.BeginMusic(Audio.Music, _asset, _extension);
+            _new.BeginMusic(_channel, _asset, _extension);
             _new.Advance();
         }
 
