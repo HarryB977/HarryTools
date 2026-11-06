@@ -207,8 +207,9 @@ namespace HarryTools.Audio.Subtitles {
             SubtitlePlayback _playback = pool.Count > 0 ? pool.Pop() : new SubtitlePlayback();
             playbacks.Add(_playback);
             _playback.Begin(_handle, _asset, _extension);
-            // Entries at Delay 0 show with the sound, not one frame later.
-            _playback.Advance();
+            // 2D entries at Delay 0 show with the sound, not one frame later. A 3D sound waits for the first tick, since the caller
+            // may still move it (At, Follow) after Play; a sound in its asset delay waits until it is heard.
+            if (!_handle.Is3D && !_handle.InDelay) _playback.Advance();
         }
 
         private static void HandleEnded(AudioHandle _handle) {

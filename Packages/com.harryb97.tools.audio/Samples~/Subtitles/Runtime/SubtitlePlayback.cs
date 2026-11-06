@@ -120,6 +120,8 @@ namespace HarryTools.Audio.Subtitles {
             if (!handle.IsValid) return false;
             clock = handle.Elapsed;
             position = handle.Position;
+            // Lines are timed from when the sound starts being heard: nothing moves during the asset delay.
+            if (handle.InDelay) return true;
             Advance();
             return true;
         }
