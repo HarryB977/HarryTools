@@ -178,6 +178,34 @@ namespace HarryTools.Audio.Tests {
             Assert.Greater(_handle.Elapsed, _atPause + 0.05f);
         }
 
+        [UnityTest]
+        public IEnumerator InDelay_TrueUntilTheAssetDelayElapses() {
+            SoundAsset _delayed = MakeSound(MakeClip(3f));
+            _delayed.SetDelay(0.4f);
+            SoundAsset _plain = MakeSound(MakeClip(3f));
+            AudioHandle _handle = Audio.Play(_delayed);
+            AudioHandle _immediate = Audio.Play(_plain);
+
+            Assert.IsTrue(_handle.InDelay, "A sound with a delay starts in its delay.");
+            Assert.IsFalse(_immediate.InDelay, "A sound without a delay is never in delay.");
+            yield return WaitReal(0.2f);
+            Assert.IsTrue(_handle.InDelay);
+
+            yield return WaitReal(0.4f);
+            Assert.IsFalse(_handle.InDelay, "InDelay must turn false once the delay elapsed.");
+            Assert.IsTrue(_handle.IsValid);
+        }
+
+        [UnityTest]
+        public IEnumerator InDelay_FrozenWhilePaused() {
+            SoundAsset _delayed = MakeSound(MakeClip(3f));
+            _delayed.SetDelay(0.3f);
+            AudioHandle _handle = Audio.Play(_delayed);
+            _handle.Pause();
+            yield return WaitReal(0.5f);
+            Assert.IsTrue(_handle.InDelay, "The delay does not run while the playback is paused.");
+        }
+
         [Test]
         public void InvalidHandle_ReturnsDefaults() {
             AudioHandle _handle = AudioHandle.Invalid;
@@ -187,12 +215,14 @@ namespace HarryTools.Audio.Tests {
             Assert.AreEqual(Vector3.zero, _handle.Position);
             Assert.IsFalse(_handle.Is3D);
             Assert.AreEqual(0f, _handle.Elapsed);
+            Assert.IsFalse(_handle.InDelay);
         }
 
         [UnityTest]
         public IEnumerator StaleHandle_ReturnsDefaults() {
             AudioHandle _handle = Audio.Play(MakeSound(MakeClip(0.1f)));
             yield return WaitFor(() => !_handle.IsValid, 2f);
+            Assert.IsFalse(_handle.InDelay);
             Assert.IsNull(_handle.Clip);
             Assert.AreEqual(0f, _handle.Duration);
             Assert.AreEqual(0f, _handle.Elapsed);

@@ -142,6 +142,19 @@ namespace HarryTools.Audio.Tests {
         }
 
         [UnityTest]
+        public IEnumerator HandleReads_ZeroGC() {
+            sound.SetDelay(0.5f);
+            AudioHandle _handle = Audio.Play(sound, Vector3.zero);
+            yield return null;
+            bool _sink = false;
+            Action _read = () => { for (int _i = 0; _i < Plays; _i++) _sink |= _handle.InDelay && _handle.Elapsed >= 0f; };
+            _read();
+            int _count = CountAllocations(_read);
+            Assert.IsTrue(_sink, "The playback must still be in its delay.");
+            Assert.AreEqual(0, _count, "Reading AudioHandle.InDelay allocated managed memory.");
+        }
+
+        [UnityTest]
         public IEnumerator Play_WithoutPosition_SteadyState_ZeroGC() {
             Action _run = () => { for (int _i = 0; _i < Plays; _i++) Audio.Play(sound).Stop(0f); };
             for (int _i = 0; _i < 10; _i++) _run();

@@ -44,6 +44,8 @@ namespace HarryTools.Audio {
         public bool Is3D => TryGetVoice(out AudioVoice _voice) && _voice.Is3D;
         /// <summary> Seconds of audio played, without the delay and without paused time. 0 when the handle is no longer valid. </summary>
         public float Elapsed => TryGetVoice(out AudioVoice _voice) ? _voice.PlayedTime : 0f;
+        /// <summary> True while the asset Delay has not elapsed yet: the playback exists but nothing is heard. Paused time does not count. False when the handle is no longer valid. </summary>
+        public bool InDelay => TryGetVoice(out AudioVoice _voice) && _voice.InDelay;
 
         // ==================== PUBLIC ===================
         /// <summary> Moves the sound to a world position and stops following its target. </summary>

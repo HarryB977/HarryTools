@@ -3,6 +3,7 @@
 ## [1.0.0-beta.2] - 2026-11-06
 ### Añadido
 - `AudioHandle` expone `Clip`, `Duration`, `IsLooping`, `Position`, `Is3D` y `Elapsed` (tiempo de audio sonado, sin el `Delay` ni el tiempo en pausa).
+- `AudioHandle.InDelay`: `true` mientras no ha pasado el `Delay` del asset (la reproducción existe pero aún no se oye).
 - `MusicChannel.Elapsed`: segundos sonados de la pista actual, sin reinicio en el paso de intro a loop y congelados con la pausa.
 - Sample de subtítulos (`Samples~/Subtitles`, requiere Unity Localization): extensión de subtítulos para los assets, eventos `Started`, `TextChanged` y `Ended`, distancia de escucha, opciones del jugador y escena de demo con un logger de consola.
 
