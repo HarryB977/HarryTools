@@ -39,6 +39,8 @@ namespace HarryTools.Audio.Subtitles {
         private bool[] refresh = Array.Empty<bool>();
         /// <summary> The audio stopped while the text was resolving: the line stays on the timeline but is never announced. </summary>
         private bool[] cancelled = Array.Empty<bool>();
+        /// <summary> Started was emitted for this entry during this playback. Only such lines may show again after the audio ended. </summary>
+        private bool[] everAnnounced = Array.Empty<bool>();
         private float[] shownAt = Array.Empty<float>();
         private float[] shownRemaining = Array.Empty<float>();
         /// <summary> Duration carried by the last Started or TextChanged, repeated in Ended. </summary>
@@ -148,9 +150,10 @@ namespace HarryTools.Audio.Subtitles {
             refresh[_entry] = false;
             shownAt[_entry] = clock;
             shownRemaining[_entry] = _remaining;
-            // After the audio ended nothing starts again, not even a kept line shown back by a kind toggle.
-            cancelled[_entry] = audioEnded;
-            if (audioEnded) {
+            // After the audio ended, only a line already announced (kept by Stop, then hidden and shown back by a kind toggle)
+            // starts again, with its remaining time. A line never announced stays cancelled.
+            cancelled[_entry] = audioEnded && !everAnnounced[_entry];
+            if (cancelled[_entry]) {
                 textRequests[_entry] = 0;
                 return;
             }
@@ -206,6 +209,7 @@ namespace HarryTools.Audio.Subtitles {
             if (!announced[_entry]) {
                 // Marked first: a Started subscriber that stops the audio must get the Ended of this line.
                 announced[_entry] = true;
+                everAnnounced[_entry] = true;
                 ids[_entry] = Subtitles.NextId();
                 durations[_entry] = Remaining(_entry);
                 Subtitles.RaiseStarted(CreateInfo(_entry, durations[_entry]));
@@ -237,6 +241,7 @@ namespace HarryTools.Audio.Subtitles {
             announced[_entry] = false;
             refresh[_entry] = false;
             cancelled[_entry] = false;
+            everAnnounced[_entry] = false;
             shownAt[_entry] = 0f;
             shownRemaining[_entry] = 0f;
             durations[_entry] = 0f;
@@ -250,6 +255,7 @@ namespace HarryTools.Audio.Subtitles {
             announced = new bool[_count];
             refresh = new bool[_count];
             cancelled = new bool[_count];
+            everAnnounced = new bool[_count];
             shownAt = new float[_count];
             shownRemaining = new float[_count];
             durations = new float[_count];
