@@ -22,7 +22,7 @@ namespace HarryTools.Audio.Subtitles.Demo {
         [Tooltip("Log the Started, TextChanged and Ended events.")]
         public bool LogEvents = true;
 
-        private static bool warnedAboutLocalization;
+        private bool warnedAboutLocalization;
 
         // ==================== UNITY ===================
         private void OnEnable() {
@@ -103,7 +103,7 @@ namespace HarryTools.Audio.Subtitles.Demo {
             return "[" + _info.Kind + "] " + _speaker + _info.Text + " (" + _duration + ") #" + _info.Id;
         }
 
-        private static void WarnIfLocalizationIsMissing() {
+        private void WarnIfLocalizationIsMissing() {
             if (warnedAboutLocalization || LocalizationSettings.HasSettings) return;
             warnedAboutLocalization = true;
             HarryTools.LoggerTool.Logger.LogWarning("Audio", "The subtitles demo needs Localization Settings with the locales en and es. Create them in Edit > Project Settings > Localization (see the package README).");
