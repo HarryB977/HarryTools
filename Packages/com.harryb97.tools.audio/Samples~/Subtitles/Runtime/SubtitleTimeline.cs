@@ -22,7 +22,6 @@ namespace HarryTools.Audio.Subtitles {
         /// <summary> Entry indices sorted by Delay, stable on ties. </summary>
         private int[] order = Array.Empty<int>();
         private int count;
-        private bool stopped;
 
         // ==================== PROPERTIES ===================
         /// <summary> True when no entry is visible and none can still show. </summary>
@@ -39,17 +38,19 @@ namespace HarryTools.Audio.Subtitles {
         /// <summary>
         /// Prepares the timeline for a new playback. The end of each entry is the earliest of: the Delay of the next entry
         /// of the same kind, Delay + Duration when Duration is above 0, and the audio duration when the sound does not loop.
+        /// Entries whose Delay is at or past the clip length never show, loop or not (a loop emits once, on its first lap),
+        /// and they do not cut the previous entry of their kind.
         /// </summary>
         public void Reset(IReadOnlyList<SubtitleEntry> _entries, float _audioDuration, bool _loop) {
             count = _entries != null ? _entries.Count : 0;
-            stopped = false;
             EnsureCapacity(count);
 
             for (int _i = 0; _i < count; _i++) {
                 SubtitleEntry _entry = _entries[_i];
                 starts[_i] = _entry != null ? _entry.Delay : 0f;
                 kinds[_i] = _entry != null ? _entry.Kind : SubtitleKind.Dialogue;
-                states[_i] = _entry != null ? EntryState.Pending : EntryState.Done;
+                bool _pastClip = _audioDuration > 0f && starts[_i] >= _audioDuration;
+                states[_i] = _entry != null && !_pastClip ? EntryState.Pending : EntryState.Done;
                 visible[_i] = false;
                 order[_i] = _i;
             }
@@ -91,14 +92,10 @@ namespace HarryTools.Audio.Subtitles {
 
                 if (_elapsed < starts[_index]) continue;
                 states[_index] = EntryState.Active;
-                if (visible[_index] && !IsKindShown(kinds[_index], _showDialogue, _showCaptions)) {
-                    Hide(_index, _listener);
-                    // After Stop only the visible entries may finish: a hidden one is over.
-                    if (stopped) states[_index] = EntryState.Done;
-                }
+                if (!IsKindShown(kinds[_index], _showDialogue, _showCaptions)) Hide(_index, _listener);
             }
 
-            if (stopped) return;
+            // After Stop only the entries visible at that moment are still Active, so only they can show again.
             for (int _o = 0; _o < count; _o++) {
                 int _index = order[_o];
                 if (states[_index] != EntryState.Active || visible[_index]) continue;
@@ -112,10 +109,10 @@ namespace HarryTools.Audio.Subtitles {
         /// <summary>
         /// The audio stopped before its time. With _endVisible every visible entry hides now; otherwise the visible ones
         /// keep their end (the caller goes on calling Advance with the time that passes). Pending entries are cancelled
-        /// either way, and so are entries that only end when a loop stops.
+        /// either way, and so are entries that only end when a loop stops. A kept entry hidden by a kind toggle shows again,
+        /// with its remaining time, if the kind comes back before its end.
         /// </summary>
         public void Stop(bool _endVisible, ISubtitleTimelineListener _listener) {
-            stopped = true;
             for (int _o = 0; _o < count; _o++) {
                 int _index = order[_o];
                 if (states[_index] == EntryState.Done) continue;
