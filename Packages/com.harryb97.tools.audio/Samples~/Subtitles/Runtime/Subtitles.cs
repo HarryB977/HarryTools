@@ -63,8 +63,15 @@ namespace HarryTools.Audio.Subtitles {
             set => settings = value;
         }
 
-        internal static bool DialogueShown => showDialogue;
-        internal static bool CaptionsShown => showCaptions;
+        internal static bool DialogueShown {
+            get => showDialogue;
+            set => showDialogue = value;
+        }
+
+        internal static bool CaptionsShown {
+            get => showCaptions;
+            set => showCaptions = value;
+        }
 
         /// <summary> Text source in use; created on first use so Localization is not touched until a subtitle needs it. </summary>
         internal static ISubtitleTextSource Source {
@@ -85,7 +92,8 @@ namespace HarryTools.Audio.Subtitles {
         }
 
         // ==================== LIFECYCLE ===================
-        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+        // Before the first scene loads, like the core: sounds started in the first scene's Awake/OnEnable must get subtitles.
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         private static void Bootstrap() {
             Audio.Started -= onAudioStarted;
             Audio.Started += onAudioStarted;
@@ -100,6 +108,10 @@ namespace HarryTools.Audio.Subtitles {
 
         [ExecuteOnReload]
         private static void ResetOnReload() {
+            // Listeners of the previous Play session are gone: the open lines end silently.
+            started = null;
+            ended = null;
+            textChanged = null;
             Shutdown();
             UseSource(null);
             settings = null;
@@ -107,9 +119,6 @@ namespace HarryTools.Audio.Subtitles {
             nextRequest = 0;
             showDialogue = true;
             showCaptions = true;
-            started = null;
-            ended = null;
-            textChanged = null;
         }
 
         /// <summary> Ends every open line, drops the tracking and the pool, and subscribes again. Keeps listeners and the text source. </summary>

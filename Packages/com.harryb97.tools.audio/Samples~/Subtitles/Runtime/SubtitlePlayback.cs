@@ -146,9 +146,14 @@ namespace HarryTools.Audio.Subtitles {
             ids[_entry] = 0;
             announced[_entry] = false;
             refresh[_entry] = false;
-            cancelled[_entry] = false;
             shownAt[_entry] = clock;
             shownRemaining[_entry] = _remaining;
+            // After the audio ended nothing starts again, not even a kept line shown back by a kind toggle.
+            cancelled[_entry] = audioEnded;
+            if (audioEnded) {
+                textRequests[_entry] = 0;
+                return;
+            }
             ResolveText(_entry);
         }
 
