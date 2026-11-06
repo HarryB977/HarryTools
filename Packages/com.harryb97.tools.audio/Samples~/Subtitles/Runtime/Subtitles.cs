@@ -1,0 +1,214 @@
+using System;
+using System.Collections.Generic;
+using HarryTools.DomainReload;
+using HarryTools.GameLoop;
+using UnityEngine;
+
+namespace HarryTools.Audio.Subtitles {
+    /// <summary>
+    /// Turns sounds and voice lines with a SubtitleExtension into subtitle events. It draws nothing: the game listens to
+    /// Started, TextChanged and Ended and shows the lines its own way. Every Started gets exactly one Ended.
+    /// </summary>
+    public static class Subtitles {
+        // ==================== VARIABLES ===================
+        public const string LoopId = "HarryTools.Audio.Subtitles";
+        public const float DefaultHearingDistance = 15f;
+        public const float DefaultExitMargin = 0.1f;
+        /// <summary> A playback that ends this close to its duration finished on its own; earlier, it was stopped. </summary>
+        internal const float NaturalEndTolerance = 0.1f;
+
+        private static readonly List<SubtitlePlayback> playbacks = new List<SubtitlePlayback>();
+        private static readonly Stack<SubtitlePlayback> pool = new Stack<SubtitlePlayback>();
+        private static readonly Action<AudioHandle> onAudioStarted = HandleStarted;
+        private static readonly Action<AudioHandle> onAudioEnded = HandleEnded;
+        private static readonly Action onLanguageChanged = HandleLanguageChanged;
+        private static readonly LoopSystem.LoopDelegate tick = Tick;
+
+        private static ILoopable loop;
+        private static ISubtitleTextSource source;
+        private static SubtitleSettings settings;
+        private static int nextId;
+        private static int nextRequest;
+        // Player options; Task 5 adds ShowDialogue/ShowCaptions and their store.
+        private static bool showDialogue = true;
+        private static bool showCaptions = true;
+
+        private static Action<SubtitleInfo> started;
+        private static Action<SubtitleInfo> ended;
+        private static Action<SubtitleInfo> textChanged;
+
+        // ==================== EVENTS ===================
+        /// <summary> A line appears. Raised once its text (and speaker name) is resolved. </summary>
+        public static event Action<SubtitleInfo> Started {
+            add => started += value;
+            remove => started -= value;
+        }
+
+        /// <summary> A line disappears. Rely on this, not on Duration, to remove it. </summary>
+        public static event Action<SubtitleInfo> Ended {
+            add => ended += value;
+            remove => ended -= value;
+        }
+
+        /// <summary> The language changed while the line was visible: new text and the time it has left. </summary>
+        public static event Action<SubtitleInfo> TextChanged {
+            add => textChanged += value;
+            remove => textChanged -= value;
+        }
+
+        // ==================== PROPERTIES ===================
+        /// <summary> Global settings. Null uses the defaults (15 m hearing distance, 0.1 exit margin). </summary>
+        public static SubtitleSettings Settings {
+            get => settings;
+            set => settings = value;
+        }
+
+        internal static bool DialogueShown => showDialogue;
+        internal static bool CaptionsShown => showCaptions;
+
+        /// <summary> Text source in use; created on first use so Localization is not touched until a subtitle needs it. </summary>
+        internal static ISubtitleTextSource Source {
+            get {
+                if (source == null) UseSource(new LocalizationTextSource());
+                return source;
+            }
+        }
+
+        /// <summary> Playbacks being tracked (playing, or stopped with lines still on time). </summary>
+        internal static int ActivePlaybackCount => playbacks.Count;
+
+        // ==================== PUBLIC ===================
+        /// <summary> Where texts come from. Null goes back to Unity Localization. </summary>
+        public static void SetTextSource(ISubtitleTextSource _source) {
+            // Null is resolved lazily by Source, so clearing the source never touches Localization.
+            UseSource(_source);
+        }
+
+        // ==================== LIFECYCLE ===================
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+        private static void Bootstrap() {
+            Audio.Started -= onAudioStarted;
+            Audio.Started += onAudioStarted;
+            Audio.Ended -= onAudioEnded;
+            Audio.Ended += onAudioEnded;
+
+            if (LoopSystem.HasLoop(LoopId)) LoopSystem.RemoveLoop(LoopId);
+            loop = new Loop(LoopId);
+            loop.AddUpdateListener(tick);
+            LoopSystem.AddLoop(loop);
+        }
+
+        [ExecuteOnReload]
+        private static void ResetOnReload() {
+            Shutdown();
+            UseSource(null);
+            settings = null;
+            nextId = 0;
+            nextRequest = 0;
+            showDialogue = true;
+            showCaptions = true;
+            started = null;
+            ended = null;
+            textChanged = null;
+        }
+
+        /// <summary> Ends every open line, drops the tracking and the pool, and subscribes again. Keeps listeners and the text source. </summary>
+        internal static void ResetForTests() {
+            Shutdown();
+            Bootstrap();
+        }
+
+        /// <summary> Ends every open line (each Started gets its Ended), stops listening to the audio and removes the loop. </summary>
+        private static void Shutdown() {
+            Audio.Started -= onAudioStarted;
+            Audio.Ended -= onAudioEnded;
+            if (loop != null) {
+                if (LoopSystem.TryGetLoop(LoopId, out ILoopable _registered) && _registered == loop) LoopSystem.RemoveLoop(LoopId);
+                loop.RemoveUpdateListener(tick);
+                loop = null;
+            }
+
+            // An Ended subscriber may start new playbacks: keep ending until the list is empty.
+            while (playbacks.Count > 0) {
+                int _last = playbacks.Count - 1;
+                SubtitlePlayback _playback = playbacks[_last];
+                playbacks.RemoveAt(_last);
+                _playback.EndAll();
+                _playback.Release();
+                pool.Push(_playback);
+            }
+            pool.Clear();
+        }
+
+        // ==================== AUDIO ===================
+        /// <summary> Starts tracking the playback when its asset has subtitles. Assets without them return before allocating anything. </summary>
+        internal static void HandleStarted(AudioHandle _handle) {
+            AudioAsset _asset = _handle.Asset;
+            if (_asset == null) return;
+            SubtitleExtension _extension = _asset.GetExtension<SubtitleExtension>();
+            if (_extension == null) return;
+
+            SubtitlePlayback _playback = pool.Count > 0 ? pool.Pop() : new SubtitlePlayback();
+            playbacks.Add(_playback);
+            _playback.Begin(_handle, _asset, _extension);
+            // Entries at Delay 0 show with the sound, not one frame later.
+            _playback.Advance();
+        }
+
+        private static void HandleEnded(AudioHandle _handle) {
+            for (int _i = 0; _i < playbacks.Count; _i++) {
+                if (playbacks[_i].Handle != _handle) continue;
+                playbacks[_i].OnAudioEnded(NaturalEndTolerance);
+                return;
+            }
+        }
+
+        private static void HandleLanguageChanged() {
+            for (int _i = 0; _i < playbacks.Count; _i++) playbacks[_i].OnLanguageChanged();
+        }
+
+        private static void Tick() {
+            float _deltaTime = Time.unscaledDeltaTime;
+            // By index: a subscriber may start sounds (appended) while the list is walked. Removal waits for the sweep below.
+            for (int _i = 0; _i < playbacks.Count; _i++) {
+                SubtitlePlayback _playback = playbacks[_i];
+                if (!_playback.Tick(_deltaTime)) _playback.EndAll();
+            }
+
+            for (int _i = playbacks.Count - 1; _i >= 0; _i--) {
+                SubtitlePlayback _playback = playbacks[_i];
+                if (!_playback.IsFinished) continue;
+                playbacks.RemoveAt(_i);
+                _playback.Release();
+                pool.Push(_playback);
+            }
+        }
+
+        // ==================== INTERNAL ===================
+        internal static int NextId() => ++nextId;
+
+        internal static int NextRequest() {
+            nextRequest++;
+            if (nextRequest == 0) nextRequest = 1;
+            return nextRequest;
+        }
+
+        internal static void RaiseStarted(SubtitleInfo _info) => Raise(started, _info);
+        internal static void RaiseEnded(SubtitleInfo _info) => Raise(ended, _info);
+        internal static void RaiseTextChanged(SubtitleInfo _info) => Raise(textChanged, _info);
+
+        // ==================== PRIVATE ===================
+        private static void UseSource(ISubtitleTextSource _source) {
+            if (source == _source) return;
+            if (source != null) source.LanguageChanged -= onLanguageChanged;
+            source = _source;
+            if (source != null) source.LanguageChanged += onLanguageChanged;
+        }
+
+        // A throwing subscriber must not break the timeline of the playback or the audio tick that raised the event.
+        private static void Raise(Action<SubtitleInfo> _event, SubtitleInfo _info) {
+            if (_event == null) return;
+            try { _event(_info); } catch (Exception _exception) { Debug.LogException(_exception); }
+        }
+    }
+}
