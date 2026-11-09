@@ -1,7 +1,6 @@
 using System;
 using Unity.Profiling;
 using UnityEngine;
-using Stopwatch = System.Diagnostics.Stopwatch;
 
 namespace HarryTools.Audio.Acoustics {
     /// <summary>
@@ -133,14 +132,18 @@ namespace HarryTools.Audio.Acoustics {
 
             try {
                 using (Marker.Auto()) {
-                    long _deadline = Stopwatch.GetTimestamp() + (long)(profile.MainThreadBudgetMs * Stopwatch.Frequency / 1000f);
+                    long _deadline = budget.BeginWork();
                     float _now = Time.unscaledTime;
                     EnsureCapacity(_queries.Length);
                     AssignSlots(_queries);
                     ClaimCells(_queries, _now);
-                    ReadBatch(_deadline);
-                    if (batch == NoBatch) ScheduleDue(_queries.Length, _now);
+                    // Runs after the propagation module: when that one used up the frame, the voices keep their reverb until the next.
+                    if (!budget.WaitIfSpent(this)) {
+                        ReadBatch(_deadline);
+                        if (batch == NoBatch) ScheduleDue(_queries.Length, _now, _deadline);
+                    }
                     WriteResults(_queries, _results);
+                    budget.EndWork();
                 }
             } catch {
                 Acoustics.OnModuleFailed(this);
@@ -270,7 +273,7 @@ namespace HarryTools.Audio.Acoustics {
         }
 
         // ==================== SCHEDULING ===================
-        private void ScheduleDue(int _queryCount, float _now) {
+        private void ScheduleDue(int _queryCount, float _now, long _deadline) {
             float _interval = Mathf.Max(0f, profile.UpdateInterval);
             int _rayCount = 0;
             entryCount = 0;
@@ -278,7 +281,7 @@ namespace HarryTools.Audio.Acoustics {
 
             while (entryCount < entries.Length) {
                 int _index = MostOverdueCell(_queryCount, _now);
-                if (_index < 0) break;
+                if (_index < 0 || !budget.MayWork(this, _deadline, entryCount == 0)) break;
 
                 ref Cell _cell = ref cells[_index];
                 bool _incomplete = _cell.Count < roomRays;
@@ -331,7 +334,7 @@ namespace HarryTools.Audio.Acoustics {
 
             int _read = 0;
             while (entryCursor < entryCount) {
-                if (_read > 0 && Stopwatch.GetTimestamp() >= _deadline) return;
+                if (!budget.MayWork(this, _deadline, _read == 0)) return;
                 BatchEntry _entry = entries[entryCursor++];
                 _read++;
                 if (cells[_entry.Cell].Generation == _entry.Generation) StoreSamples(_entry, _hits, _counts);

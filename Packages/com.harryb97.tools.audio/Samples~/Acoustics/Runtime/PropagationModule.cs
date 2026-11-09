@@ -1,7 +1,6 @@
 using System;
 using Unity.Profiling;
 using UnityEngine;
-using Stopwatch = System.Diagnostics.Stopwatch;
 
 namespace HarryTools.Audio.Acoustics {
     /// <summary>
@@ -101,12 +100,15 @@ namespace HarryTools.Audio.Acoustics {
 
             try {
                 using (Marker.Auto()) {
-                    long _deadline = Stopwatch.GetTimestamp() + (long)(profile.MainThreadBudgetMs * Stopwatch.Frequency / 1000f);
+                    long _deadline = budget.BeginWork();
                     EnsureCapacity(_queries.Length);
                     AssignSlots(_queries);
-                    ReadBatch(_deadline);
-                    if (batch == NoBatch) ScheduleDue(_queries, _deadline);
+                    if (!budget.ShouldYield()) {
+                        ReadBatch(_deadline);
+                        if (batch == NoBatch) ScheduleDue(_queries, _deadline);
+                    }
                     for (int i = 0; i < _queries.Length; i++) _results[i] = slots[slotOfQuery[i]].Result;
+                    budget.EndWork();
                 }
             } catch {
                 // The core unregisters a module that throws and has no callback, so the cleanup happens here.
@@ -199,7 +201,7 @@ namespace HarryTools.Audio.Acoustics {
                 int _next = MostOverdue(_queries.Length, _now);
                 if (_next < 0) break;
                 // The first voice always goes through, so a tiny budget slows the simulation down instead of stopping it.
-                if (entryCount > 0 && Stopwatch.GetTimestamp() >= _deadline) break;
+                if (!budget.MayWork(this, _deadline, entryCount == 0)) break;
 
                 int _slot = slotOfQuery[_next];
                 AcousticQuery _query = _queries[_next];
@@ -290,7 +292,7 @@ namespace HarryTools.Audio.Acoustics {
             // What does not fit in the time of this frame is read in the next; the hits stay valid until Release.
             int _read = 0;
             while (entryCursor < entryCount) {
-                if (_read > 0 && Stopwatch.GetTimestamp() >= _deadline) return;
+                if (!budget.MayWork(this, _deadline, _read == 0)) return;
                 BatchEntry _entry = entries[entryCursor++];
                 _read++;
                 if (slots[_entry.Slot].Handle == _entry.Handle) slots[_entry.Slot].Result = Compute(_entry, _hits, _counts);

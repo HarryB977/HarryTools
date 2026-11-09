@@ -85,8 +85,12 @@ namespace HarryTools.Audio.Acoustics {
 
             geometry = _geometry;
             geometry.Configure(_resolved);
-            if (budget == null) budget = new RayBudget(_resolved.RayBudgetPerFrame);
-            else budget.SetLimit(_resolved.RayBudgetPerFrame);
+            if (budget == null) {
+                budget = new RayBudget(_resolved.RayBudgetPerFrame, _resolved.MainThreadBudgetMs);
+            } else {
+                budget.SetLimit(_resolved.RayBudgetPerFrame);
+                budget.SetTimeLimit(_resolved.MainThreadBudgetMs);
+            }
 
             if (module == null) module = new PropagationModule(_resolved, geometry, budget);
             else module.Configure(_resolved);
