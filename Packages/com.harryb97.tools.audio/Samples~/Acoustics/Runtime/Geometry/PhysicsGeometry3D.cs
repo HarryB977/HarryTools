@@ -74,9 +74,20 @@ namespace HarryTools.Audio.Acoustics {
         public bool ContainsPoint(int _colliderId, Vector3 _point) {
             if (!colliders.TryGetValue(_colliderId, out Collider _collider) || _collider == null) return false;
             if (!_collider.enabled || !_collider.gameObject.activeInHierarchy) return false;
-            if (_collider is MeshCollider _mesh && !_mesh.convex) return false;
-            // ClosestPoint returns the point itself when it is inside.
-            return (_collider.ClosestPoint(_point) - _point).sqrMagnitude < ContainsToleranceSqr;
+
+            switch (_collider) {
+                case CharacterController _character:
+                    return InsideCharacterCapsule(_character, _point);
+                case BoxCollider _:
+                case SphereCollider _:
+                case CapsuleCollider _:
+                case MeshCollider _mesh when _mesh.convex:
+                    // ClosestPoint returns the point itself when it is inside.
+                    return (_collider.ClosestPoint(_point) - _point).sqrMagnitude < ContainsToleranceSqr;
+                default:
+                    // ClosestPoint logs an error for any other collider type.
+                    return false;
+            }
         }
 
         public void Dispose() {
@@ -94,6 +105,18 @@ namespace HarryTools.Audio.Acoustics {
         }
 
         // ==================== HELPERS ===================
+        // The capsule of a CharacterController stays upright whatever the rotation of its transform.
+        private static bool InsideCharacterCapsule(CharacterController _character, Vector3 _point) {
+            Vector3 _scale = _character.transform.lossyScale;
+            float _radius = _character.radius * Mathf.Max(Mathf.Abs(_scale.x), Mathf.Abs(_scale.z));
+            float _height = Mathf.Max(_character.height * Mathf.Abs(_scale.y), _radius * 2f);
+            float _halfSegment = _height * 0.5f - _radius;
+
+            Vector3 _offset = _point - _character.transform.TransformPoint(_character.center);
+            _offset.y -= Mathf.Clamp(_offset.y, -_halfSegment, _halfSegment);
+            return _offset.sqrMagnitude <= _radius * _radius;
+        }
+
         private void ReclaimAbandoned() {
             for (int i = abandoned.Count - 1; i >= 0; i--) {
                 if (!abandoned[i].IsJobDone) continue;
