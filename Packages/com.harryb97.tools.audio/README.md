@@ -414,6 +414,7 @@ Marca **Debug Gizmos** en el Acoustics Bootstrap y entra en Play: en la vista de
 | F | Abre o cierra la puerta |
 | G | Destruye el muro de hormigón |
 | R | Suena un chasquido corto en la radio: se oye la cola de eco de la sala después de que acabe |
+| T | Apaga o enciende la radio, para oír el eco del chasquido sin el loop encima |
 
 Cada acción escribe una línea en la consola. Activa la pestaña Scene durante Play para ver los gizmos.
 

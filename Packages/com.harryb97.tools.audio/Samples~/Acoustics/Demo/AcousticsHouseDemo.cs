@@ -2,7 +2,7 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 
 namespace HarryTools.Audio.Acoustics.Demo {
-    /// <summary> Controls of the house demo: E picks up or drops the radio, F opens or closes the door, G destroys the wall, R plays a short sound at the radio. </summary>
+    /// <summary> Controls of the house demo: E picks up or drops the radio, F opens or closes the door, G destroys the wall, R plays a short sound at the radio, T mutes or unmutes the radio. </summary>
     [AddComponentMenu("HarryTools/Audio/Samples/Acoustics House Demo")]
     public sealed class AcousticsHouseDemo : MonoBehaviour {
         // ==================== VARIABLES ===================
@@ -45,6 +45,7 @@ namespace HarryTools.Audio.Acoustics.Demo {
             if (_keyboard.fKey.wasPressedThisFrame) ToggleDoor();
             if (_keyboard.gKey.wasPressedThisFrame) DestroyWall();
             if (_keyboard.rKey.wasPressedThisFrame) PlayShortSound();
+            if (_keyboard.tKey.wasPressedThisFrame) ToggleRadio();
         }
 
         // ==================== ACTIONS ===================
@@ -87,6 +88,14 @@ namespace HarryTools.Audio.Acoustics.Demo {
             if (ShortSound == null || Radio == null) return;
             Audio.Play(ShortSound).At(Radio.position);
             Debug.Log("Short sound played at the radio.");
+        }
+
+        /// <summary> Pauses or resumes the radio, so its loop does not cover the tail of the short sound. </summary>
+        public void ToggleRadio() {
+            if (!radioHandle.IsValid) return;
+            if (radioHandle.IsPaused) radioHandle.Resume();
+            else radioHandle.Pause();
+            Debug.Log(radioHandle.IsPaused ? "Radio off." : "Radio on.");
         }
 
         public void DestroyWall() {
