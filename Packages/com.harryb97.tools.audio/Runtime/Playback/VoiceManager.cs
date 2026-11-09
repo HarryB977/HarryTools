@@ -171,11 +171,12 @@ namespace HarryTools.Audio {
             }
         }
 
-        /// <summary> Stops one voice. A negative fade uses the asset FadeOut; 0 (or a paused voice) releases it at once. </summary>
+        /// <summary> Stops one voice. A negative fade uses the asset FadeOut; 0 (or a paused voice) releases it at once. An explicit 0 is a hard cut; a negative fade on an asset without FadeOut can still leave a reverb tail. </summary>
         public void Stop(AudioVoice _voice, float _fade) {
             if (_voice == null || !_voice.IsActive) return;
-            if (_fade < 0f) _fade = _voice.Asset != null ? _voice.Asset.FadeOut : 0f;
-            if (_fade <= 0f || _voice.IsFrozen) Release(_voice);
+            bool _assetDefault = _fade < 0f;
+            if (_assetDefault) _fade = _voice.Asset != null ? _voice.Asset.FadeOut : 0f;
+            if (_fade <= 0f || _voice.IsFrozen) Release(_voice, false, _assetDefault && !_voice.IsFrozen);
             else _voice.BeginFadeOut(_fade);
         }
 
@@ -310,7 +311,7 @@ namespace HarryTools.Audio {
         }
 
         // _natural: the sound played to its end (not stopped, faded out or stolen).
-        // _allowTail: the playback finished by itself or after its fade-out. Cuts (stealing, Stop without fade, StopAll) never leave a tail.
+        // _allowTail: the playback finished by itself, after its fade-out, or by a Stop that asked for the asset default. Cuts (stealing, explicit Stop(0), Stop while frozen, StopAll) never leave a tail.
         private void Release(AudioVoice _voice, bool _natural = false, bool _allowTail = false) {
             if (ReferenceEquals(_voice, null) || !_voice.IsActive) return;
             var _handle = new AudioHandle(_voice.Index, _voice.Generation);

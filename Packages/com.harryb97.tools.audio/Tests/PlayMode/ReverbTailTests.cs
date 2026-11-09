@@ -254,11 +254,43 @@ namespace HarryTools.Audio.Tests {
         }
 
         [UnityTest]
-        public IEnumerator Stop_ZeroFade_CutsWithoutTail() {
+        public IEnumerator ExplicitStopZero_NoTail() {
+            Register(0.8f, 3f);
+            AudioHandle _handle = PlayAt(MakeSound(2f));
+            AudioVoice _voice = VoiceOf(_handle);
+            yield return Seconds(0.5f);
+            _handle.Stop(0f);
+            Assert.AreEqual(1, ended);
+            Assert.AreEqual(0, Manager.TailCount);
+            Assert.IsFalse(_voice.IsTail);
+            Assert.IsFalse(_voice.Reverb.enabled);
+        }
+
+        [UnityTest]
+        public IEnumerator DefaultStop_NoFadeOut_StartsTail() {
+            Register(0.8f, 3f);
+            SoundAsset _sound = MakeSound(2f);
+            Assert.AreEqual(0f, _sound.FadeOut, "The test needs an asset without FadeOut.");
+            AudioHandle _handle = PlayAt(_sound);
+            AudioVoice _voice = VoiceOf(_handle);
+            yield return Seconds(0.5f);
+
+            _handle.Stop();
+            Assert.AreEqual(1, ended, "Ended belongs to the Stop, not to the end of the tail.");
+            Assert.IsFalse(_handle.IsValid);
+            Assert.AreEqual(1, Manager.TailCount);
+            Assert.IsTrue(_voice.IsTail);
+            Assert.IsTrue(_voice.Reverb.enabled);
+            Assert.AreEqual(0, Manager.ActiveVoices.Count);
+        }
+
+        [UnityTest]
+        public IEnumerator DefaultStop_WhilePaused_NoTail() {
             Register(0.8f, 3f);
             AudioHandle _handle = PlayAt(MakeSound(2f));
             yield return Seconds(0.5f);
-            _handle.Stop(0f);
+            _handle.Pause();
+            _handle.Stop();
             Assert.AreEqual(1, ended);
             Assert.AreEqual(0, Manager.TailCount);
         }
