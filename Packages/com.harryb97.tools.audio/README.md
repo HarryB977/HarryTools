@@ -241,6 +241,7 @@ Contrato:
 - El núcleo combina los resultados de todos los módulos en orden: los volúmenes se multiplican, gana el paso bajo más bajo y el paso alto más alto, y la posición percibida es la del último módulo que la fija.
 - Un módulo con `UpdateInterval` sigue aportando su último resultado entre evaluaciones.
 - Solo se simulan hasta `MaxSimulated` voces por tick.
+- Un módulo puede escribir reverb (`HasReverb` y `Reverb`). Si varios lo hacen, gana el último en `Order`. Cada voz lleva un `AudioReverbFilter` apagado que se enciende con ese valor y se suaviza igual que el resto. Sin módulos que escriban reverb, el filtro sigue apagado y no hay colas.
 - Un módulo que lanza una excepción se registra en la consola y se desregistra.
 - `Evaluate` no debe reservar memoria si el juego busca cero GC.
 
@@ -316,13 +317,14 @@ Sample opcional (Package Manager > HarryTools Audio > Samples > Acoustics) que h
 
 > **Beta:** el sample forma parte de la `1.0.0-beta.4` y su API puede cambiar antes de la 1.0.0.
 
-### Qué hace el bloque 1
+### Qué hace
 
 - **Oclusión:** lanza rayos desde la fuente (el centro y puntos de una esfera alrededor) hasta el oyente. Cuantos más quedan tapados, más se apaga el sonido y más se filtran los agudos.
 - **Transmisión:** lo que tapa deja pasar parte del sonido según el material y el grosor medido de lo que atraviesa el rayo. Una pared de ladrillo apenas deja pasar nada; una puerta de madera, bastante más.
 - **Absorción del aire:** a más distancia, menos agudos.
 - **Suelo de audibilidad:** un sonido totalmente tapado no baja de `FloorDb` (-30 dB por defecto), con un paso bajo y un paso alto máximos. Nunca se silencia del todo.
-- No hay eco ni pathing todavía: llegan en próximas betas.
+- **Eco por sala:** cada sonido recibe la reverb de la sala donde está él, no la del oyente (ver más abajo).
+- No hay pathing todavía: llega en próximas betas.
 
 ### Instalación y uso
 
@@ -347,11 +349,41 @@ Basta con un **Acoustic Surface** en el padre de una pared compuesta de varias p
 
 ### Extensión por sonido
 
-Añade la extensión **Acoustic Source Extension** a un asset de audio (lista *Extensions*) para ajustar ese sonido: `Radius` (radio en metros de la esfera que representa la fuente), `Exclude` (no simularlo) y `ReverbSend` (reservado para la reverb de las próximas betas). Sin la extensión se usan los valores por defecto.
+Añade la extensión **Acoustic Source Extension** a un asset de audio (lista *Extensions*) para ajustar ese sonido: `Radius` (radio en metros de la esfera que representa la fuente), `Exclude` (no simularlo) y `ReverbSend` (cuánto eco recibe ese sonido; 0 lo apaga, 1 es lo normal). Sin la extensión se usan los valores por defecto.
 
 ### Coste y presupuestos
 
 Cada sonido simulado lanza 2 rayos centrales más `OcclusionRays` (8 por defecto). El trabajo se limita por frame con `RayBudgetPerFrame` (256) y `MainThreadBudgetMs` (0,5 ms): lo que no cabe espera al siguiente frame y el sonido conserva su último resultado. Cada voz se reevalúa cada `UpdateInterval` (0,1 s). El núcleo solo simula hasta `MaxSimulated` voces por tick, las más audibles. El módulo no genera basura por tick; solo reserva memoria al crear o ampliar buffers.
+
+### Eco por sala
+
+Cada sonido simulado suena con el eco de la sala en la que está. Alrededor de la fuente se lanzan rayos en todas direcciones; con la distancia media hasta la primera superficie (el recorrido libre medio), cuánto escapa sin chocar y lo que absorbe el material de cada superficie se calcula la reverb: una cochera de hormigón vacía da un eco largo y marcado, un salón con moqueta casi no da. El oyente solo decide qué sonidos se oyen y con qué filtro, no qué eco tienen.
+
+Los rayos se comparten por celdas de espacio: los sonidos que están en la misma celda usan la misma estimación. Cada celda guarda un anillo de muestras que se renueva poco a poco, así que si cambia la geometría (un muro que cae) el eco se actualiza solo sin detectar nada.
+
+Parámetros del perfil:
+
+- `Reverb`: enciende o apaga el eco por sala.
+- `RoomMaxDistance` (30 m): hasta dónde llegan los rayos. Un rayo que no choca cuenta como espacio abierto.
+- `RoomCellSize` (2 m): tamaño de la celda. Más pequeña es más precisa y más cara.
+- `RoomRays` (32): muestras que guarda cada celda.
+- `RoomRaysPerUpdate` (8): rayos que se renuevan por actualización de una celda.
+- `ReverbWet`: volumen del eco para todo el perfil. Se multiplica por el `ReverbSend` de cada sonido.
+
+Con los valores por defecto una celda se renueva entera cada 0,4 s (32 rayos a 8 por actualización cada `UpdateInterval` de 0,1 s). Una celda recién creada no tiene eco hasta que llega la mitad de sus muestras; mientras tanto el sonido conserva el que tuviera. Una fuente que cruza celdas deprisa mantiene la última estimación hasta que la celda nueva está lista.
+
+Los rayos de eco comparten presupuesto con la oclusión: cuando el presupuesto de rayos o de tiempo va justo, el sonido directo tiene prioridad sobre el eco.
+
+**Colas:** al acabar un sonido con eco, su reverb se queda sonando unos instantes para que no se corte en seco.
+
+- `Stop()` sin fundido deja el eco; `Stop(0f)` lo corta; `Audio.StopAll` corta también las colas.
+- Una cola dura como máximo 5 s.
+- `Ended`, `WaitForEnd`, las conversaciones y los subtítulos ocurren al acabar el clip, no al acabar la cola.
+- Una voz en cola ocupa un hueco del pool y es la primera que se roba cuando el pool se llena, así que nunca impide un `Play` nuevo. Un handle antiguo no la toca. `Audio.Pause` la congela.
+
+**Coste:** cada voz con eco lleva un `AudioReverbFilter`; el coste del mezclador crece con el número de voces simuladas, que el núcleo limita con `MaxSimulated`. El módulo no genera basura por tick.
+
+**WebGL:** no hay reverb ni colas (no hay mixer ni filtros), igual que el resto de la acústica.
 
 ### Qué se simula y qué no
 
@@ -361,15 +393,16 @@ Cada sonido simulado lanza 2 rayos centrales más `OcclusionRays` (8 por defecto
 - La comprobación de si un extremo está dentro de un collider solo se hace en colliders convexos: los `MeshCollider` no convexos y el terreno no se comprueban.
 - Una malla abierta no tiene interior definido, así que se le supone un grosor nominal.
 - Los presets de materiales y del perfil son valores de partida que conviene ajustar de oído.
-- El eco, la reverb por sala y el pathing llegan en próximas betas.
+- El pathing (sonido que rodea esquinas) llega en próximas betas.
+- La reverb es una estimación del espacio alrededor de la fuente con unas decenas de rayos: una sala con huecos pequeños o muy irregulares puede dar un valor aproximado.
 
 ### Depuración en la vista de escena
 
-Marca **Debug Gizmos** en el Acoustics Bootstrap y entra en Play: en la vista de escena (con los *Gizmos* activados) cada sonido simulado dibuja la línea hasta el oyente (verde libre, roja tapada), los rayos de oclusión libres o bloqueados, los puntos donde atraviesa superficies con el nombre de su material, y el volumen y los filtros que recibe. Solo existe en la vista de escena, no hay UI de juego. Activarlo copia unos datos por voz; déjalo apagado en builds.
+Marca **Debug Gizmos** en el Acoustics Bootstrap y entra en Play: en la vista de escena (con los *Gizmos* activados) cada sonido simulado dibuja la línea hasta el oyente (verde libre, roja tapada), los rayos de oclusión libres o bloqueados, los puntos donde atraviesa superficies con el nombre de su material, y el volumen y los filtros que recibe. Para el eco dibuja la celda de la sala de cada sonido, una esfera con su recorrido libre medio y un color que va de cian (seco) a magenta (mucho eco) según `Wet`, con el tiempo de decay. Solo existe en la vista de escena, no hay UI de juego. Activarlo copia unos datos por voz; déjalo apagado en builds.
 
 ### Demo
 
-`Demo/AcousticsHouse.unity` es una casa vista desde arriba con un salón (la radio suena en bucle), un pasillo, una cocina conectada por un arco, y una cochera vacía. Hay una puerta de madera entre el salón y el pasillo y un muro de hormigón entre el salón y la cochera. La esfera verde es el oyente. Lee el teclado con el **Input System** (`com.unity.inputsystem`); sin ese paquete los scripts de la demo no se compilan. Los materiales de la escena usan el shader de URP Lit: en otro pipeline, reasígnalos. Si tu escena ya tiene un `AudioListener`, desactívalo: la demo trae el suyo.
+`Demo/AcousticsHouse.unity` es una casa vista desde arriba con un salón (la radio suena en bucle), un pasillo, una cocina conectada por un arco, y una cochera vacía. Hay una puerta de madera entre el salón y el pasillo y un muro de hormigón entre el salón y la cochera. El salón tiene moqueta y la cochera paredes y techo metálicos con suelo de hormigón, así que la misma radio suena con mucho más eco en la cochera. La esfera verde es el oyente. Lee el teclado con el **Input System** (`com.unity.inputsystem`); sin ese paquete los scripts de la demo no se compilan. Los materiales de la escena usan el shader de URP Lit: en otro pipeline, reasígnalos. Si tu escena ya tiene un `AudioListener`, desactívalo: la demo trae el suyo.
 
 | Tecla | Acción |
 |---|---|
@@ -377,6 +410,7 @@ Marca **Debug Gizmos** en el Acoustics Bootstrap y entra en Play: en la vista de
 | E | Coge la radio si estás a menos de 2,5 m, o la suelta en el suelo |
 | F | Abre o cierra la puerta |
 | G | Destruye el muro de hormigón |
+| R | Suena un chasquido corto en la radio: se oye la cola de eco de la sala después de que acabe |
 
 Cada acción escribe una línea en la consola. Activa la pestaña Scene durante Play para ver los gizmos.
 

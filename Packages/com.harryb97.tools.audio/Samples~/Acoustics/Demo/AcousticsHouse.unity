@@ -119,6 +119,73 @@ NavMeshSettings:
     debug:
       m_Flags: 0
   m_NavMeshData: {fileID: 0}
+--- !u!1 &13096556
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 13096557}
+  - component: {fileID: 13096559}
+  - component: {fileID: 13096558}
+  m_Layer: 0
+  m_Name: Living room ceiling
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &13096557
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 13096556}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 3, y: 3.05, z: 4}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 1
+  m_Children: []
+  m_Father: {fileID: 2040928366}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &13096558
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 13096556}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 94907ac9ea84a08499b3cf84690ef37b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: HarryTools.Audio.Samples.Acoustics::HarryTools.Audio.Acoustics.AcousticSurface
+  Material: {fileID: 11400000, guid: 0bd7e446281cd364ca5055c06f636b78, type: 2}
+--- !u!65 &13096559
+BoxCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 13096556}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Size: {x: 6.2, y: 0.1, z: 8.2}
+  m_Center: {x: 0, y: 0, z: 0}
 --- !u!1 &45458932
 GameObject:
   m_ObjectHideFlags: 0
@@ -256,6 +323,8 @@ GameObject:
   - component: {fileID: 232104591}
   - component: {fileID: 232104593}
   - component: {fileID: 232104592}
+  - component: {fileID: 232104595}
+  - component: {fileID: 232104594}
   m_Layer: 0
   m_Name: Garage
   m_TagString: Untagged
@@ -335,6 +404,40 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 232104590}
   m_Mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
+--- !u!114 &232104594
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 232104590}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 94907ac9ea84a08499b3cf84690ef37b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: HarryTools.Audio.Samples.Acoustics::HarryTools.Audio.Acoustics.AcousticSurface
+  Material: {fileID: 11400000, guid: 3ad5f2a0b8ffb3346a69d97b7f73ef1f, type: 2}
+--- !u!65 &232104595
+BoxCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 232104590}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Size: {x: 1, y: 1, z: 1}
+  m_Center: {x: 0, y: 0, z: 0}
 --- !u!1 &262489042
 GameObject:
   m_ObjectHideFlags: 0
@@ -510,6 +613,7 @@ GameObject:
   - component: {fileID: 373455884}
   - component: {fileID: 373455883}
   - component: {fileID: 373455882}
+  - component: {fileID: 373455885}
   m_Layer: 0
   m_Name: West garage
   m_TagString: Untagged
@@ -610,6 +714,19 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 373455880}
   m_Mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
+--- !u!114 &373455885
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 373455880}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 94907ac9ea84a08499b3cf84690ef37b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: HarryTools.Audio.Samples.Acoustics::HarryTools.Audio.Acoustics.AcousticSurface
+  Material: {fileID: 11400000, guid: 49309336403270d46b11588e0e5e507a, type: 2}
 --- !u!1 &396117288
 GameObject:
   m_ObjectHideFlags: 0
@@ -1069,6 +1186,8 @@ GameObject:
   - component: {fileID: 877213986}
   - component: {fileID: 877213988}
   - component: {fileID: 877213987}
+  - component: {fileID: 877213990}
+  - component: {fileID: 877213989}
   m_Layer: 0
   m_Name: Corridor
   m_TagString: Untagged
@@ -1148,6 +1267,107 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 877213985}
   m_Mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
+--- !u!114 &877213989
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 877213985}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 94907ac9ea84a08499b3cf84690ef37b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: HarryTools.Audio.Samples.Acoustics::HarryTools.Audio.Acoustics.AcousticSurface
+  Material: {fileID: 11400000, guid: c150b56f2814a224fb2953d35d14be7b, type: 2}
+--- !u!65 &877213990
+BoxCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 877213985}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Size: {x: 1, y: 1, z: 1}
+  m_Center: {x: 0, y: 0, z: 0}
+--- !u!1 &986094879
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 986094880}
+  - component: {fileID: 986094882}
+  - component: {fileID: 986094881}
+  m_Layer: 0
+  m_Name: Garage ceiling
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &986094880
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 986094879}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 3, y: 3.05, z: 11}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 1
+  m_Children: []
+  m_Father: {fileID: 2040928366}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &986094881
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 986094879}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 94907ac9ea84a08499b3cf84690ef37b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: HarryTools.Audio.Samples.Acoustics::HarryTools.Audio.Acoustics.AcousticSurface
+  Material: {fileID: 11400000, guid: 49309336403270d46b11588e0e5e507a, type: 2}
+--- !u!65 &986094882
+BoxCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 986094879}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Size: {x: 6.2, y: 0.1, z: 6.2}
+  m_Center: {x: 0, y: 0, z: 0}
 --- !u!1 &1001500417
 GameObject:
   m_ObjectHideFlags: 0
@@ -1256,6 +1476,8 @@ GameObject:
   - component: {fileID: 1003887375}
   - component: {fileID: 1003887377}
   - component: {fileID: 1003887376}
+  - component: {fileID: 1003887379}
+  - component: {fileID: 1003887378}
   m_Layer: 0
   m_Name: Kitchen
   m_TagString: Untagged
@@ -1335,6 +1557,40 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1003887374}
   m_Mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
+--- !u!114 &1003887378
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1003887374}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 94907ac9ea84a08499b3cf84690ef37b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: HarryTools.Audio.Samples.Acoustics::HarryTools.Audio.Acoustics.AcousticSurface
+  Material: {fileID: 11400000, guid: c150b56f2814a224fb2953d35d14be7b, type: 2}
+--- !u!65 &1003887379
+BoxCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1003887374}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Size: {x: 1, y: 1, z: 1}
+  m_Center: {x: 0, y: 0, z: 0}
 --- !u!1 &1059375953
 GameObject:
   m_ObjectHideFlags: 0
@@ -1399,6 +1655,7 @@ GameObject:
   - component: {fileID: 1111214889}
   - component: {fileID: 1111214888}
   - component: {fileID: 1111214887}
+  - component: {fileID: 1111214890}
   m_Layer: 0
   m_Name: East garage
   m_TagString: Untagged
@@ -1499,6 +1756,19 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1111214885}
   m_Mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
+--- !u!114 &1111214890
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1111214885}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 94907ac9ea84a08499b3cf84690ef37b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: HarryTools.Audio.Samples.Acoustics::HarryTools.Audio.Acoustics.AcousticSurface
+  Material: {fileID: 11400000, guid: 49309336403270d46b11588e0e5e507a, type: 2}
 --- !u!1 &1187776200
 GameObject:
   m_ObjectHideFlags: 0
@@ -2155,7 +2425,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1403081511}
   m_Layer: 0
-  m_Name: Floors (no colliders)
+  m_Name: Floors
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -2225,6 +2495,7 @@ GameObject:
   - component: {fileID: 1713426535}
   - component: {fileID: 1713426534}
   - component: {fileID: 1713426533}
+  - component: {fileID: 1713426536}
   m_Layer: 0
   m_Name: North garage
   m_TagString: Untagged
@@ -2325,6 +2596,19 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1713426531}
   m_Mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
+--- !u!114 &1713426536
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1713426531}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 94907ac9ea84a08499b3cf84690ef37b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: HarryTools.Audio.Samples.Acoustics::HarryTools.Audio.Acoustics.AcousticSurface
+  Material: {fileID: 11400000, guid: 49309336403270d46b11588e0e5e507a, type: 2}
 --- !u!1 &1831367917
 GameObject:
   m_ObjectHideFlags: 0
@@ -2336,6 +2620,8 @@ GameObject:
   - component: {fileID: 1831367918}
   - component: {fileID: 1831367920}
   - component: {fileID: 1831367919}
+  - component: {fileID: 1831367922}
+  - component: {fileID: 1831367921}
   m_Layer: 0
   m_Name: Living room
   m_TagString: Untagged
@@ -2415,6 +2701,40 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1831367917}
   m_Mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
+--- !u!114 &1831367921
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1831367917}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 94907ac9ea84a08499b3cf84690ef37b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: HarryTools.Audio.Samples.Acoustics::HarryTools.Audio.Acoustics.AcousticSurface
+  Material: {fileID: 11400000, guid: 034a2bf0a7734f64692eae5c21857659, type: 2}
+--- !u!65 &1831367922
+BoxCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1831367917}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Size: {x: 1, y: 1, z: 1}
+  m_Center: {x: 0, y: 0, z: 0}
 --- !u!1 &1868970381
 GameObject:
   m_ObjectHideFlags: 0
@@ -2427,6 +2747,7 @@ GameObject:
   - component: {fileID: 1868970385}
   - component: {fileID: 1868970384}
   - component: {fileID: 1868970383}
+  - component: {fileID: 1868970386}
   m_Layer: 0
   m_Name: West living room
   m_TagString: Untagged
@@ -2527,6 +2848,19 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1868970381}
   m_Mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
+--- !u!114 &1868970386
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1868970381}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 94907ac9ea84a08499b3cf84690ef37b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: HarryTools.Audio.Samples.Acoustics::HarryTools.Audio.Acoustics.AcousticSurface
+  Material: {fileID: 11400000, guid: c2e4f7557cccd0e4186763d6de90fe5e, type: 2}
 --- !u!1 &1930995111
 GameObject:
   m_ObjectHideFlags: 0
@@ -2669,6 +3003,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: HarryTools.Audio.Samples.Acoustics.Demo::HarryTools.Audio.Acoustics.Demo.AcousticsHouseDemo
   RadioSound: {fileID: 11400000, guid: 902faef083460e94cbcdc109306fdf7b, type: 2}
+  ShortSound: {fileID: 11400000, guid: 77f0c994cc824d541870cebefc5557c8, type: 2}
   Radio: {fileID: 1245236636}
   Listener: {fileID: 1298457086}
   DoorPivot: {fileID: 1695374126}
@@ -2915,6 +3250,39 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1992238576}
   m_Mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
+--- !u!1 &2040928365
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 2040928366}
+  m_Layer: 0
+  m_Name: Ceilings (colliders only)
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &2040928366
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2040928365}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 1
+  m_Children:
+  - {fileID: 13096557}
+  - {fileID: 986094880}
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &2124324612
 GameObject:
   m_ObjectHideFlags: 0
@@ -2976,3 +3344,4 @@ SceneRoots:
   - {fileID: 1298457086}
   - {fileID: 1267339354}
   - {fileID: 1945018582}
+  - {fileID: 2040928366}

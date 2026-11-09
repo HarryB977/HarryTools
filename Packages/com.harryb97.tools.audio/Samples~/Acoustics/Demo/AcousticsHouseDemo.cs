@@ -2,12 +2,14 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 
 namespace HarryTools.Audio.Acoustics.Demo {
-    /// <summary> Controls of the house demo: E picks up or drops the radio, F opens or closes the door, G destroys the wall. </summary>
+    /// <summary> Controls of the house demo: E picks up or drops the radio, F opens or closes the door, G destroys the wall, R plays a short sound at the radio. </summary>
     [AddComponentMenu("HarryTools/Audio/Samples/Acoustics House Demo")]
     public sealed class AcousticsHouseDemo : MonoBehaviour {
         // ==================== VARIABLES ===================
         [Header("Scene")]
         public SoundAsset RadioSound;
+        [Tooltip("Short sound that R plays at the radio, to hear the reverb tail after it ends.")]
+        public SoundAsset ShortSound;
         public Transform Radio;
         public Transform Listener;
         [Tooltip("Pivot at the hinge of the door; it turns around Y.")]
@@ -42,6 +44,7 @@ namespace HarryTools.Audio.Acoustics.Demo {
             if (_keyboard.eKey.wasPressedThisFrame) PickUpOrDrop();
             if (_keyboard.fKey.wasPressedThisFrame) ToggleDoor();
             if (_keyboard.gKey.wasPressedThisFrame) DestroyWall();
+            if (_keyboard.rKey.wasPressedThisFrame) PlayShortSound();
         }
 
         // ==================== ACTIONS ===================
@@ -77,6 +80,13 @@ namespace HarryTools.Audio.Acoustics.Demo {
             // Colliders moved by transform are only seen by the next ray after a sync.
             Physics.SyncTransforms();
             Debug.Log(IsDoorOpen ? "Door opened." : "Door closed.");
+        }
+
+        /// <summary> Plays the short sound where the radio is. It ends fast, so the room's reverb tail is what keeps sounding. </summary>
+        public void PlayShortSound() {
+            if (ShortSound == null || Radio == null) return;
+            Audio.Play(ShortSound).At(Radio.position);
+            Debug.Log("Short sound played at the radio.");
         }
 
         public void DestroyWall() {

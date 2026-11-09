@@ -6,7 +6,7 @@ namespace HarryTools.Audio.Acoustics {
         // ==================== VARIABLES ===================
         [Tooltip("Profile to simulate with while this component is enabled.")]
         public AcousticProfile Profile;
-        [Tooltip("Draw the occlusion rays, the surfaces they cross and the result of each voice in the Scene view. Costs a few copies per voice.")]
+        [Tooltip("Draw the occlusion rays, the surfaces they cross and the result of each voice and the room cell and reverb of each sound in the Scene view. Costs a few copies per voice.")]
         public bool DebugGizmos;
 
         // ==================== LIFECYCLE ===================
@@ -29,7 +29,9 @@ namespace HarryTools.Audio.Acoustics {
         private void OnDrawGizmos() {
             if (!Application.isPlaying || !isActiveAndEnabled) return;
             if (Acoustics.DebugCapture != DebugGizmos) Acoustics.DebugCapture = DebugGizmos;
-            if (DebugGizmos) AcousticsDebug.Draw(Acoustics.Module);
+            if (!DebugGizmos) return;
+            AcousticsDebug.Draw(Acoustics.Module);
+            AcousticsDebug.DrawRoom(Acoustics.Room);
         }
     }
 }

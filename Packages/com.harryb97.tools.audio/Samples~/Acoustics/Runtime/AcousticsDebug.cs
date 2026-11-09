@@ -32,6 +32,8 @@ namespace HarryTools.Audio.Acoustics {
         // ==================== VARIABLES ===================
         private static readonly Color Free = new Color(0.25f, 0.9f, 0.35f, 1f);
         private static readonly Color Blocked = new Color(0.95f, 0.25f, 0.2f, 1f);
+        private static readonly Color Dry = new Color(0.2f, 0.85f, 0.95f, 1f);
+        private static readonly Color Wet = new Color(0.95f, 0.25f, 0.85f, 1f);
         private static readonly Color Hit = new Color(1f, 0.85f, 0.2f, 1f);
 
         // ==================== DRAWING ===================
@@ -42,6 +44,25 @@ namespace HarryTools.Audio.Acoustics {
             Color _previous = Gizmos.color;
             for (int i = 0; i < _voices.Length; i++) {
                 if (_voices[i].Valid && _module.IsLive(i)) DrawVoice(_voices[i]);
+            }
+            Gizmos.color = _previous;
+        }
+
+        /// <summary> Draws the room cell of each sound, the sphere of its mean free path and a color that goes from dry (cyan) to wet (magenta). </summary>
+        internal static void DrawRoom(RoomModule _room) {
+            if (_room == null) return;
+
+            Color _previous = Gizmos.color;
+            for (int s = 0; s < _room.SlotCount; s++) {
+                if (!_room.TryGetDebug(s, out Vector3 _source, out Vector3 _cellCenter, out RoomEstimate _estimate, out AcousticReverb _reverb)) continue;
+
+                Gizmos.color = Color.Lerp(Dry, Wet, Mathf.Clamp01(_reverb.Wet));
+                Gizmos.DrawWireCube(_cellCenter, Vector3.one * _room.CellSize);
+                Gizmos.DrawWireSphere(_source, _estimate.MeanFreePath);
+#if UNITY_EDITOR
+                string _text = "decay " + _reverb.DecayTime.ToString("0.00") + " s\nwet " + _reverb.Wet.ToString("0.00") + "\nfree path " + _estimate.MeanFreePath.ToString("0.0") + " m";
+                UnityEditor.Handles.Label(_source + Vector3.down * 0.4f, _text);
+#endif
             }
             Gizmos.color = _previous;
         }

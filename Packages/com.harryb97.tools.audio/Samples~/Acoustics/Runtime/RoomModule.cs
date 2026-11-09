@@ -15,6 +15,8 @@ namespace HarryTools.Audio.Acoustics {
             public bool HasReverb;
             public AcousticReverb Reverb;
             public int SeenStamp;
+            public Vector3 Position;
+            public int Cell;
         }
 
         private struct Cell {
@@ -85,6 +87,10 @@ namespace HarryTools.Audio.Acoustics {
         // Cells are throttled by the UpdateInterval of the profile here, so a voice can read a finished batch on the first tick it is ready.
         public float UpdateInterval => 0f;
 
+        // Read by the scene view gizmos.
+        internal int SlotCount => slots.Length;
+        internal float CellSize => cellSize;
+
         // ==================== INITIALIZATION ===================
         public RoomModule(AcousticProfile _profile, IAcousticGeometry _geometry, RayBudget _budget) {
             geometry = _geometry;
@@ -125,6 +131,27 @@ namespace HarryTools.Audio.Acoustics {
             DropBatch();
         }
 
+        // ==================== DEBUG ===================
+        /// <summary> Reads what a slot got in the last evaluation: where the sound is, the center of its cell, the room estimate and the reverb it sends. False for an empty slot, a dead voice or a voice without a ready cell. </summary>
+        internal bool TryGetDebug(int _slot, out Vector3 _source, out Vector3 _cellCenter, out RoomEstimate _room, out AcousticReverb _reverb) {
+            _source = default;
+            _cellCenter = default;
+            _room = default;
+            _reverb = default;
+            if (_slot < 0 || _slot >= slots.Length) return false;
+
+            VoiceSlot _voice = slots[_slot];
+            if (_voice.SeenStamp != stamp || !_voice.HasReverb || _voice.Cell < 0 || !_voice.Handle.IsValid) return false;
+            Cell _cell = cells[_voice.Cell];
+            if (!_cell.HasEstimate) return false;
+
+            _source = _voice.Position;
+            _cellCenter = (new Vector3(_cell.Coord.x, _cell.Coord.y, _cell.Coord.z) + Vector3.one * 0.5f) * cellSize;
+            _room = _cell.Estimate;
+            _reverb = _voice.Reverb;
+            return true;
+        }
+
         // ==================== EVALUATION ===================
         public void Evaluate(ReadOnlySpan<AcousticQuery> _queries, Span<AcousticResult> _results) {
             // The core can still evaluate this module in the tick the other one failed in, with the geometry already gone.
@@ -155,6 +182,8 @@ namespace HarryTools.Audio.Acoustics {
             for (int i = 0; i < _queries.Length; i++) {
                 ref VoiceSlot _slot = ref slots[slotOfQuery[i]];
                 int _cell = cellOfQuery[i];
+                _slot.Position = _queries[i].SourcePosition;
+                _slot.Cell = _cell;
 
                 if (_cell == NoCell) {
                     _slot.HasReverb = false;

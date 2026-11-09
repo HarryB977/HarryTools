@@ -3,9 +3,14 @@
 ## [1.0.0-beta.4] - 2026-11-09
 ### Añadido
 - Canal de reverb por voz en el contrato acústico: `AcousticResult.HasReverb` y `AcousticResult.Reverb` (`AcousticReverb` con `Wet`, `DecayTime`, `HighFrequencyRatio` y `ReflectionsDelay`). Cada voz lleva un `AudioReverbFilter` apagado que se enciende con la reverb de los módulos acústicos y se suaviza igual que el resto de valores.
+- Colas de reverb: al acabar una voz con eco, su reverb sigue sonando hasta 5 s. `Ended` ocurre al acabar el clip, no la cola. `Stop(0f)` y `Audio.StopAll` la cortan.
+- `RoomModule` en el sample de acústica: cada sonido recibe el eco de la sala donde está, calculado con rayos compartidos por celdas (`Reverb`, `RoomMaxDistance`, `RoomCellSize`, `RoomRays`, `RoomRaysPerUpdate` y `ReverbWet` en el perfil, y `ReverbSend` en la extensión por sonido).
+- Gizmos del eco en la vista de escena: celda de la sala, esfera del recorrido libre medio y color según `Wet`.
+- Demo `AcousticsHouse`: tecla R para oír un sonido corto con su cola, salón con moqueta y cochera metálica.
 
 ### Cambiado
-- Si varios módulos acústicos escriben reverb, gana el último en `Order`. Sin módulos que la escriban el núcleo se comporta igual que antes (filtro apagado). En WebGL no hay reverb.
+- `AcousticResult` gana el canal de reverb y cada voz lleva un `AudioReverbFilter`.
+- Si varios módulos acústicos escriben reverb, gana el último en `Order`. Sin módulos que la escriban el núcleo se comporta igual que antes (filtro apagado y sin colas). En WebGL no hay reverb ni colas.
 
 ## [1.0.0-beta.3] - 2026-11-09
 ### Añadido
