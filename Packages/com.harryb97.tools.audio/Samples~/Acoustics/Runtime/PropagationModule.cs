@@ -40,6 +40,7 @@ namespace HarryTools.Audio.Acoustics {
         private static readonly ProfilerMarker Marker = new ProfilerMarker("Acoustics.Propagation");
 
         private readonly IAcousticGeometry geometry;
+        private readonly RayBudget budget;
         private AcousticProfile profile;
         private Vector3[] sphere = Array.Empty<Vector3>();
         private int maxHits = 1;
@@ -67,15 +68,15 @@ namespace HarryTools.Audio.Acoustics {
         public float UpdateInterval => 0f;
 
         // ==================== INITIALIZATION ===================
-        public PropagationModule(AcousticProfile _profile, IAcousticGeometry _geometry) {
+        public PropagationModule(AcousticProfile _profile, IAcousticGeometry _geometry, RayBudget _budget) {
             geometry = _geometry;
+            budget = _budget;
             Configure(_profile);
         }
 
-        /// <summary> Switches profile. A batch in flight is dropped; voices keep their last result and are evaluated again right away. </summary>
+        /// <summary> Switches profile. A batch in flight is dropped; voices keep their last result and are evaluated again right away. The geometry and the budget belong to <see cref="Acoustics"/>, which configures them. </summary>
         public void Configure(AcousticProfile _profile) {
             profile = _profile;
-            geometry.Configure(_profile);
             DropBatch();
 
             maxHits = Mathf.Max(1, _profile.MaxHitsPerRay);
@@ -91,7 +92,7 @@ namespace HarryTools.Audio.Acoustics {
         public void Dispose() {
             if (disposed) return;
             disposed = true;
-            geometry.Dispose();
+            DropBatch();
         }
 
         // ==================== EVALUATION ===================
@@ -217,12 +218,13 @@ namespace HarryTools.Audio.Acoustics {
                 }
 
                 int _sphereRays = profile.Occlusion ? sphere.Length : 0;
-                int _available = profile.RayBudgetPerFrame - _rayCount;
+                int _available = budget.Remaining;
                 if (CenterRays + _sphereRays > _available) {
                     if (entryCount > 0 || _available < CenterRays) break;
                     _sphereRays = _available - CenterRays;
                 }
 
+                budget.TryConsume(CenterRays + _sphereRays);
                 float _radius = _extension != null ? Mathf.Max(0f, _extension.Radius) : DefaultRadius;
                 EnsureRays(_rayCount + CenterRays + _sphereRays);
                 entries[entryCount++] = new BatchEntry { Slot = _slot, Handle = _query.Handle, RayStart = _rayCount, SphereRays = _sphereRays, Distance = _distance, Radius = _radius, Source = _query.SourcePosition, Listener = _query.ListenerPosition };

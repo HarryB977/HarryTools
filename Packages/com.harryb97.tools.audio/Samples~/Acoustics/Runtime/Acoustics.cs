@@ -1,11 +1,15 @@
+using System;
 using HarryTools.DomainReload;
 using UnityEngine;
 
 namespace HarryTools.Audio.Acoustics {
-    /// <summary> Starts, switches and stops the acoustic simulation. </summary>
+    /// <summary> Starts, switches and stops the acoustic simulation. Owns the geometry and the ray budget that the modules share. </summary>
     public static class Acoustics {
         // ==================== VARIABLES ===================
         private static PropagationModule module;
+        private static RoomModule room;
+        private static IAcousticGeometry geometry;
+        private static RayBudget budget;
         private static bool debugCapture;
 
         // ==================== PROPERTIES ===================
@@ -22,6 +26,7 @@ namespace HarryTools.Audio.Acoustics {
         }
 
         internal static PropagationModule Module => module;
+        internal static RoomModule Room => room;
 
         // ==================== PUBLIC API ===================
         /// <summary> Runs the simulation with the profile, or its override for the current platform. Null stops it. </summary>
@@ -31,42 +36,73 @@ namespace HarryTools.Audio.Acoustics {
                 return;
             }
 
-            Start(_profile, module == null ? new PhysicsGeometry3D() : null);
+            Start(_profile, geometry ?? new PhysicsGeometry3D());
         }
 
-        /// <summary> Runs the simulation on the given geometry, replacing any running module. Lets tests inject a fake. </summary>
+        /// <summary> Runs the simulation on the given geometry, replacing any running modules. Takes ownership of it. Lets tests inject a fake. </summary>
         internal static void UseWith(AcousticProfile _profile, IAcousticGeometry _geometry) {
             Stop();
             Start(_profile, _geometry);
         }
 
-        /// <summary> Unregisters the module and frees its buffers. Sounds keep playing and go back to neutral. </summary>
+        /// <summary> Unregisters the modules and frees their buffers. Sounds keep playing and go back to neutral. </summary>
         public static void Stop() {
             Active = null;
-            if (module == null) return;
-            Audio.UnregisterModule(module);
-            module.Dispose();
+
+            PropagationModule _module = module;
+            RoomModule _room = room;
+            IAcousticGeometry _geometry = geometry;
             module = null;
+            room = null;
+            geometry = null;
+            budget = null;
+
+            // The core only unregisters a module that throws by itself, so the other one has to go too.
+            if (_module != null) Audio.UnregisterModule(_module);
+            if (_room != null) Audio.UnregisterModule(_room);
+
+            // Modules first: each one still has to release its batch in flight.
+            try {
+                _module?.Dispose();
+            } finally {
+                try {
+                    _room?.Dispose();
+                } finally {
+                    _geometry?.Dispose();
+                }
+            }
         }
 
         // ==================== HELPERS ===================
-        /// <summary> Called by a module whose Evaluate threw, just before the core unregisters it. Frees it and, when it is the running one, stops the simulation. </summary>
-        internal static void OnModuleFailed(PropagationModule _failed) {
-            if (module == _failed) {
-                module = null;
-                Active = null;
-            }
-            _failed.Dispose();
+        /// <summary> Called by a module whose Evaluate threw, just before the core unregisters it. A running module stops the whole simulation; any other only frees itself. </summary>
+        internal static void OnModuleFailed(IAcousticModule _failed) {
+            if (ReferenceEquals(_failed, module) || ReferenceEquals(_failed, room)) Stop();
+            else (_failed as IDisposable)?.Dispose();
         }
 
-        // A null geometry reuses the running module.
         private static void Start(AcousticProfile _profile, IAcousticGeometry _geometry) {
             AcousticProfile _resolved = _profile.Resolve(Application.platform);
-            if (_geometry != null) module = new PropagationModule(_resolved, _geometry);
+
+            geometry = _geometry;
+            geometry.Configure(_resolved);
+            if (budget == null) budget = new RayBudget(_resolved.RayBudgetPerFrame);
+            else budget.SetLimit(_resolved.RayBudgetPerFrame);
+
+            if (module == null) module = new PropagationModule(_resolved, geometry, budget);
             else module.Configure(_resolved);
             module.CaptureDebug = debugCapture;
-
             Audio.RegisterModule(module);
+
+            if (_resolved.Reverb) {
+                if (room == null) room = new RoomModule(_resolved, geometry, budget);
+                else room.Configure(_resolved);
+                Audio.RegisterModule(room);
+            } else if (room != null) {
+                Audio.UnregisterModule(room);
+                room.Dispose();
+                room = null;
+            }
+
             Active = _profile;
         }
 
