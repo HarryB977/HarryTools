@@ -18,13 +18,13 @@ Sistema de audio para Unity, inspirado en [JSAM](https://github.com/Jacky-Yang/J
 Instala el paquete desde [OpenUPM](https://openupm.com/packages/com.harryb97.tools.audio/). La CLI añade también UniTask y los paquetes `com.harryb97.*` de los que depende:
 
 ```sh
-openupm add com.harryb97.tools.audio@1.0.0-beta.4
+openupm add com.harryb97.tools.audio@1.0.0-beta.5
 ```
 
 Para instalarlo por URL de git hay que añadir también sus dependencias, porque Unity no las resuelve en ese caso. UniTask (`com.cysharp.unitask`) se instala desde OpenUPM:
 
 ```json
-"com.harryb97.tools.audio": "https://github.com/HarryB977/HarryTools.git?path=/Packages/com.harryb97.tools.audio#audio/1.0.0-beta.4",
+"com.harryb97.tools.audio": "https://github.com/HarryB977/HarryTools.git?path=/Packages/com.harryb97.tools.audio#audio/1.0.0-beta.5",
 "com.harryb97.tools.gameloop": "https://github.com/HarryB977/HarryTools.git?path=/Packages/com.harryb97.tools.gameloop#gameloop/1.1.0",
 "com.harryb97.tools.logger": "https://github.com/HarryB977/HarryTools.git?path=/Packages/com.harryb97.tools.logger#logger/1.0.3",
 "com.harryb97.tools.domainreload": "https://github.com/HarryB977/HarryTools.git?path=/Packages/com.harryb97.tools.domainreload#domainreload/1.0.3",
@@ -315,7 +315,7 @@ Cada `Started` recibe exactamente un `Ended` con el mismo `Id`. `SubtitleInfo` l
 
 Sample opcional (Package Manager > HarryTools Audio > Samples > Acoustics) que hace que los sonidos 3D se oigan distintos según lo que haya entre la fuente y el oyente. Es un módulo que se enchufa al núcleo (`IAcousticModule`); el núcleo no depende del sample.
 
-> **Beta:** el sample forma parte de la `1.0.0-beta.4` y su API puede cambiar antes de la 1.0.0.
+> **Beta:** el sample forma parte de la `1.0.0-beta.5` y su API puede cambiar antes de la 1.0.0.
 
 ### Qué hace
 

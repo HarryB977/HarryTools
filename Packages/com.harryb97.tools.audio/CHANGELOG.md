@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.0.0-beta.5] - 2026-11-09
+### Añadido
+- `SpatialSettings.GainAt(distancia)`: ganancia de la curva de rolloff a una distancia del oyente. Es la misma estimación que usa el núcleo para elegir qué voces robar o simular.
+- Sample de acústica: fórmulas de camino (`PathMath`) y los campos de perfil del pathing (`Pathing`, `ProbeRadius`, `ProbeSpacing`, `ProbeVerticalExtent`, `MaxProbes`, `PathRaysPerFrame`, `PathMaxOpen`, `PathMidDbPerMeter`, `PathHighDbPerMeter`, `PerceivedSpeed`).
+- `MaxWallThickness` en el perfil de acústica (0,6 m por defecto): limita el grosor medido para la transmisión.
+
+### Cambiado
+- Una malla que forma varias paredes ya no mide como grosor todo lo que hay entre ellas: el grosor se limita a `MaxWallThickness`.
+
 ## [1.0.0-beta.4] - 2026-11-09
 ### Añadido
 - Canal de reverb por voz en el contrato acústico: `AcousticResult.HasReverb` y `AcousticResult.Reverb` (`AcousticReverb` con `Wet`, `DecayTime`, `HighFrequencyRatio` y `ReflectionsDelay`). Cada voz lleva un `AudioReverbFilter` apagado que se enciende con la reverb de los módulos acústicos y se suaviza igual que el resto de valores.

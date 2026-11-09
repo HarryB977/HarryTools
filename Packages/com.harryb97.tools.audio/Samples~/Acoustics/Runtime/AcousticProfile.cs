@@ -41,6 +41,9 @@ namespace HarryTools.Audio.Acoustics {
         [Tooltip("Milliseconds of main thread time per frame. Voices left over wait for the next frame.")]
         public float MainThreadBudgetMs = 0.5f;
 
+        [Tooltip("Longest wall thickness in meters counted for transmission. Stops one mesh that forms several walls from measuring everything between them.")]
+        public float MaxWallThickness = 0.6f;
+
         [Header("Geometry")]
         [Tooltip("Layers that block sound. Triggers never count.")]
         public LayerMask Geometry = ~(1 << 2);
@@ -74,6 +77,28 @@ namespace HarryTools.Audio.Acoustics {
         public float RoomCellSize = 2f;
         [Tooltip("Overall reverb amount. Multiplies each source's reverb send.")]
         public float ReverbWet = 1f;
+
+        [Header("Pathing")]
+        [Tooltip("Let blocked sounds reach the listener around obstacles, through doors and openings.")]
+        public bool Pathing = true;
+        [Tooltip("Horizontal radius in meters of the probe region around the listener.")]
+        public float ProbeRadius = 32f;
+        [Tooltip("Distance in meters between probes.")]
+        public float ProbeSpacing = 1.5f;
+        [Tooltip("Meters above and below the listener covered by probes.")]
+        public float ProbeVerticalExtent = 6f;
+        [Tooltip("Maximum number of probes. Far probes are dropped first.")]
+        public int MaxProbes = 4096;
+        [Tooltip("Rays per frame the path search may use.")]
+        public int PathRaysPerFrame = 96;
+        [Tooltip("Open fraction of the direct line from which a sound no longer uses a path.")]
+        public float PathMaxOpen = 0.75f;
+        [Tooltip("Mid band loss per meter of detour, in dB.")]
+        public float PathMidDbPerMeter = 0.03f;
+        [Tooltip("High band loss per meter of detour, in dB.")]
+        public float PathHighDbPerMeter = 0.12f;
+        [Tooltip("Meters per second the perceived position may move.")]
+        public float PerceivedSpeed = 30f;
 
         [Header("Platforms")]
         [Tooltip("Profiles that replace this one on specific platforms.")]

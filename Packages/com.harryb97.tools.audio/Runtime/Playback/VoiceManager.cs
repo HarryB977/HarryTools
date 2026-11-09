@@ -387,18 +387,7 @@ namespace HarryTools.Audio {
             Transform _listener = runtime.ListenerTracker.Listener;
             if (_listener == null) return 1f;
 
-            float _min = Mathf.Max(0.0001f, _spatial.MinDistance);
-            float _max = Mathf.Max(_min, _spatial.MaxDistance);
-            float _distance = Mathf.Min(Vector3.Distance(_listener.position, _position), _max);
-            float _gain;
-            if (_spatial.Rolloff == AudioRolloffMode.Linear) {
-                _gain = _max > _min ? 1f - Mathf.Clamp01((_distance - _min) / (_max - _min)) : 1f;
-            } else if (_spatial.Rolloff == AudioRolloffMode.Custom && _spatial.HasCustomCurve) {
-                _gain = Mathf.Clamp01(_spatial.CustomRolloff.Evaluate(_distance / _max));
-            } else {
-                _gain = _distance <= _min ? 1f : _min / _distance;
-            }
-            return Mathf.Lerp(1f, _gain, _spatial.SpatialBlend);
+            return _spatial.GainAt(Vector3.Distance(_listener.position, _position));
         }
 
         // A nested Tick/StopAll (from an Ended callback) gets its own list so the outer iteration is not disturbed.

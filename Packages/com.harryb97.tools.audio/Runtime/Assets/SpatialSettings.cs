@@ -59,5 +59,22 @@ namespace HarryTools.Audio {
             _source.spread = Spread;
             _source.dopplerLevel = Doppler;
         }
+
+        /// <summary> Gain of the rolloff at a distance from the listener, estimated from the curve. 1 for a 2D sound. </summary>
+        public float GainAt(float _distance) {
+            if (SpatialBlend <= 0f) return 1f;
+            float _min = Mathf.Max(0.0001f, MinDistance);
+            float _max = Mathf.Max(_min, MaxDistance);
+            float _clamped = Mathf.Min(_distance, _max);
+            float _gain;
+            if (Rolloff == AudioRolloffMode.Linear) {
+                _gain = _max > _min ? 1f - Mathf.Clamp01((_clamped - _min) / (_max - _min)) : 1f;
+            } else if (Rolloff == AudioRolloffMode.Custom && HasCustomCurve) {
+                _gain = Mathf.Clamp01(CustomRolloff.Evaluate(_clamped / _max));
+            } else {
+                _gain = _clamped <= _min ? 1f : _min / _clamped;
+            }
+            return Mathf.Lerp(1f, _gain, SpatialBlend);
+        }
     }
 }

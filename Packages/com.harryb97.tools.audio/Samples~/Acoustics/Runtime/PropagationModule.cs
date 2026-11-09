@@ -415,11 +415,11 @@ namespace HarryTools.Audio.Acoustics {
         }
 
         // A one-sided hit that does not hold an endpoint is an open mesh, or its partner fell off a full hit list: its real thickness is unknown.
-        private static float Thickness(int _colliderId, ReadOnlySpan<AcousticHit> _forward, ReadOnlySpan<AcousticHit> _backward, float _length) {
+        private float Thickness(int _colliderId, ReadOnlySpan<AcousticHit> _forward, ReadOnlySpan<AcousticHit> _backward, float _length) {
             int _entry = IndexOf(_forward, _colliderId);
             int _exit = IndexOf(_backward, _colliderId);
             if (_entry < 0 || _exit < 0) return AcousticMaterial.ReferenceThickness;
-            return _length - _backward[_exit].Distance - _forward[_entry].Distance;
+            return Mathf.Min(_length - _backward[_exit].Distance - _forward[_entry].Distance, profile.MaxWallThickness);
         }
 
         private Vector3 Transmit(int _colliderId, float _thickness) {
