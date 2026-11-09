@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.0.0-beta.3] - 2026-11-09
+### Añadido
+- Sample de acústica (`Samples~/Acoustics`): materiales acústicos (`AcousticMaterial`, `AcousticSurface`), perfiles de calidad con overrides por plataforma (`AcousticProfile`), extensión por asset (`AcousticSourceExtension`) y ocho materiales de ejemplo.
+
 ## [1.0.0-beta.2] - 2026-11-06
 ### Añadido
 - `AudioHandle` expone `Clip`, `Duration`, `IsLooping`, `Position`, `Is3D` y `Elapsed` (tiempo de audio sonado, sin el `Delay` ni el tiempo en pausa).

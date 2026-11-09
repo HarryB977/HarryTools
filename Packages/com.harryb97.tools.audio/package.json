@@ -1,6 +1,6 @@
 {
   "name": "com.harryb97.tools.audio",
-  "version": "1.0.0-beta.2",
+  "version": "1.0.0-beta.3",
   "displayName": "HarryTools Audio",
   "description": "Sistema de audio con catálogo de assets, reproducción por bus con pooling, música con transiciones, diálogos con voces y efectos, y código generado para acceder a los sonidos.",
   "unity": "6000.0",
@@ -28,6 +28,11 @@
       "displayName": "Subtitles",
       "description": "Subtítulos localizados para los sonidos del catálogo, con eventos para pintarlos con la UI que prefieras. Requiere Unity Localization.",
       "path": "Samples~/Subtitles"
+    },
+    {
+      "displayName": "Acoustics",
+      "description": "Acústica para los sonidos 3D: oclusión y transmisión por materiales, y absorción del aire, con un módulo enchufable al núcleo.",
+      "path": "Samples~/Acoustics"
     }
   ],
   "dependencies": {
