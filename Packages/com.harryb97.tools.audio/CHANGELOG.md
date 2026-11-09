@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.0-beta.4] - 2026-11-09
+### Añadido
+- Canal de reverb por voz en el contrato acústico: `AcousticResult.HasReverb` y `AcousticResult.Reverb` (`AcousticReverb` con `Wet`, `DecayTime`, `HighFrequencyRatio` y `ReflectionsDelay`). Cada voz lleva un `AudioReverbFilter` apagado que se enciende con la reverb de los módulos acústicos y se suaviza igual que el resto de valores.
+
+### Cambiado
+- Si varios módulos acústicos escriben reverb, gana el último en `Order`. Sin módulos que la escriban el núcleo se comporta igual que antes (filtro apagado). En WebGL no hay reverb.
+
 ## [1.0.0-beta.3] - 2026-11-09
 ### Añadido
 - Sample de acústica (`Samples~/Acoustics`): materiales acústicos (`AcousticMaterial`, `AcousticSurface`), perfiles de calidad con overrides por plataforma (`AcousticProfile`), extensión por asset (`AcousticSourceExtension`) y ocho materiales de ejemplo.

@@ -17,6 +17,7 @@ namespace HarryTools.Audio {
         private AudioHighPassFilter highPass;
         private AudioDistortionFilter distortion;
         private AudioEchoFilter echo;
+        private AudioReverbFilter reverb;
         #endregion
 
         #region Playback state
@@ -59,6 +60,8 @@ namespace HarryTools.Audio {
         public AudioHighPassFilter HighPass => highPass;
         public AudioDistortionFilter Distortion => distortion;
         public AudioEchoFilter Echo => echo;
+        /// <summary> Per-voice reverb written by the AcousticSimulator. Last in the chain, user preset. </summary>
+        public AudioReverbFilter Reverb => reverb;
 
         /// <summary> True between Begin and the release back to the pool. </summary>
         public bool IsActive { get; private set; }
@@ -118,6 +121,7 @@ namespace HarryTools.Audio {
             highPass = GetComponent<AudioHighPassFilter>();
             distortion = GetComponent<AudioDistortionFilter>();
             echo = GetComponent<AudioEchoFilter>();
+            reverb = GetComponent<AudioReverbFilter>();
         }
 
         /// <summary> Adds the AudioSource, the filters (disabled) and the voice to a template object. </summary>
@@ -131,6 +135,10 @@ namespace HarryTools.Audio {
             _go.AddComponent<AudioHighPassFilter>().enabled = false;
             _go.AddComponent<AudioDistortionFilter>().enabled = false;
             _go.AddComponent<AudioEchoFilter>().enabled = false;
+            // Last in the chain, so the reverb hears the other filters. The user preset keeps the values the simulator writes.
+            var _reverb = _go.AddComponent<AudioReverbFilter>();
+            _reverb.reverbPreset = AudioReverbPreset.User;
+            _reverb.enabled = false;
             return _go.AddComponent<AudioVoice>();
         }
 
@@ -410,6 +418,18 @@ namespace HarryTools.Audio {
             }
             if (distortion != null) distortion.enabled = false;
             if (echo != null) echo.enabled = false;
+            if (reverb != null) {
+                reverb.enabled = false;
+                reverb.reverbPreset = AudioReverbPreset.User;
+                reverb.dryLevel = 0f;
+                reverb.room = 0f;
+                reverb.reverbLevel = -10000f;
+                reverb.reflectionsLevel = -10000f;
+                reverb.decayTime = 1f;
+                reverb.decayHFRatio = 0.5f;
+                reverb.reflectionsDelay = 0f;
+                reverb.reverbDelay = 0.04f;
+            }
         }
 
         // Delay plus the clip length at the current pitch, measured from Begin.

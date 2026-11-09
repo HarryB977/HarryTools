@@ -14,6 +14,11 @@ namespace HarryTools.Audio {
         public float LogLowPass;
         public float LogHighPass;
         public bool HasPerceivedPosition;
+        /// <summary> Smoothed reverb: Wet and ReflectionsDelay linear, decay time and high-frequency ratio as natural logs. </summary>
+        public float Wet;
+        public float LogDecayTime;
+        public float LogHighFrequencyRatio;
+        public float ReflectionsDelay;
         /// <summary> False while every value is neutral; the simulator then leaves the voice and its filters alone. </summary>
         public bool Active;
         /// <summary> Tick in which the simulator last selected the voice. </summary>
@@ -24,6 +29,8 @@ namespace HarryTools.Audio {
             Volume = 1f,
             LogLowPass = LogMaxCutoff,
             LogHighPass = LogMinCutoff,
+            LogDecayTime = 0f,
+            LogHighFrequencyRatio = Mathf.Log(0.5f),
             Stamp = -1,
         };
     }
@@ -43,6 +50,17 @@ namespace HarryTools.Audio {
         // A cutoff counts as neutral at or beyond these (Hz).
         private const float NeutralLowPassHz = 21999f;
         private const float NeutralHighPassHz = 11f;
+        // The reverb filter is on while the smoothed wet is above this.
+        internal const float ReverbOnWet = 0.001f;
+        private const float SnapDelay = 0.0005f;
+        private const float ReverbLevelMin = -10000f;
+        private const float ReflectionsBelowReverb = 600f;
+        private const float ReverbDecayMin = 0.1f;
+        private const float ReverbDecayMax = 20f;
+        private const float ReverbRatioMin = 0.1f;
+        private const float ReverbRatioMax = 2f;
+        private const float ReverbReflectionsDelayMax = 0.3f;
+        private const float ReverbDelayMax = 0.1f;
         private static readonly float LogNeutralLowHz = Mathf.Log(NeutralLowPassHz);
         private static readonly float LogNeutralHighHz = Mathf.Log(NeutralHighPassHz);
 
@@ -245,7 +263,7 @@ namespace HarryTools.Audio {
             }
         }
 
-        // Volume multiplies, low-pass takes the lowest, high-pass the highest, the perceived position is the last one in Order.
+        // Volume multiplies, low-pass takes the lowest, high-pass the highest, the perceived position and the reverb are the last ones in Order.
         private static void Combine(ref AcousticResult _result, in AcousticResult _contribution) {
             _result.VolumeMultiplier *= _contribution.VolumeMultiplier;
             _result.LowPassCutoff = Mathf.Min(_result.LowPassCutoff, _contribution.LowPassCutoff);
@@ -253,6 +271,10 @@ namespace HarryTools.Audio {
             if (_contribution.HasPerceivedPosition) {
                 _result.HasPerceivedPosition = true;
                 _result.PerceivedPosition = _contribution.PerceivedPosition;
+            }
+            if (_contribution.HasReverb) {
+                _result.HasReverb = true;
+                _result.Reverb = _contribution.Reverb;
             }
         }
 
@@ -272,7 +294,22 @@ namespace HarryTools.Audio {
             if (_perceived || _state.HasPerceivedPosition) _voice.SetPerceivedPosition(_perceived, _target.PerceivedPosition);
             _state.HasPerceivedPosition = _perceived;
 
-            _state.Active = _state.Volume != 1f || _state.LogLowPass < LogNeutralLowHz || _state.LogHighPass > LogNeutralHighHz || _perceived;
+            // Without reverb the wet drifts to 0 and the other values stay where they were. A reverb that starts from off takes its values at once.
+            float _wet = 0f;
+            if (_target.HasReverb) {
+                AcousticReverb _reverb = _target.Reverb;
+                _wet = Mathf.Clamp01(_reverb.Wet);
+                float _logDecay = Mathf.Log(Mathf.Clamp(_reverb.DecayTime, ReverbDecayMin, ReverbDecayMax));
+                float _logRatio = Mathf.Log(Mathf.Clamp(_reverb.HighFrequencyRatio, ReverbRatioMin, ReverbRatioMax));
+                float _delay = Mathf.Clamp(_reverb.ReflectionsDelay, 0f, ReverbReflectionsDelayMax);
+                float _shape = _state.Wet > ReverbOnWet ? _alpha : 1f;
+                _state.LogDecayTime = Approach(_state.LogDecayTime, _logDecay, _shape, SnapLog);
+                _state.LogHighFrequencyRatio = Approach(_state.LogHighFrequencyRatio, _logRatio, _shape, SnapLog);
+                _state.ReflectionsDelay = Approach(_state.ReflectionsDelay, _delay, _shape, SnapDelay);
+            }
+            _state.Wet = Approach(_state.Wet, _wet, _alpha, SnapVolume);
+
+            _state.Active = _state.Volume != 1f || _state.LogLowPass < LogNeutralLowHz || _state.LogHighPass > LogNeutralHighHz || _perceived || _state.Wet > ReverbOnWet;
             if (_wasActive || _state.Active) ApplyFilters(_voice, in _state);
         }
 
@@ -283,6 +320,20 @@ namespace HarryTools.Audio {
 
         // Low-pass: lowest of the preset cutoff and the module cutoff. High-pass: highest. A filter is on while either side needs it.
         private static void ApplyFilters(AudioVoice _voice, in AcousticState _state) {
+            AudioReverbFilter _reverbFilter = _voice.Reverb;
+            if (_reverbFilter != null) {
+                bool _on = _state.Wet > ReverbOnWet;
+                if (_on) {
+                    MapReverb(new AcousticReverb {
+                        Wet = _state.Wet,
+                        DecayTime = Mathf.Exp(_state.LogDecayTime),
+                        HighFrequencyRatio = Mathf.Exp(_state.LogHighFrequencyRatio),
+                        ReflectionsDelay = _state.ReflectionsDelay,
+                    }, _reverbFilter);
+                }
+                if (_reverbFilter.enabled != _on) _reverbFilter.enabled = _on;
+            }
+
             AudioLowPassFilter _lowFilter = _voice.LowPass;
             if (_lowFilter != null) {
                 bool _module = _state.LogLowPass < LogNeutralLowHz;
@@ -306,6 +357,21 @@ namespace HarryTools.Audio {
                 }
                 if (_highFilter.enabled != _on) _highFilter.enabled = _on;
             }
+        }
+
+        // Writes a reverb to an AudioReverbFilter: dry untouched, the wet as the reverb level, the reflections a bit below it.
+        internal static void MapReverb(in AcousticReverb _reverb, AudioReverbFilter _filter) {
+            if (_filter.reverbPreset != AudioReverbPreset.User) _filter.reverbPreset = AudioReverbPreset.User;
+            float _level = Mathf.Clamp(2000f * Mathf.Log10(Mathf.Max(_reverb.Wet, 0.00001f)), ReverbLevelMin, 0f);
+            _filter.dryLevel = 0f;
+            _filter.room = 0f;
+            _filter.reverbLevel = _level;
+            _filter.reflectionsLevel = Mathf.Clamp(_level - ReflectionsBelowReverb, ReverbLevelMin, 0f);
+            _filter.decayTime = Mathf.Clamp(_reverb.DecayTime, ReverbDecayMin, ReverbDecayMax);
+            _filter.decayHFRatio = Mathf.Clamp(_reverb.HighFrequencyRatio, ReverbRatioMin, ReverbRatioMax);
+            float _reflectionsDelay = Mathf.Clamp(_reverb.ReflectionsDelay, 0f, ReverbReflectionsDelayMax);
+            _filter.reflectionsDelay = _reflectionsDelay;
+            _filter.reverbDelay = Mathf.Clamp(_reflectionsDelay * 0.5f, 0f, ReverbDelayMax);
         }
 
         // Copies the registry into the slots. Storage only grows here, so a tick without registry changes never allocates.

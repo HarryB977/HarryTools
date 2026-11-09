@@ -1,6 +1,6 @@
 {
   "name": "com.harryb97.tools.audio",
-  "version": "1.0.0-beta.3",
+  "version": "1.0.0-beta.4",
   "displayName": "HarryTools Audio",
   "description": "Sistema de audio con catálogo de assets, reproducción por bus con pooling, música con transiciones, diálogos con voces y efectos, y código generado para acceder a los sonidos.",
   "unity": "6000.0",
