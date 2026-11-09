@@ -56,8 +56,12 @@ namespace HarryTools.Audio.Acoustics {
         private int batch = NoBatch;
         private int stamp;
         private bool disposed;
+        private DebugVoice[] debugVoices = Array.Empty<DebugVoice>();
 
         // ==================== PROPERTIES ===================
+        /// <summary> When true, each finished voice keeps what it traced for the scene view gizmos. </summary>
+        internal bool CaptureDebug { get; set; }
+        internal DebugVoice[] DebugVoices => debugVoices;
         public int Order => 0;
         // Each voice is throttled by the UpdateInterval of the profile here, so one late voice never holds the others back.
         public float UpdateInterval => 0f;
@@ -104,6 +108,38 @@ namespace HarryTools.Audio.Acoustics {
             }
         }
 
+        // ==================== DEBUG ===================
+        /// <summary> True when the slot was asked about in the last Evaluate. </summary>
+        internal bool IsLive(int _slot) => _slot < slots.Length && slots[_slot].SeenStamp == stamp;
+
+        private void BeginCapture(in BatchEntry _entry, ReadOnlySpan<AcousticHit> _forward, ReadOnlySpan<AcousticHit> _backward, bool _blocked) {
+            if (debugVoices.Length < slots.Length) Array.Resize(ref debugVoices, slots.Length);
+            ref DebugVoice _voice = ref debugVoices[_entry.Slot];
+            if (_voice.Hits == null || _voice.Hits.Length < maxHits * 2) _voice.Hits = new DebugHit[maxHits * 2];
+            if (_voice.Rays == null || _voice.Rays.Length < sphere.Length) _voice.Rays = new DebugRay[sphere.Length];
+
+            _voice.Valid = true;
+            _voice.Source = _entry.Source;
+            _voice.Listener = _entry.Listener;
+            _voice.Radius = _entry.Radius;
+            _voice.Blocked = _blocked;
+            _voice.RayCount = _entry.SphereRays;
+            _voice.HitCount = 0;
+
+            for (int f = 0; f < _forward.Length; f++) {
+                if (!IsIgnored(_forward[f].ColliderId)) _voice.Hits[_voice.HitCount++] = new DebugHit { Point = _forward[f].Point, Material = geometry.MaterialOf(_forward[f].ColliderId) };
+            }
+            for (int b = 0; b < _backward.Length; b++) {
+                int _id = _backward[b].ColliderId;
+                if (IsIgnored(_id) || IndexOf(_forward, _id) >= 0) continue;
+                _voice.Hits[_voice.HitCount++] = new DebugHit { Point = _backward[b].Point, Material = geometry.MaterialOf(_id) };
+            }
+        }
+
+        private void CaptureRay(int _slot, int _index, Vector3 _from, bool _open) {
+            debugVoices[_slot].Rays[_index] = new DebugRay { From = _from, Open = _open };
+        }
+
         // ==================== SLOTS ===================
         private void AssignSlots(ReadOnlySpan<AcousticQuery> _queries) {
             stamp++;
@@ -120,6 +156,7 @@ namespace HarryTools.Audio.Acoustics {
             for (int i = 0; i < _queries.Length; i++) {
                 if (slotOfQuery[i] >= 0) continue;
                 int _free = LeastRecentlySeen();
+                if (_free < debugVoices.Length) debugVoices[_free].Valid = false;
                 slots[_free] = new Slot { Handle = _queries[i].Handle, Result = AcousticResult.Neutral, SeenStamp = stamp };
                 slotOfQuery[i] = _free;
             }
@@ -269,10 +306,13 @@ namespace HarryTools.Audio.Acoustics {
             IgnoreContaining(_forward, _backward, _entry.Listener);
             IgnoreContaining(_backward, _forward, _entry.Source);
             bool _blocked = FirstSolid(_forward) >= 0 || FirstSolid(_backward) >= 0;
+            if (CaptureDebug) BeginCapture(_entry, _forward, _backward, _blocked);
 
             Vector3 _through = profile.Transmission && _blocked ? ThroughWalls(_forward, _backward, _entry.Distance) : Vector3.one;
             Vector3 _gains = profile.Occlusion ? Occlude(_entry, _hits, _counts, _forward, _backward, _blocked, _through) : _through;
-            return ToResult(ApplyAir(_gains, _entry.Distance));
+            AcousticResult _result = ToResult(ApplyAir(_gains, _entry.Distance));
+            if (CaptureDebug) debugVoices[_entry.Slot].Result = _result;
+            return _result;
         }
 
         private ReadOnlySpan<AcousticHit> RayHits(int _ray, ReadOnlySpan<AcousticHit> _hits, ReadOnlySpan<int> _counts) {
@@ -313,15 +353,19 @@ namespace HarryTools.Audio.Acoustics {
 
             for (int i = 0; i < _entry.SphereRays; i++) {
                 // A start point past the first wall would count as open, or start inside the wall where it reports no hit.
-                float _advance = Vector3.Dot(sphere[SphereIndex(i, _entry.SphereRays)] * _entry.Radius, _toListener);
+                Vector3 _offset = sphere[SphereIndex(i, _entry.SphereRays)] * _entry.Radius;
+                float _advance = Vector3.Dot(_offset, _toListener);
                 if (_hidden || (_firstForward >= 0 && _advance >= _forward[_firstForward].Distance)) {
+                    if (CaptureDebug) CaptureRay(_entry.Slot, i, _entry.Source + _offset, false);
                     _closed++;
                     _leak += _through;
                     continue;
                 }
 
                 ReadOnlySpan<AcousticHit> _side = RayHits(_entry.RayStart + CenterRays + i, _hits, _counts);
-                if (FirstSolid(_side) < 0) {
+                bool _clear = FirstSolid(_side) < 0;
+                if (CaptureDebug) CaptureRay(_entry.Slot, i, _entry.Source + _offset, _clear);
+                if (_clear) {
                     _open++;
                     continue;
                 }

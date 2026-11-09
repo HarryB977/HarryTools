@@ -310,6 +310,76 @@ Cada `Started` recibe exactamente un `Ended` con el mismo `Id`. `SubtitleInfo` l
 | 4 | Alterna `ShowDialogue` |
 | 5 | Alterna `ShowCaptions` |
 
+## Sample de acústica
+
+Sample opcional (Package Manager > HarryTools Audio > Samples > Acoustics) que hace que los sonidos 3D se oigan distintos según lo que haya entre la fuente y el oyente. Es un módulo que se enchufa al núcleo (`IAcousticModule`); el núcleo no depende del sample.
+
+> **Beta:** el sample forma parte de la `1.0.0-beta.3` y su API puede cambiar antes de la 1.0.0.
+
+### Qué hace el bloque 1
+
+- **Oclusión:** lanza rayos desde la fuente (el centro y puntos de una esfera alrededor) hasta el oyente. Cuantos más quedan tapados, más se apaga el sonido y más se filtran los agudos.
+- **Transmisión:** lo que tapa deja pasar parte del sonido según el material y el grosor medido de lo que atraviesa el rayo. Una pared de ladrillo apenas deja pasar nada; una puerta de madera, bastante más.
+- **Absorción del aire:** a más distancia, menos agudos.
+- **Suelo de audibilidad:** un sonido totalmente tapado no baja de `FloorDb` (-30 dB por defecto), con un paso bajo y un paso alto máximos. Nunca se silencia del todo.
+- No hay eco ni pathing todavía: llegan en próximas betas.
+
+### Instalación y uso
+
+1. Importa el sample desde el Package Manager. Necesita Unity Physics 3D (los colliders de la escena son la geometría).
+2. Crea un **perfil** (**Create > HarryTools > Audio > Acoustics > Profile**) o usa `Presets/DefaultProfile.asset`.
+3. Añade a un objeto de la escena el componente **Acoustics Bootstrap** y asígnale el perfil. Simula mientras el componente está activo. También puedes llamar a `Acoustics.Use(perfil)` y `Acoustics.Stop()` desde código.
+4. Asigna materiales a los colliders (ver más abajo).
+
+### Perfil y overrides por plataforma
+
+`AcousticProfile` agrupa los interruptores (`Occlusion`, `Transmission`, `AirAbsorption`), los presupuestos, las capas que bloquean el sonido (`Geometry`, sin triggers), el material por defecto y los límites del resultado (`FloorDb`, `MinLowPass`, `MaxHighPass`). La lista `PlatformOverrides` sustituye todo el perfil en las plataformas indicadas: por ejemplo, un perfil más barato para móvil con menos rayos y un intervalo mayor.
+
+### Materiales
+
+Un `AcousticMaterial` guarda, para tres bandas (graves, medios, agudos), cuánta energía absorbe y cuánta deja pasar a través de 0,2 m. El sample trae ocho de ejemplo en `Presets/` (ladrillo, hormigón, yeso, madera, vidrio, metal, moqueta y tela). Para un collider, se usa el primero que exista:
+
+1. Un componente **Acoustic Surface** en el propio objeto o en un padre (el más cercano al collider).
+2. El `PhysicsMaterial` del collider, si está en la lista `PhysicsMaterials` del perfil.
+3. El `DefaultMaterial` del perfil. Sin ninguno, la superficie no deja pasar nada.
+
+Basta con un **Acoustic Surface** en el padre de una pared compuesta de varias piezas.
+
+### Extensión por sonido
+
+Añade la extensión **Acoustic Source Extension** a un asset de audio (lista *Extensions*) para ajustar ese sonido: `Radius` (radio en metros de la esfera que representa la fuente), `Exclude` (no simularlo) y `ReverbSend` (reservado para la reverb de las próximas betas). Sin la extensión se usan los valores por defecto.
+
+### Coste y presupuestos
+
+Cada sonido simulado lanza 2 rayos centrales más `OcclusionRays` (8 por defecto). El trabajo se limita por frame con `RayBudgetPerFrame` (256) y `MainThreadBudgetMs` (0,5 ms): lo que no cabe espera al siguiente frame y el sonido conserva su último resultado. Cada voz se reevalúa cada `UpdateInterval` (0,1 s). El núcleo solo simula hasta `MaxSimulated` voces por tick, las más audibles. El módulo no genera basura por tick; solo reserva memoria al crear o ampliar buffers.
+
+### Qué se simula y qué no
+
+- Solo se simulan los sonidos con *spatial blend* mayor que 0. Un sonido 2D no cambia.
+- No funciona en WebGL (no hay mixer ni filtros).
+- Un sonido que está realmente enterrado dentro de un collider sólido no lo nota como tapado: ese collider no cuenta como obstáculo.
+- La comprobación de si un extremo está dentro de un collider solo se hace en colliders convexos: los `MeshCollider` no convexos y el terreno no se comprueban.
+- Una malla abierta no tiene interior definido, así que se le supone un grosor nominal.
+- Los presets de materiales y del perfil son valores de partida que conviene ajustar de oído.
+- El eco, la reverb por sala y el pathing llegan en próximas betas.
+
+### Depuración en la vista de escena
+
+Marca **Debug Gizmos** en el Acoustics Bootstrap y entra en Play: en la vista de escena (con los *Gizmos* activados) cada sonido simulado dibuja la línea hasta el oyente (verde libre, roja tapada), los rayos de oclusión libres o bloqueados, los puntos donde atraviesa superficies con el nombre de su material, y el volumen y los filtros que recibe. Solo existe en la vista de escena, no hay UI de juego. Activarlo copia unos datos por voz; déjalo apagado en builds.
+
+### Demo
+
+`Demo/AcousticsHouse.unity` es una casa vista desde arriba con un salón (la radio suena en bucle), un pasillo, una cocina conectada por un arco, y una cochera vacía. Hay una puerta de madera entre el salón y el pasillo y un muro de hormigón entre el salón y la cochera. La esfera verde es el oyente. Lee el teclado con el **Input System** (`com.unity.inputsystem`); sin ese paquete los scripts de la demo no se compilan. Los materiales de la escena usan el shader de URP Lit: en otro pipeline, reasígnalos. Si tu escena ya tiene un `AudioListener`, desactívalo: la demo trae el suyo.
+
+| Tecla | Acción |
+|---|---|
+| WASD o flechas | Mueve al oyente (atraviesa las paredes) |
+| E | Coge la radio si estás a menos de 2,5 m, o la suelta en el suelo |
+| F | Abre o cierra la puerta |
+| G | Destruye el muro de hormigón |
+
+Cada acción escribe una línea en la consola. Activa la pestaña Scene durante Play para ver los gizmos.
+
 ## Limitaciones
 
 - El audio no se pausa solo con `Time.timeScale`; hay que llamar a `Audio.Pause()`.

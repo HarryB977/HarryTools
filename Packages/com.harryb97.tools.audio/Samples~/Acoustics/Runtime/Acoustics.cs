@@ -6,10 +6,22 @@ namespace HarryTools.Audio.Acoustics {
     public static class Acoustics {
         // ==================== VARIABLES ===================
         private static PropagationModule module;
+        private static bool debugCapture;
 
         // ==================== PROPERTIES ===================
         /// <summary> The profile given to <see cref="Use"/>, before resolving platform overrides. Null when stopped. </summary>
         public static AcousticProfile Active { get; private set; }
+
+        /// <summary> Keeps what each voice traced so the scene view gizmos can draw it. Costs a few copies per voice, so leave it off in builds. </summary>
+        public static bool DebugCapture {
+            get => debugCapture;
+            set {
+                debugCapture = value;
+                if (module != null) module.CaptureDebug = value;
+            }
+        }
+
+        internal static PropagationModule Module => module;
 
         // ==================== PUBLIC API ===================
         /// <summary> Runs the simulation with the profile, or its override for the current platform. Null stops it. </summary>
@@ -22,6 +34,7 @@ namespace HarryTools.Audio.Acoustics {
             AcousticProfile _resolved = _profile.Resolve(Application.platform);
             if (module == null) module = new PropagationModule(_resolved, new PhysicsGeometry3D());
             else module.Configure(_resolved);
+            module.CaptureDebug = debugCapture;
 
             // Also recovers a module the core unregistered after an exception.
             Audio.RegisterModule(module);
@@ -45,7 +58,10 @@ namespace HarryTools.Audio.Acoustics {
         }
 
         [ExecuteOnReload]
-        private static void ResetOnReload() => Stop();
+        private static void ResetOnReload() {
+            debugCapture = false;
+            Stop();
+        }
 
 #if UNITY_EDITOR
         // A recompile during Play skips both hooks above and would leak the native buffers.

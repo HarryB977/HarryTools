@@ -1,0 +1,26 @@
+{
+    "name": "HarryTools.Audio.Samples.Acoustics.Demo",
+    "rootNamespace": "HarryTools.Audio.Acoustics.Demo",
+    "references": [
+        "HarryTools.Audio",
+        "HarryTools.Audio.Samples.Acoustics",
+        "Unity.InputSystem"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [
+        "HARRYTOOLS_INPUTSYSTEM"
+    ],
+    "versionDefines": [
+        {
+            "name": "com.unity.inputsystem",
+            "expression": "",
+            "define": "HARRYTOOLS_INPUTSYSTEM"
+        }
+    ],
+    "noEngineReferences": false
+}

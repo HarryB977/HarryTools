@@ -3,6 +3,9 @@
 ## [1.0.0-beta.3] - 2026-11-09
 ### Añadido
 - Sample de acústica (`Samples~/Acoustics`): materiales acústicos (`AcousticMaterial`, `AcousticSurface`), perfiles de calidad con overrides por plataforma (`AcousticProfile`), extensión por asset (`AcousticSourceExtension`) y ocho materiales de ejemplo.
+- Módulo de propagación del sample de acústica: oclusión por rayos, transmisión por materiales y grosor, absorción del aire y suelo de audibilidad, con un presupuesto de rayos por frame sin basura por tick.
+- Gizmos de depuración en la vista de escena (opción *Debug Gizmos* del `AcousticsBootstrap`): rayos libres o bloqueados, superficies atravesadas y resultado por voz.
+- Demo `AcousticsHouse` del sample de acústica: una casa con radio que se puede coger, una puerta que se abre y un muro que se destruye.
 
 ## [1.0.0-beta.2] - 2026-11-06
 ### Añadido
