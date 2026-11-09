@@ -3,9 +3,6 @@ using UnityEngine;
 namespace HarryTools.Audio.Acoustics {
     /// <summary> Pure acoustic formulas. Bands are Vector3 (x = Low, y = Mid, z = High) holding linear energy gains from 0 to 1. </summary>
     internal static class AcousticMath {
-        // ==================== VARIABLES ===================
-        private const float Epsilon = 1e-6f;
-
         // ==================== PUBLIC METHODS ===================
         /// <summary> Energy that survives a wall of the given thickness: T^(thickness / ReferenceThickness) per band. </summary>
         public static Vector3 Transmit(Vector3 _transmission, float _thickness) {
@@ -45,8 +42,8 @@ namespace HarryTools.Audio.Acoustics {
             float _mid = _valid ? Mathf.Max(0f, _bandGains.y) : 0f;
             float _high = _valid ? Mathf.Max(0f, _bandGains.z) : 0f;
 
-            float _lowPassRatio = _mid > Epsilon ? Mathf.Clamp01(_high / _mid) : 0f;
-            float _highPassRatio = _mid > Epsilon ? Mathf.Clamp01(_low / _mid) : 0f;
+            float _lowPassRatio = BandRatio(_high, _mid);
+            float _highPassRatio = BandRatio(_low, _mid);
 
             AcousticResult _result = AcousticResult.Neutral;
             _result.VolumeMultiplier = Mathf.Max(Mathf.Sqrt(Mathf.Min(_mid, 1f)), _floorVolume);
@@ -56,6 +53,12 @@ namespace HarryTools.Audio.Acoustics {
         }
 
         // ==================== PRIVATE METHODS ===================
+        // With Mid at zero, the limit of band / Mid is 1 while the band has energy, so a deep wall does not jump to a filter limit.
+        private static float BandRatio(float _band, float _mid) {
+            if (_mid > 0f) return Mathf.Clamp01(_band / _mid);
+            return _band > 0f ? 1f : 0f;
+        }
+
         private static float LogLerp(float _a, float _b, float _t) {
             float _la = Mathf.Log(Mathf.Max(_a, 1f));
             float _lb = Mathf.Log(Mathf.Max(_b, 1f));

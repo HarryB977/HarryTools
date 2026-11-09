@@ -31,14 +31,13 @@ namespace HarryTools.Audio.Acoustics {
                 return;
             }
 
-            AcousticProfile _resolved = _profile.Resolve(Application.platform);
-            if (module == null) module = new PropagationModule(_resolved, new PhysicsGeometry3D());
-            else module.Configure(_resolved);
-            module.CaptureDebug = debugCapture;
+            Start(_profile, module == null ? new PhysicsGeometry3D() : null);
+        }
 
-            // Also recovers a module the core unregistered after an exception.
-            Audio.RegisterModule(module);
-            Active = _profile;
+        /// <summary> Runs the simulation on the given geometry, replacing any running module. Lets tests inject a fake. </summary>
+        internal static void UseWith(AcousticProfile _profile, IAcousticGeometry _geometry) {
+            Stop();
+            Start(_profile, _geometry);
         }
 
         /// <summary> Unregisters the module and frees its buffers. Sounds keep playing and go back to neutral. </summary>
@@ -48,6 +47,27 @@ namespace HarryTools.Audio.Acoustics {
             Audio.UnregisterModule(module);
             module.Dispose();
             module = null;
+        }
+
+        // ==================== HELPERS ===================
+        /// <summary> Called by a module whose Evaluate threw, just before the core unregisters it. Frees it and, when it is the running one, stops the simulation. </summary>
+        internal static void OnModuleFailed(PropagationModule _failed) {
+            if (module == _failed) {
+                module = null;
+                Active = null;
+            }
+            _failed.Dispose();
+        }
+
+        // A null geometry reuses the running module.
+        private static void Start(AcousticProfile _profile, IAcousticGeometry _geometry) {
+            AcousticProfile _resolved = _profile.Resolve(Application.platform);
+            if (_geometry != null) module = new PropagationModule(_resolved, _geometry);
+            else module.Configure(_resolved);
+            module.CaptureDebug = debugCapture;
+
+            Audio.RegisterModule(module);
+            Active = _profile;
         }
 
         // ==================== LIFECYCLE ===================

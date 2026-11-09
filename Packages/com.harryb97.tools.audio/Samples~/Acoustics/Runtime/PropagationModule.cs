@@ -98,13 +98,19 @@ namespace HarryTools.Audio.Acoustics {
         public void Evaluate(ReadOnlySpan<AcousticQuery> _queries, Span<AcousticResult> _results) {
             if (disposed) return;
 
-            using (Marker.Auto()) {
-                long _deadline = Stopwatch.GetTimestamp() + (long)(profile.MainThreadBudgetMs * Stopwatch.Frequency / 1000f);
-                EnsureCapacity(_queries.Length);
-                AssignSlots(_queries);
-                ReadBatch(_deadline);
-                if (batch == NoBatch) ScheduleDue(_queries, _deadline);
-                for (int i = 0; i < _queries.Length; i++) _results[i] = slots[slotOfQuery[i]].Result;
+            try {
+                using (Marker.Auto()) {
+                    long _deadline = Stopwatch.GetTimestamp() + (long)(profile.MainThreadBudgetMs * Stopwatch.Frequency / 1000f);
+                    EnsureCapacity(_queries.Length);
+                    AssignSlots(_queries);
+                    ReadBatch(_deadline);
+                    if (batch == NoBatch) ScheduleDue(_queries, _deadline);
+                    for (int i = 0; i < _queries.Length; i++) _results[i] = slots[slotOfQuery[i]].Result;
+                }
+            } catch {
+                // The core unregisters a module that throws and has no callback, so the cleanup happens here.
+                Acoustics.OnModuleFailed(this);
+                throw;
             }
         }
 
@@ -199,8 +205,8 @@ namespace HarryTools.Audio.Acoustics {
                 AcousticSourceExtension _extension = _query.Asset != null ? _query.Asset.GetExtension<AcousticSourceExtension>() : null;
                 float _distance = Vector3.Distance(_query.SourcePosition, _query.ListenerPosition);
 
-                // Also catches NaN positions.
-                if ((_extension != null && _extension.Exclude) || !(_distance > MinDistance)) {
+                // The negated comparison also catches NaN positions.
+                if ((_extension != null && _extension.Exclude) || !(_distance > MinDistance) || float.IsInfinity(_distance)) {
                     Finish(_slot, AcousticResult.Neutral, _now, _interval);
                     continue;
                 }

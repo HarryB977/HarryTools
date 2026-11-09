@@ -113,11 +113,11 @@ namespace HarryTools.Audio.Acoustics {
             return _count;
         }
 
-        private static RaycastCommand ToCommand(in AcousticRay _ray, QueryParameters _query) {
+        internal static RaycastCommand ToCommand(in AcousticRay _ray, QueryParameters _query) {
             Vector3 _delta = _ray.To - _ray.From;
             float _distance = _delta.magnitude;
-            // Also catches NaN. Collect reports no hits for a zero distance command.
-            if (!(_distance > Mathf.Epsilon)) return new RaycastCommand(Vector3.zero, Vector3.forward, _query, 0f);
+            // The negated comparison also catches NaN. Collect reports no hits for a zero distance command.
+            if (!(_distance > Mathf.Epsilon) || float.IsInfinity(_distance)) return new RaycastCommand(Vector3.zero, Vector3.forward, _query, 0f);
             return new RaycastCommand(_ray.From, _delta / _distance, _query, _distance);
         }
 
