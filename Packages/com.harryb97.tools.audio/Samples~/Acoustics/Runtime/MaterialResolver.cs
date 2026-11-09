@@ -16,6 +16,8 @@ namespace HarryTools.Audio.Acoustics {
         // ==================== PUBLIC API ===================
         /// <summary> AcousticSurface on the collider or a parent, then the mapped physics material, then the profile default. </summary>
         public AcousticMaterial Resolve(Collider _collider) {
+            if (_collider == null) return profile.DefaultMaterial;
+
             int _id = _collider.GetInstanceID();
             if (cache.TryGetValue(_id, out AcousticMaterial _cached)) return _cached;
 
