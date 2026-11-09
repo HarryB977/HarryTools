@@ -292,6 +292,8 @@ namespace HarryTools.Audio {
                 tailClip = AudioClip.Create(TailClipName, 44100, 1, 44100, false);
                 tailClip.hideFlags = HideFlags.HideAndDontSave;
             }
+            // Tails keep their reverb filter on, so they share the MaxSimulated cap; the oldest one makes room.
+            if (tails.Count >= Mathf.Max(1, runtime.Settings.MaxSimulated)) CutTail(0);
             _voice.BeginTail(tailClip, Mathf.Min(Mathf.Exp(_voice.Acoustic.LogDecayTime), TailMaxSeconds));
             tails.Add(_voice);
         }

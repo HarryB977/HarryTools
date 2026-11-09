@@ -51,9 +51,12 @@ namespace HarryTools.Audio.Acoustics {
             return _room;
         }
 
+        private const float OpenAirOpenness = 0.45f;
+
         /// <summary> Converts a room estimate into reverb. <paramref name="_wetScale"/> is the profile wet times the source send. </summary>
         public static AcousticReverb ToReverb(in RoomEstimate _room, float _wetScale) {
-            float _closed = 1f - _room.Openness;
+            // A ground plane alone leaves about half of the sphere open and must stay dry.
+            float _closed = Mathf.Clamp01(1f - _room.Openness / OpenAirOpenness);
             return new AcousticReverb {
                 Wet = Mathf.Clamp01(_room.DecayTime / 2f) * _closed * _closed * Mathf.Max(0f, _wetScale),
                 DecayTime = Mathf.Clamp(_room.DecayTime, MinDecay, MaxDecay),

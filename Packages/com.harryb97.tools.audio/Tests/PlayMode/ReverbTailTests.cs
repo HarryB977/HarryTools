@@ -327,6 +327,31 @@ namespace HarryTools.Audio.Tests {
         }
 
         [UnityTest]
+        public IEnumerator Tails_CappedAtMaxSimulated_OldestCut() {
+            Audio.ShutdownForTests();
+            var _settings = ScriptableObject.CreateInstance<AudioProjectSettings>();
+            _settings.MaxVoices = 6;
+            _settings.PrewarmVoices = 6;
+            _settings.MaxSimulated = 2;
+            _settings.PersistenceKey = TestKey;
+            created.Add(_settings);
+            Audio.InitializeForTests(_settings);
+            Register(0.8f, 5f);
+
+            SoundAsset _short = MakeSound(0.3f);
+            AudioVoice _first = VoiceOf(PlayAt(_short));
+            yield return WaitFor(() => Manager.TailCount == 1, 3f);
+            yield return PlayIntoTail(_short);
+            Assert.AreEqual(2, Manager.TailCount);
+            Assert.IsTrue(_first.IsTail);
+
+            PlayAt(_short);
+            yield return WaitFor(() => Manager.ActiveVoices.Count == 0, 3f);
+            Assert.AreEqual(2, Manager.TailCount, "Tails must never exceed MaxSimulated.");
+            Assert.IsFalse(_first.IsTail, "The oldest tail must be the one cut.");
+        }
+
+        [UnityTest]
         public IEnumerator StaleHandle_DuringTail_DoesNothing() {
             Register(0.8f, 3f);
             AudioHandle _handle = PlayAt(MakeSound(0.3f));

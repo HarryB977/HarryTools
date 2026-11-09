@@ -361,7 +361,7 @@ Cada sonido simulado suena con el eco de la sala en la que está. Alrededor de l
 
 Los rayos se comparten por celdas de espacio: los sonidos que están en la misma celda usan la misma estimación. Cada celda guarda un anillo de muestras que se renueva poco a poco, así que si cambia la geometría (un muro que cae) el eco se actualiza solo sin detectar nada.
 
-**Qué necesita una sala para dar eco:** colliders que la encierren, es decir paredes, suelo y techo. Un rayo que no choca con nada cuenta como espacio abierto, así que una sala sin collider de suelo o de techo suena como si estuviera al aire libre, con poco eco aunque tenga cuatro paredes. Los colliders pueden ser objetos solo de collider (invisibles) con un **Acoustic Surface** para fijar su material. La demo lo hace así: los suelos tienen collider y el salón y la cochera tienen un techo invisible (`Ceilings (colliders only)`).
+**Qué necesita una sala para dar eco:** colliders que la encierren, es decir paredes, suelo y techo. Un rayo que no choca con nada cuenta como espacio abierto, así que una sala sin collider de suelo o de techo suena como si estuviera al aire libre, con poco eco aunque tenga cuatro paredes. Un suelo solo, sin paredes ni techo, cuenta como exterior y no da eco. Los colliders pueden ser objetos solo de collider (invisibles) con un **Acoustic Surface** para fijar su material. La demo lo hace así: los suelos tienen collider y el salón y la cochera tienen un techo invisible (`Ceilings (colliders only)`).
 
 Parámetros del perfil:
 
@@ -383,7 +383,7 @@ Los rayos de eco comparten presupuesto con la oclusión: cuando el presupuesto d
 - `Ended`, `WaitForEnd`, las conversaciones y los subtítulos ocurren al acabar el clip, no al acabar la cola.
 - Una voz en cola ocupa un hueco del pool y es la primera que se roba cuando el pool se llena, así que nunca impide un `Play` nuevo. Un handle antiguo no la toca. `Audio.Pause` la congela.
 
-**Coste:** cada voz con eco lleva un `AudioReverbFilter`; el coste del mezclador crece con el número de voces simuladas, que el núcleo limita con `MaxSimulated`. El módulo no genera basura por tick.
+**Coste:** cada voz con eco lleva un `AudioReverbFilter`; el coste del mezclador crece con el número de voces simuladas, que el núcleo limita con `MaxSimulated`; las colas de eco tienen el mismo tope y, al superarlo, se corta la más antigua. El módulo no genera basura por tick.
 
 **WebGL:** no hay reverb ni colas (no hay mixer ni filtros), igual que el resto de la acústica.
 
