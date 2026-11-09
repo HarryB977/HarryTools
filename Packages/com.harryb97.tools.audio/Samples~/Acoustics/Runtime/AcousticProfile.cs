@@ -61,6 +61,20 @@ namespace HarryTools.Audio.Acoustics {
         [Tooltip("Mid band loss per meter of air, in dB.")]
         public float AirMidDbPerMeter = 0.004f;
 
+        [Header("Reverb")]
+        [Tooltip("Estimate the room around each sound and give it matching reverb.")]
+        public bool Reverb = true;
+        [Tooltip("Rays stored per room cell.")]
+        public int RoomRays = 32;
+        [Tooltip("New rays traced per cell on each update.")]
+        public int RoomRaysPerUpdate = 8;
+        [Tooltip("Rays that travel farther than this count as escaping the room.")]
+        public float RoomMaxDistance = 30f;
+        [Tooltip("Size in meters of a cell that shares one room estimate.")]
+        public float RoomCellSize = 2f;
+        [Tooltip("Overall reverb amount. Multiplies each source's reverb send.")]
+        public float ReverbWet = 1f;
+
         [Header("Platforms")]
         [Tooltip("Profiles that replace this one on specific platforms.")]
         public List<PlatformProfile> PlatformOverrides = new List<PlatformProfile>();
