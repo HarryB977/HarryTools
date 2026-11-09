@@ -143,7 +143,7 @@ namespace HarryTools.Audio.Acoustics {
             VoiceSlot _voice = slots[_slot];
             if (_voice.SeenStamp != stamp || !_voice.HasReverb || _voice.Cell < 0 || !_voice.Handle.IsValid) return false;
             Cell _cell = cells[_voice.Cell];
-            if (!_cell.HasEstimate) return false;
+            if (!_cell.InUse || !_cell.HasEstimate) return false;
 
             _source = _voice.Position;
             _cellCenter = (new Vector3(_cell.Coord.x, _cell.Coord.y, _cell.Coord.z) + Vector3.one * 0.5f) * cellSize;

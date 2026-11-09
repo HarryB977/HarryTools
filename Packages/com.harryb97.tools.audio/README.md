@@ -361,6 +361,8 @@ Cada sonido simulado suena con el eco de la sala en la que está. Alrededor de l
 
 Los rayos se comparten por celdas de espacio: los sonidos que están en la misma celda usan la misma estimación. Cada celda guarda un anillo de muestras que se renueva poco a poco, así que si cambia la geometría (un muro que cae) el eco se actualiza solo sin detectar nada.
 
+**Qué necesita una sala para dar eco:** colliders que la encierren, es decir paredes, suelo y techo. Un rayo que no choca con nada cuenta como espacio abierto, así que una sala sin collider de suelo o de techo suena como si estuviera al aire libre, con poco eco aunque tenga cuatro paredes. Los colliders pueden ser objetos solo de collider (invisibles) con un **Acoustic Surface** para fijar su material. La demo lo hace así: los suelos tienen collider y el salón y la cochera tienen un techo invisible (`Ceilings (colliders only)`).
+
 Parámetros del perfil:
 
 - `Reverb`: enciende o apaga el eco por sala.
@@ -394,6 +396,7 @@ Los rayos de eco comparten presupuesto con la oclusión: cuando el presupuesto d
 - Una malla abierta no tiene interior definido, así que se le supone un grosor nominal.
 - Los presets de materiales y del perfil son valores de partida que conviene ajustar de oído.
 - El pathing (sonido que rodea esquinas) llega en próximas betas.
+- Una sala sin colliders de suelo o techo se estima como espacio abierto y apenas da eco.
 - La reverb es una estimación del espacio alrededor de la fuente con unas decenas de rayos: una sala con huecos pequeños o muy irregulares puede dar un valor aproximado.
 
 ### Depuración en la vista de escena
