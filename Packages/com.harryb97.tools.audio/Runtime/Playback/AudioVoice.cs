@@ -52,6 +52,10 @@ namespace HarryTools.Audio {
         private AcousticState acoustic = AcousticState.Neutral;
         #endregion
 
+        #region Tail
+        private float tailRemaining;
+        #endregion
+
         // ==================== PROPERTIES ===================
         public int Index { get; private set; }
         public int Generation { get; private set; }
@@ -65,6 +69,10 @@ namespace HarryTools.Audio {
 
         /// <summary> True between Begin and the release back to the pool. </summary>
         public bool IsActive { get; private set; }
+        /// <summary> True while the voice rings out its reverb after its playback ended. It is neither active nor back in the pool. </summary>
+        public bool IsTail { get; private set; }
+        /// <summary> Set when Audio.StopAll stops the voice: it ends without a tail, even after a fade-out. </summary>
+        public bool TailSuppressed { get; set; }
         /// <summary> Prepared by Begin but not started: a queued voice line waiting for its emitter. It does not advance, sound or end. </summary>
         public bool IsReserved { get; private set; }
         public AudioAsset Asset { get; private set; }
@@ -323,6 +331,33 @@ namespace HarryTools.Audio {
             SyncSource();
         }
 
+        /// <summary>
+        /// The playback is over but the reverb filter keeps ringing: the source loops a silent clip so Unity keeps running its filter chain.
+        /// The voice stays where it is with its last reverb, and only the time left advances. Measured: source.volume is applied before the filters,
+        /// so the tail does not depend on it; it goes back to 1 because a fade-out leaves it at 0.
+        /// </summary>
+        public void BeginTail(AudioClip _silence, float _duration) {
+            IsActive = false;
+            IsTail = true;
+            tailRemaining = _duration;
+            fadingOut = false;
+            followTarget = null;
+            following = false;
+            EndedCallback = null;
+            source.clip = _silence;
+            source.loop = true;
+            source.volume = 1f;
+            source.Play();
+        }
+
+        /// <summary> Advances the tail. Frozen by the same pauses as a playing voice. Returns true when it has rung out. </summary>
+        public bool TickTail(float _delta, bool _systemPaused) {
+            RefreshPause(_systemPaused);
+            if (IsFrozen) return false;
+            tailRemaining -= _delta;
+            return tailRemaining <= 0f;
+        }
+
         /// <summary> Bumps the generation so every handle to the previous playback becomes stale. </summary>
         public void Invalidate(int _generation) => Generation = _generation;
 
@@ -332,6 +367,9 @@ namespace HarryTools.Audio {
         void IPoolable.OnReleaseToPool() {
             IsActive = false;
             IsReserved = false;
+            IsTail = false;
+            TailSuppressed = false;
+            tailRemaining = 0f;
             ResetComponents();
             SetEffectCutoffs(false, 0f, false, 0f);
             Asset = null;

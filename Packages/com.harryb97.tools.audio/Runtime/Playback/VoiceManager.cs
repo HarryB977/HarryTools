@@ -33,21 +33,29 @@ namespace HarryTools.Audio {
         // Not reset on reload on purpose: generations keep growing across runtimes, so a handle from a previous runtime never matches a new voice.
         private static int generationSeed;
         private static readonly int BusCount = BusMixer.BusCount;
+        // A voice whose smoothed wet is at or below this ends as if it had no reverb.
+        private const float TailMinWet = 0.01f;
+        private const float TailMaxSeconds = 5f;
+        internal const string TailClipName = "HarryTools Tail Silence";
 
         private readonly AudioRuntime runtime;
         private readonly Pool<AudioVoice> pool;
         private readonly List<AudioVoice> voices = new List<AudioVoice>();
         private readonly List<AudioVoice> active = new List<AudioVoice>();
+        // Oldest first. Out of the pool but not in active: no handle, instance limit, simulation or ducking reaches them.
+        private readonly List<AudioVoice> tails;
         private readonly List<List<Pending>> scratch = new List<List<Pending>>();
         private readonly Dictionary<AudioAsset, AssetState> states = new Dictionary<AudioAsset, AssetState>();
         private readonly System.Random rng = new System.Random();
         private readonly bool[] busPaused = new bool[BusCount];
         private bool globalPaused;
         private int scratchDepth;
+        private AudioClip tailClip;
 
         // ==================== CONSTRUCTOR ===================
         public VoiceManager(AudioRuntime _runtime, AudioVoice _template, Transform _parent, int _maxVoices, int _prewarm) {
             runtime = _runtime;
+            tails = new List<AudioVoice>(Mathf.Max(1, _maxVoices));
             pool = new Pool<AudioVoice>(_template, 0, Mathf.Max(1, _maxVoices), PoolOverflow.Fail, _parent);
             pool.Created += OnVoiceCreated;
             pool.Prewarm(Mathf.Min(_prewarm, _maxVoices));
@@ -57,6 +65,8 @@ namespace HarryTools.Audio {
         /// <summary> Voices currently in use, oldest first. </summary>
         public IReadOnlyList<AudioVoice> ActiveVoices => active;
         public bool IsPaused => globalPaused;
+        /// <summary> Voices whose playback ended and that only ring out their reverb. </summary>
+        public int TailCount => tails.Count;
 
         // ==================== PUBLIC ===================
         public AudioHandle Start(in PlaybackRequest _request) {
@@ -79,6 +89,11 @@ namespace HarryTools.Audio {
             float _baseVolume = UnityEngine.Random.Range(_volumeRange.x, _volumeRange.y);
 
             AudioVoice _voice = pool.Get();
+            // A tail is only reverb dying out: it gives way before any playing voice.
+            if (_voice == null && tails.Count > 0) {
+                CutTail(0);
+                _voice = pool.Get();
+            }
             if (_voice == null) {
                 float _score = _asset.Priority / 100f * _baseVolume * runtime.Mixer.GetSourceMultiplier(_asset.Bus) * (_request.Force2D ? 1f : Attenuation(_asset.GetSpatial(), _position));
                 AudioVoice _victim = FindLowestScore(_asset.Priority, out float _lowest);
@@ -139,6 +154,7 @@ namespace HarryTools.Audio {
         public void Tick(float _unscaledDelta) {
             bool _onSource = runtime.MultiplyOnSources;
             BusMixer _mixer = runtime.Mixer;
+            TickTails(_unscaledDelta);
             List<Pending> _finished = RentScratch();
             try {
                 for (int _i = 0; _i < active.Count; _i++) {
@@ -148,7 +164,7 @@ namespace HarryTools.Audio {
                 for (int _i = 0; _i < _finished.Count; _i++) {
                     // Finishing without a fade-out is the natural end; a completed fade-out means it was stopped.
                     AudioVoice _done = _finished[_i].Voice;
-                    if (_done.Generation == _finished[_i].Generation) Release(_done, !_done.IsFadingOut);
+                    if (_done.Generation == _finished[_i].Generation) Release(_done, !_done.IsFadingOut, true);
                 }
             } finally {
                 ReturnScratch(_finished);
@@ -163,12 +179,18 @@ namespace HarryTools.Audio {
             else _voice.BeginFadeOut(_fade);
         }
 
-        /// <summary> Stops every voice of the asset, or every voice when the asset is null. </summary>
+        /// <summary> Stops every voice of the asset, or every voice when the asset is null. Stopping everything also cuts the tails and leaves none behind. </summary>
         public void StopAll(AudioAsset _asset, float _fade) {
+            bool _everything = ReferenceEquals(_asset, null);
+            if (_everything) {
+                while (tails.Count > 0) CutTail(tails.Count - 1);
+            }
             List<Pending> _targets = RentScratch();
             try {
                 for (int _i = 0; _i < active.Count; _i++) {
-                    if (ReferenceEquals(_asset, null) || ReferenceEquals(active[_i].Asset, _asset)) _targets.Add(new Pending(active[_i]));
+                    if (!_everything && !ReferenceEquals(active[_i].Asset, _asset)) continue;
+                    if (_everything) active[_i].TailSuppressed = true;
+                    _targets.Add(new Pending(active[_i]));
                 }
                 // Reserved voices (queued lines) first, so stopping a current line does not start a queued one that is about to be stopped.
                 for (int _pass = 0; _pass < 2; _pass++) {
@@ -213,6 +235,12 @@ namespace HarryTools.Audio {
             pool.Dispose();
             voices.Clear();
             active.Clear();
+            tails.Clear();
+            if (tailClip != null) {
+                if (Application.isPlaying) UnityEngine.Object.Destroy(tailClip);
+                else UnityEngine.Object.DestroyImmediate(tailClip);
+            }
+            tailClip = null;
             states.Clear();
         }
 
@@ -229,6 +257,42 @@ namespace HarryTools.Audio {
                 AudioVoice _voice = active[_i];
                 if (_voice != null) _voice.RefreshPause(IsSystemPaused(_voice));
             }
+            for (int _i = 0; _i < tails.Count; _i++) {
+                AudioVoice _voice = tails[_i];
+                if (_voice != null) _voice.RefreshPause(IsSystemPaused(_voice));
+            }
+        }
+
+        // No user code runs here, so the list cannot change while it is walked.
+        private void TickTails(float _unscaledDelta) {
+            for (int _i = tails.Count - 1; _i >= 0; _i--) {
+                AudioVoice _voice = tails[_i];
+                if (_voice == null) tails.RemoveAt(_i);
+                else if (_voice.TickTail(_unscaledDelta, IsSystemPaused(_voice))) CutTail(_i);
+            }
+        }
+
+        private void CutTail(int _index) {
+            AudioVoice _voice = tails[_index];
+            tails.RemoveAt(_index);
+            if (_voice == null) return;
+            pool.Release(_voice);
+            _voice.Invalidate(++generationSeed);
+        }
+
+        private bool WantsTail(AudioVoice _voice) {
+            if (!AudioPlatform.UsesMixer || _voice.TailSuppressed || _voice.Acoustic.Wet <= TailMinWet) return false;
+            AudioReverbFilter _reverb = _voice.Reverb;
+            return _reverb != null && _reverb.enabled;
+        }
+
+        private void BeginTail(AudioVoice _voice) {
+            if (tailClip == null) {
+                tailClip = AudioClip.Create(TailClipName, 44100, 1, 44100, false);
+                tailClip.hideFlags = HideFlags.HideAndDontSave;
+            }
+            _voice.BeginTail(tailClip, Mathf.Min(Mathf.Exp(_voice.Acoustic.LogDecayTime), TailMaxSeconds));
+            tails.Add(_voice);
         }
 
         private void OnVoiceCreated(AudioVoice _voice) {
@@ -246,7 +310,8 @@ namespace HarryTools.Audio {
         }
 
         // _natural: the sound played to its end (not stopped, faded out or stolen).
-        private void Release(AudioVoice _voice, bool _natural = false) {
+        // _allowTail: the playback finished by itself or after its fade-out. Cuts (stealing, Stop without fade, StopAll) never leave a tail.
+        private void Release(AudioVoice _voice, bool _natural = false, bool _allowTail = false) {
             if (ReferenceEquals(_voice, null) || !_voice.IsActive) return;
             var _handle = new AudioHandle(_voice.Index, _voice.Generation);
             Action<AudioHandle> _callback = _voice.EndedCallback;
@@ -257,7 +322,8 @@ namespace HarryTools.Audio {
             AudioAsset _asset = _voice.Asset;
             if (!ReferenceEquals(_asset, null) && states.TryGetValue(_asset, out AssetState _state)) _state.ActiveCount--;
             // A voice destroyed from outside is dropped by the pool instead of being returned.
-            pool.Release(_voice);
+            if (_allowTail && WantsTail(_voice)) BeginTail(_voice);
+            else pool.Release(_voice);
             _voice.Invalidate(++generationSeed);
 
             if (_callback != null) {
