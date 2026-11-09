@@ -28,6 +28,9 @@ namespace HarryTools.Audio.Acoustics {
         /// <summary> Acoustic material of a collider; the profile default when the collider no longer exists. </summary>
         AcousticMaterial MaterialOf(int _colliderId);
 
+        /// <summary> True when the point is inside a solid collider. False when the collider no longer exists or its inside is undefined (open or non-convex meshes). </summary>
+        bool ContainsPoint(int _colliderId, Vector3 _point);
+
         /// <summary> Applies the layer mask and materials of <paramref name="_profile"/> to batches scheduled from now on. </summary>
         void Configure(AcousticProfile _profile);
     }

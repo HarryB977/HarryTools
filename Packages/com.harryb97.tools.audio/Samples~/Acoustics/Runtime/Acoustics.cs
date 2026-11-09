@@ -46,5 +46,14 @@ namespace HarryTools.Audio.Acoustics {
 
         [ExecuteOnReload]
         private static void ResetOnReload() => Stop();
+
+#if UNITY_EDITOR
+        // A recompile during Play skips both hooks above and would leak the native buffers.
+        [UnityEditor.InitializeOnLoadMethod]
+        private static void RegisterEditorHooks() {
+            UnityEditor.AssemblyReloadEvents.beforeAssemblyReload -= Stop;
+            UnityEditor.AssemblyReloadEvents.beforeAssemblyReload += Stop;
+        }
+#endif
     }
 }

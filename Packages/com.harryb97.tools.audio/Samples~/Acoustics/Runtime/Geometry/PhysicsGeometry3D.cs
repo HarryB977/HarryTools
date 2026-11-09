@@ -7,6 +7,7 @@ namespace HarryTools.Audio.Acoustics {
     internal sealed class PhysicsGeometry3D : IAcousticGeometry {
         // ==================== VARIABLES ===================
         private const int MinSweepCount = 64;
+        private const float ContainsToleranceSqr = 1e-8f;
 
         private readonly Dictionary<int, RayBatch> active = new Dictionary<int, RayBatch>();
         private readonly Stack<RayBatch> free = new Stack<RayBatch>();
@@ -68,6 +69,14 @@ namespace HarryTools.Audio.Acoustics {
                 Forget(_colliderId);
             }
             return resolver.Resolve(null);
+        }
+
+        public bool ContainsPoint(int _colliderId, Vector3 _point) {
+            if (!colliders.TryGetValue(_colliderId, out Collider _collider) || _collider == null) return false;
+            if (!_collider.enabled || !_collider.gameObject.activeInHierarchy) return false;
+            if (_collider is MeshCollider _mesh && !_mesh.convex) return false;
+            // ClosestPoint returns the point itself when it is inside.
+            return (_collider.ClosestPoint(_point) - _point).sqrMagnitude < ContainsToleranceSqr;
         }
 
         public void Dispose() {

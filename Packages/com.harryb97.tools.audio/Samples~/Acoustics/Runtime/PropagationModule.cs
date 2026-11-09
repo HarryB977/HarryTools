@@ -25,6 +25,9 @@ namespace HarryTools.Audio.Acoustics {
             public int RayStart;
             public int SphereRays;
             public float Distance;
+            public float Radius;
+            public Vector3 Source;
+            public Vector3 Listener;
         }
 
         // ==================== VARIABLES ===================
@@ -40,6 +43,9 @@ namespace HarryTools.Audio.Acoustics {
         private AcousticProfile profile;
         private Vector3[] sphere = Array.Empty<Vector3>();
         private int maxHits = 1;
+        // Colliders holding an endpoint of the voice being computed. A ray list has at most maxHits of them per direction.
+        private int[] ignored = Array.Empty<int>();
+        private int ignoredCount;
 
         private Slot[] slots = new Slot[InitialSlots];
         private int[] slotOfQuery = new int[InitialSlots];
@@ -69,6 +75,7 @@ namespace HarryTools.Audio.Acoustics {
             DropBatch();
 
             maxHits = Mathf.Max(1, _profile.MaxHitsPerRay);
+            if (ignored.Length != maxHits * 2) ignored = new int[maxHits * 2];
             sphere = BuildSphere(Mathf.Max(0, _profile.OcclusionRays));
             for (int i = 0; i < slots.Length; i++) slots[i].NextDue = 0f;
 
@@ -148,7 +155,7 @@ namespace HarryTools.Audio.Acoustics {
                 int _next = MostOverdue(_queries.Length, _now);
                 if (_next < 0) break;
                 // The first voice always goes through, so a tiny budget slows the simulation down instead of stopping it.
-                if (entryCount > 0 && Stopwatch.GetTimestamp() > _deadline) break;
+                if (entryCount > 0 && Stopwatch.GetTimestamp() >= _deadline) break;
 
                 int _slot = slotOfQuery[_next];
                 AcousticQuery _query = _queries[_next];
@@ -175,7 +182,7 @@ namespace HarryTools.Audio.Acoustics {
 
                 float _radius = _extension != null ? Mathf.Max(0f, _extension.Radius) : DefaultRadius;
                 EnsureRays(_rayCount + CenterRays + _sphereRays);
-                entries[entryCount++] = new BatchEntry { Slot = _slot, Handle = _query.Handle, RayStart = _rayCount, SphereRays = _sphereRays, Distance = _distance };
+                entries[entryCount++] = new BatchEntry { Slot = _slot, Handle = _query.Handle, RayStart = _rayCount, SphereRays = _sphereRays, Distance = _distance, Radius = _radius, Source = _query.SourcePosition, Listener = _query.ListenerPosition };
                 _rayCount = WriteRays(_query.SourcePosition, _query.ListenerPosition, _radius, _sphereRays, _rayCount);
 
                 slots[_slot].PickedStamp = stamp;
@@ -206,9 +213,12 @@ namespace HarryTools.Audio.Acoustics {
         private int WriteRays(Vector3 _source, Vector3 _listener, float _radius, int _sphereRays, int _at) {
             rays[_at++] = new AcousticRay { From = _source, To = _listener };
             rays[_at++] = new AcousticRay { From = _listener, To = _source };
-            for (int i = 0; i < _sphereRays; i++) rays[_at++] = new AcousticRay { From = _source + sphere[i] * _radius, To = _listener };
+            for (int i = 0; i < _sphereRays; i++) rays[_at++] = new AcousticRay { From = _source + sphere[SphereIndex(i, _sphereRays)] * _radius, To = _listener };
             return _at;
         }
+
+        // A reduced count walks the whole lattice: a prefix would only sample the top cap.
+        private int SphereIndex(int _sample, int _sphereRays) => _sample * sphere.Length / _sphereRays;
 
         private void EnsureRays(int _needed) {
             if (rays.Length < _needed) Array.Resize(ref rays, Mathf.Max(_needed, rays.Length * 2));
@@ -235,7 +245,7 @@ namespace HarryTools.Audio.Acoustics {
             // What does not fit in the time of this frame is read in the next; the hits stay valid until Release.
             int _read = 0;
             while (entryCursor < entryCount) {
-                if (_read > 0 && Stopwatch.GetTimestamp() > _deadline) return;
+                if (_read > 0 && Stopwatch.GetTimestamp() >= _deadline) return;
                 BatchEntry _entry = entries[entryCursor++];
                 _read++;
                 if (slots[_entry.Slot].Handle == _entry.Handle) slots[_entry.Slot].Result = Compute(_entry, _hits, _counts);
@@ -252,55 +262,110 @@ namespace HarryTools.Audio.Acoustics {
 
         // ==================== ACOUSTICS ===================
         private AcousticResult Compute(in BatchEntry _entry, ReadOnlySpan<AcousticHit> _hits, ReadOnlySpan<int> _counts) {
-            ReadOnlySpan<AcousticHit> _forward = _hits.Slice(_entry.RayStart * maxHits, _counts[_entry.RayStart]);
-            ReadOnlySpan<AcousticHit> _backward = _hits.Slice((_entry.RayStart + 1) * maxHits, _counts[_entry.RayStart + 1]);
-            bool _blocked = _forward.Length > 0 || _backward.Length > 0;
+            ReadOnlySpan<AcousticHit> _forward = RayHits(_entry.RayStart, _hits, _counts);
+            ReadOnlySpan<AcousticHit> _backward = RayHits(_entry.RayStart + 1, _hits, _counts);
+
+            ignoredCount = 0;
+            IgnoreContaining(_forward, _backward, _entry.Listener);
+            IgnoreContaining(_backward, _forward, _entry.Source);
+            bool _blocked = FirstSolid(_forward) >= 0 || FirstSolid(_backward) >= 0;
 
             Vector3 _through = profile.Transmission && _blocked ? ThroughWalls(_forward, _backward, _entry.Distance) : Vector3.one;
-            Vector3 _gains = profile.Occlusion ? Occlude(_entry, _counts, _forward, _backward, _through) : _through;
+            Vector3 _gains = profile.Occlusion ? Occlude(_entry, _hits, _counts, _forward, _backward, _blocked, _through) : _through;
             return ToResult(ApplyAir(_gains, _entry.Distance));
         }
 
-        private Vector3 Occlude(in BatchEntry _entry, ReadOnlySpan<int> _counts, ReadOnlySpan<AcousticHit> _forward, ReadOnlySpan<AcousticHit> _backward, Vector3 _through) {
-            bool _blocked = _forward.Length > 0 || _backward.Length > 0;
-            // Rays do not hit the collider they start in: a source buried in a collider only shows up in the backward ray.
-            bool _enclosed = _forward.Length == 0 && _backward.Length > 0;
+        private ReadOnlySpan<AcousticHit> RayHits(int _ray, ReadOnlySpan<AcousticHit> _hits, ReadOnlySpan<int> _counts) {
+            return _hits.Slice(_ray * maxHits, _counts[_ray]);
+        }
+
+        // Only a hit with no partner from the other side can hold the point where its ray ends, so walls never pay for this query.
+        private void IgnoreContaining(ReadOnlySpan<AcousticHit> _hits, ReadOnlySpan<AcousticHit> _opposite, Vector3 _endpoint) {
+            for (int i = 0; i < _hits.Length; i++) {
+                int _id = _hits[i].ColliderId;
+                if (IndexOf(_opposite, _id) < 0 && geometry.ContainsPoint(_id, _endpoint)) ignored[ignoredCount++] = _id;
+            }
+        }
+
+        private bool IsIgnored(int _colliderId) {
+            for (int i = 0; i < ignoredCount; i++) {
+                if (ignored[i] == _colliderId) return true;
+            }
+            return false;
+        }
+
+        private int FirstSolid(ReadOnlySpan<AcousticHit> _hits) {
+            for (int i = 0; i < _hits.Length; i++) {
+                if (!IsIgnored(_hits[i].ColliderId)) return i;
+            }
+            return -1;
+        }
+
+        private Vector3 Occlude(in BatchEntry _entry, ReadOnlySpan<AcousticHit> _hits, ReadOnlySpan<int> _counts, ReadOnlySpan<AcousticHit> _forward, ReadOnlySpan<AcousticHit> _backward, bool _blocked, Vector3 _through) {
+            int _firstForward = FirstSolid(_forward);
+            // Rays do not hit a surface from behind: a backward hit alone means the side rays cannot see that surface either.
+            bool _hidden = _firstForward < 0 && _blocked;
+            Vector3 _toListener = (_entry.Listener - _entry.Source) / _entry.Distance;
 
             int _open = _blocked ? 0 : 1;
-            if (!_enclosed) {
-                for (int i = 0; i < _entry.SphereRays; i++) {
-                    if (_counts[_entry.RayStart + CenterRays + i] == 0) _open++;
+            int _closed = _blocked ? 1 : 0;
+            Vector3 _leak = _blocked ? _through : Vector3.zero;
+
+            for (int i = 0; i < _entry.SphereRays; i++) {
+                // A start point past the first wall would count as open, or start inside the wall where it reports no hit.
+                float _advance = Vector3.Dot(sphere[SphereIndex(i, _entry.SphereRays)] * _entry.Radius, _toListener);
+                if (_hidden || (_firstForward >= 0 && _advance >= _forward[_firstForward].Distance)) {
+                    _closed++;
+                    _leak += _through;
+                    continue;
                 }
+
+                ReadOnlySpan<AcousticHit> _side = RayHits(_entry.RayStart + CenterRays + i, _hits, _counts);
+                if (FirstSolid(_side) < 0) {
+                    _open++;
+                    continue;
+                }
+                _closed++;
+                if (profile.Transmission) _leak += ThroughSideRay(_side, _forward, _backward, _entry.Distance);
             }
 
-            // Thickness is only known along the center ray. When it is clear, the blocked side rays carry nothing.
-            Vector3 _leak = profile.Transmission && _blocked ? _through : Vector3.zero;
-            return AcousticMath.Occlude((float)_open / (1 + _entry.SphereRays), _leak);
+            Vector3 _average = profile.Transmission && _closed > 0 ? _leak / _closed : Vector3.zero;
+            return AcousticMath.Occlude((float)_open / (_open + _closed), _average);
         }
 
         private Vector3 ThroughWalls(ReadOnlySpan<AcousticHit> _forward, ReadOnlySpan<AcousticHit> _backward, float _length) {
             Vector3 _gains = Vector3.one;
 
             for (int f = 0; f < _forward.Length; f++) {
-                int _match = IndexOf(_backward, _forward[f].ColliderId);
-                float _thickness = _match >= 0
-                    ? _length - _backward[_match].Distance - _forward[f].Distance
-                    : OneSidedThickness(_length - _forward[f].Distance, _backward.Length);
-                _gains = Vector3.Scale(_gains, Transmit(_forward[f].ColliderId, _thickness));
+                int _id = _forward[f].ColliderId;
+                if (!IsIgnored(_id)) _gains = Vector3.Scale(_gains, Transmit(_id, Thickness(_id, _forward, _backward, _length)));
             }
 
             for (int b = 0; b < _backward.Length; b++) {
-                if (IndexOf(_forward, _backward[b].ColliderId) >= 0) continue;
-                float _thickness = OneSidedThickness(_length - _backward[b].Distance, _forward.Length);
-                _gains = Vector3.Scale(_gains, Transmit(_backward[b].ColliderId, _thickness));
+                int _id = _backward[b].ColliderId;
+                if (IndexOf(_forward, _id) >= 0 || IsIgnored(_id)) continue;
+                _gains = Vector3.Scale(_gains, Transmit(_id, AcousticMaterial.ReferenceThickness));
             }
 
             return _gains;
         }
 
-        // A full opposite list may have cut off the partner hit, so the distance to the endpoint would be meaningless.
-        private float OneSidedThickness(float _toEndpoint, int _oppositeHits) {
-            return _oppositeHits >= maxHits ? AcousticMaterial.ReferenceThickness : _toEndpoint;
+        // Side rays go one way only: a wall the center ray measured keeps that thickness, any other surface gets the reference one.
+        private Vector3 ThroughSideRay(ReadOnlySpan<AcousticHit> _side, ReadOnlySpan<AcousticHit> _forward, ReadOnlySpan<AcousticHit> _backward, float _length) {
+            Vector3 _gains = Vector3.one;
+            for (int i = 0; i < _side.Length; i++) {
+                int _id = _side[i].ColliderId;
+                if (!IsIgnored(_id)) _gains = Vector3.Scale(_gains, Transmit(_id, Thickness(_id, _forward, _backward, _length)));
+            }
+            return _gains;
+        }
+
+        // A one-sided hit that does not hold an endpoint is an open mesh, or its partner fell off a full hit list: its real thickness is unknown.
+        private static float Thickness(int _colliderId, ReadOnlySpan<AcousticHit> _forward, ReadOnlySpan<AcousticHit> _backward, float _length) {
+            int _entry = IndexOf(_forward, _colliderId);
+            int _exit = IndexOf(_backward, _colliderId);
+            if (_entry < 0 || _exit < 0) return AcousticMaterial.ReferenceThickness;
+            return _length - _backward[_exit].Distance - _forward[_entry].Distance;
         }
 
         private Vector3 Transmit(int _colliderId, float _thickness) {
