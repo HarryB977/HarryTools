@@ -277,8 +277,10 @@ namespace HarryTools.Audio.Acoustics {
 
             int _neighbor = graph.Neighbor(_probe, _direction);
             if (_neighbor >= 0) return NeedsEntryCheck(_neighbor, _to) ? StageFarEntry : StageLine;
-            // A far probe that does not exist yet is taken as free only from a free near end: past a solid one it is most likely inside the same solid.
-            return solidCollider[_probe] == 0 && pendingSolid[_key] == 0 ? StageFarEntry : StageLine;
+            // A far probe that does not exist yet has no entry point when it is known to be solid: its center line hit it from one side, or its cell center is inside the near probe's solid.
+            // In every other case it will be created free, so it has to see the line from its cell center.
+            if (pendingSolid[_key] != 0) return StageLine;
+            return IsInside(solidCollider[_probe], CoordToPosition(graph.CoordOf(_probe) + ProbeGraph.Step(_direction))) ? StageLine : StageFarEntry;
         }
 
         private bool NeedsEntryCheck(int _probe, Vector3 _point) {
