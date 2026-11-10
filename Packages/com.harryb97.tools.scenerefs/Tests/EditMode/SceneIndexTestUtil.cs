@@ -83,6 +83,14 @@ namespace HarryTools.SceneRefs.Tests
             EditorSceneManager.SaveScene(_scene);
         }
 
+        /// <summary>Opens an existing scene asset additively; it is closed on TearDown.</summary>
+        public Scene Open(string _path)
+        {
+            Scene _scene = EditorSceneManager.OpenScene(_path, OpenSceneMode.Additive);
+            opened.Add(_scene);
+            return _scene;
+        }
+
         public void Close(Scene _scene)
         {
             EditorSceneManager.CloseScene(_scene, true);

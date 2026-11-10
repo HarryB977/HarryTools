@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Text.RegularExpressions;
 using HarryTools.SceneRefs.Editor;
 using NUnit.Framework;
 using UnityEditor;
@@ -132,7 +133,7 @@ namespace HarryTools.SceneRefs.Tests
             Scene _a = util.NewScene("BuildA");
             SceneIndexTestUtil.AddId(SceneIndexTestUtil.NewObject(_a, "One"), GuidA, "Same");
             SceneIndexTestUtil.AddId(SceneIndexTestUtil.NewObject(_a, "Two"), GuidB, "same");
-            LogAssert.ignoreFailingMessages = true;
+            LogAssert.Expect(LogType.Error, new Regex("^Duplicate scene id 'Same' used by:"));
 
             BuildFailedException _exception = Assert.Throws<BuildFailedException>(() => new BuildGuard().OnPreprocessBuild(null));
             StringAssert.StartsWith("Build blocked: 1 scene id conflict(s)", _exception.Message);

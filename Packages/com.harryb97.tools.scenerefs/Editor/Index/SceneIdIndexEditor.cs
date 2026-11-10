@@ -7,7 +7,7 @@ using UnityEngine;
 namespace HarryTools.SceneRefs.Editor
 {
     /// <summary>
-    /// Read-only view of the index: search, table of ids and the Rebuild Index button.
+    /// Read-only view of the index: search, table of ids, the Rebuild Index button and a Regenerate button per scene in conflict.
     /// </summary>
     [CustomEditor(typeof(SceneIdIndex))]
     internal sealed class SceneIdIndexEditor : UnityEditor.Editor
@@ -22,6 +22,7 @@ namespace HarryTools.SceneRefs.Editor
         private readonly List<SceneIdIndexEntry> filtered = new List<SceneIdIndexEntry>();
         private readonly HashSet<string> conflictGuids = new HashSet<string>();
         private readonly List<string> conflictReports = new List<string>();
+        private readonly List<SceneIdIndexEntry> conflictScenes = new List<SceneIdIndexEntry>();
 
         // ==================== LIFECYCLE ====================
 
@@ -110,6 +111,43 @@ namespace HarryTools.SceneRefs.Editor
 
             for (int _i = 0; _i < conflictReports.Count; _i++)
                 EditorGUILayout.HelpBox(conflictReports[_i], MessageType.Error);
+
+            DrawRegenerateButtons(_conflicts);
+        }
+
+        /// <summary>One button per saved scene involved in a guid or id conflict. The tool never picks the scene on its own.</summary>
+        private void DrawRegenerateButtons(List<SceneIdConflict> _conflicts)
+        {
+            conflictScenes.Clear();
+            for (int _i = 0; _i < _conflicts.Count; _i++)
+            {
+                for (int _j = 0; _j < _conflicts[_i].Entries.Count; _j++)
+                {
+                    SceneIdIndexEntry _entry = _conflicts[_i].Entries[_j];
+                    if (_entry.SceneGuid.StartsWith(SceneIndexer.UnsavedPrefix, StringComparison.Ordinal)) continue;
+                    if (conflictScenes.Exists(_e => _e.SceneGuid == _entry.SceneGuid)) continue;
+                    conflictScenes.Add(_entry);
+                }
+            }
+
+            for (int _i = 0; _i < conflictScenes.Count; _i++)
+            {
+                string _path = AssetDatabase.GUIDToAssetPath(conflictScenes[_i].SceneGuid);
+                if (string.IsNullOrEmpty(_path)) continue;
+                if (!GUILayout.Button(new GUIContent($"Regenerate IDs in scene {conflictScenes[_i].SceneName}", _path))) continue;
+
+                bool _confirmed = EditorUtility.DisplayDialog(
+                    "Regenerate scene ids",
+                    $"Every object with an id in '{_path}' gets a new internal guid and an incremented id, and the scene is saved (including any unsaved changes).\n\n" +
+                    "References inside that scene keep pointing to its own objects. References from other scenes or assets to objects of this scene will point to the original objects instead.",
+                    "Regenerate",
+                    "Cancel");
+                if (!_confirmed) continue;
+
+                // Regenerating opens and saves scenes, so it runs outside this GUI pass.
+                EditorApplication.delayCall += () => SceneIdRegenerator.RegenerateScene(_path);
+                GUIUtility.ExitGUI();
+            }
         }
 
         private static void DrawRow(SceneIdIndexEntry _entry, bool _conflict)
