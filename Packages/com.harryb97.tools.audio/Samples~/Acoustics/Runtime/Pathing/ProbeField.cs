@@ -266,17 +266,19 @@ namespace HarryTools.Audio.Acoustics {
             else MarkBlocked(_probe, _direction);
         }
 
-        // On an edge with a solid end, a side line can pass on the far side of a wall from where that end was entered, or run wholly inside another solid where its rays see nothing.
+        // A side line can stop short of a wall the connection crosses, pass on the far side of a wall from where a solid end was entered, or run wholly inside another solid where its rays see nothing.
         // So each end has to see the line from its own free point: the entry point of a solid end, the position of a free one.
         private int NextEntryCheck(int _key, int _probe, int _direction, int _line, int _after) {
-            int _neighbor = graph.Neighbor(_probe, _direction);
-            bool _farSolid = _neighbor >= 0 ? solidCollider[_neighbor] != 0 : pendingSolid[_key] != 0;
-            if (solidCollider[_probe] == 0 && !_farSolid) return StageLine;
+            if (_line == 0) return StageLine;
 
             LineEnds(_probe, _direction, _line, out Vector3 _from, out Vector3 _to);
             if (_after < StageNearEntry && NeedsEntryCheck(_probe, _from)) return StageNearEntry;
-            if (_after < StageFarEntry && _neighbor >= 0 && NeedsEntryCheck(_neighbor, _to)) return StageFarEntry;
-            return StageLine;
+            if (_after >= StageFarEntry) return StageLine;
+
+            int _neighbor = graph.Neighbor(_probe, _direction);
+            if (_neighbor >= 0) return NeedsEntryCheck(_neighbor, _to) ? StageFarEntry : StageLine;
+            // A far probe that does not exist yet is taken as free only from a free near end: past a solid one it is most likely inside the same solid.
+            return solidCollider[_probe] == 0 && pendingSolid[_key] == 0 ? StageFarEntry : StageLine;
         }
 
         private bool NeedsEntryCheck(int _probe, Vector3 _point) {
@@ -284,7 +286,7 @@ namespace HarryTools.Audio.Acoustics {
             return (FreePointOf(_probe) - _point).sqrMagnitude > SamePointSqr;
         }
 
-        private Vector3 FreePointOf(int _probe) => solidCollider[_probe] != 0 ? entryPoint[_probe] : PositionOf(_probe);
+        private Vector3 FreePointOf(int _probe) => solidCollider[_probe] != 0 && hasEntry[_probe] ? entryPoint[_probe] : PositionOf(_probe);
 
         // Rays do not hit a surface from behind, so the end whose outgoing ray saw nothing is the one inside the collider the other ray hit.
         private void NoteEndInsideSolid(int _key, int _probe, int _direction, bool _farEnd, int _collider) {
@@ -431,6 +433,7 @@ namespace HarryTools.Audio.Acoustics {
             for (int d = 0; d < ProbeGraph.DirectionCount; d++) {
                 nextLine[_first + d] = 0;
                 nextStage[_first + d] = 0;
+                pendingSolid[_first + d] = 0;
             }
         }
 
@@ -474,8 +477,7 @@ namespace HarryTools.Audio.Acoustics {
             while (_rayCount + RaysPerLine <= _available && TryNextEdge(out int _key, out int _ring)) {
                 int _probe = _key / ProbeGraph.DirectionCount;
                 int _line = nextLine[_key];
-                // The far probe can be gone since its check was queued; the line is then traced again.
-                int _stage = nextStage[_key] == StageFarEntry && graph.Neighbor(_probe, _key % ProbeGraph.DirectionCount) < 0 ? StageLine : nextStage[_key];
+                int _stage = nextStage[_key];
                 entries[entryCount++] = new BatchEdge { Key = _key, Generation = graph.GenerationOf(_probe), Line = _line, Stage = _stage, Ring = _ring };
                 WriteEdgeRays(_probe, _key % ProbeGraph.DirectionCount, _line, _stage, _rayCount);
                 _rayCount += RaysPerLine;
@@ -509,9 +511,14 @@ namespace HarryTools.Audio.Acoustics {
         private void WriteEdgeRays(int _probe, int _direction, int _line, int _stage, int _at) {
             LineEnds(_probe, _direction, _line, out Vector3 _from, out Vector3 _to);
             if (_stage == StageNearEntry) _to = FreePointOf(_probe);
-            else if (_stage == StageFarEntry) _from = FreePointOf(graph.Neighbor(_probe, _direction));
+            else if (_stage == StageFarEntry) _from = FarFreePoint(_probe, _direction);
             rays[_at] = new AcousticRay { From = _from, To = _to };
             rays[_at + 1] = new AcousticRay { From = _to, To = _from };
+        }
+
+        private Vector3 FarFreePoint(int _probe, int _direction) {
+            int _neighbor = graph.Neighbor(_probe, _direction);
+            return _neighbor >= 0 ? FreePointOf(_neighbor) : CoordToPosition(graph.CoordOf(_probe) + ProbeGraph.Step(_direction));
         }
 
         private void LineEnds(int _probe, int _direction, int _line, out Vector3 _from, out Vector3 _to) {
