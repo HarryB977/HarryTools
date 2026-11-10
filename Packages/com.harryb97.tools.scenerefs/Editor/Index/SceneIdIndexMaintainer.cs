@@ -50,9 +50,12 @@ namespace HarryTools.SceneRefs.Editor
         public static void Rebuild() => Rebuild(true, new[] { "Assets" });
 
         /// <summary>Reads the scenes marked as stale again.</summary>
-        public static void RefreshStale()
+        public static void RefreshStale() => RefreshStale(false);
+
+        /// <summary>Reads stale scenes again. With _allowPlayTransition it also runs while Play is about to start, for the Play guard.</summary>
+        internal static void RefreshStale(bool _allowPlayTransition)
         {
-            if (EditorApplication.isPlayingOrWillChangePlaymode) return;
+            if (EditorApplication.isPlaying || (!_allowPlayTransition && EditorApplication.isPlayingOrWillChangePlaymode)) return;
             SceneIdIndex _index = SceneIdIndex.Existing;
             if (_index == null || _index.StaleScenes.Count == 0) return;
 
