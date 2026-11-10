@@ -324,7 +324,7 @@ Sample opcional (Package Manager > HarryTools Audio > Samples > Acoustics) que h
 - **Absorción del aire:** a más distancia, menos agudos.
 - **Suelo de audibilidad:** un sonido totalmente tapado no baja de `FloorDb` (-30 dB por defecto), con un paso bajo y un paso alto máximos. Nunca se silencia del todo.
 - **Eco por sala:** cada sonido recibe la reverb de la sala donde está él, no la del oyente (ver más abajo).
-- No hay pathing todavía: llega en próximas betas.
+- **Pathing:** un sonido tapado también llega por puertas y aberturas, oído desde por donde entra (ver más abajo).
 
 ### Instalación y uso
 
@@ -387,6 +387,45 @@ Los rayos de eco comparten presupuesto con la oclusión: cuando el presupuesto d
 
 **WebGL:** no hay reverb ni colas (no hay mixer ni filtros), igual que el resto de la acústica.
 
+### Pathing
+
+Con `Pathing` encendido, un sonido tapado por una pared también se oye por donde pueda llegar: la puerta abierta, el arco, el pasillo. En lugar de oírlo atravesar la pared, el oyente lo oye venir desde la abertura, y suena más fuerte cuanto más corto es el rodeo.
+
+**Cómo funciona:** alrededor del oyente se reparte una rejilla de sondas, fija al mundo, con coordenadas `(k + 0,5) · ProbeSpacing` en los tres ejes. La región es un cilindro: `ProbeRadius` en horizontal y `ProbeVerticalExtent` arriba y abajo, con un tope de `MaxProbes`. La inundación avanza desde el oyente, así que al llegar al tope faltan las sondas lejanas, nunca las cercanas. Cada sonda se conecta con sus vecinas (+x, +z, las dos diagonales en planta y +y) lanzando rayos en los dos sentidos; una conexión está abierta si ninguno choca. Un único Dijkstra desde el oyente, troceado por tiempo, da el camino más corto a cada sonda, y su coste no crece con el número de voces.
+
+Solo usan camino las voces cuya fracción abierta es menor que `PathMaxOpen`: un sonido con vista directa no paga nada. El sonido del camino se mezcla por energía con el directo y se oye desde el punto donde el camino llega al oyente (`PerceivedPosition`, que el módulo mueve a `PerceivedSpeed` para que no haya saltos). El volumen del camino sigue desde dónde se oye la voz y nunca pasa del que tendría con línea abierta. El suelo de audibilidad se aplica al final, también con camino.
+
+Parámetros del perfil:
+
+- `Pathing`: enciende o apaga todo. Apagado, el resultado de cada voz es idéntico al de la beta.4 y no se lanza ningún rayo de sondas.
+- `ProbeRadius` (32 m) y `ProbeVerticalExtent` (6 m): tamaño de la región.
+- `ProbeSpacing` (1,5 m): separación entre sondas. Más pequeña detecta huecos más estrechos y cuesta más sondas.
+- `MaxProbes` (4096): tope de sondas. Todos los arrays se dimensionan al configurar.
+- `PathRaysPerFrame` (96): rayos por frame para el campo. Usa como mucho la mitad de lo que quede del presupuesto, para dejar rayos al eco de sala, que corre después.
+- `PathMaxOpen` (0,75): fracción abierta desde la que una voz ya no usa camino.
+- `PathMidDbPerMeter` (0,03) y `PathHighDbPerMeter` (0,12): pérdida por metro de rodeo en medios y agudos.
+- `PerceivedSpeed` (30 m/s): velocidad máxima a la que se mueve la posición percibida.
+- `MaxWallThickness` (0,6 m): grosor máximo medido para la transmisión. Una malla que forma varias paredes no cuenta como grosor todo lo que hay entre ellas.
+
+**Cambios en la escena:** las conexiones reaccionan a colliders que se mueven, aparecen, se desactivan o se destruyen en unos 0,5 s (una puerta que se abre, un muro que cae). Una conexión bloqueada vigila el collider que la bloquea. Las conexiones abiertas solo se revisan, cada 0,25 s, cuando algún camino las usa.
+
+**Coste:** el campo gasta como mucho `min(PathRaysPerFrame, rayos restantes / 2)` por frame, tomados del mismo presupuesto que la oclusión. Una conexión abierta cuesta dos rayos y una bloqueada hasta seis (la línea central y dos paralelas). Sin GC por tick: la memoria se reserva al configurar. Con el perfil de la demo la casa entera está lista en menos de 0,3 s; llenar las 4096 sondas del cilindro en un exterior abierto tarda unos 13 s, sin afectar a las sondas cercanas, que están listas primero.
+
+**Requisitos:**
+
+- Necesita `Occlusion` o `Transmission` encendidos: sin ellos no hay voces tapadas que encaminar.
+- Un perfil cuyo presupuesto de rayos deje menos de 20 rayos por frame para el campo no tiene pathing (el módulo sigue con directo y transmisión).
+- Al arrancar o tras un teletransporte del oyente la región se rehace, y durante aproximadamente el primer segundo no hay camino. La voz suena con directo y transmisión mientras tanto.
+
+**Limitaciones:**
+
+- La rejilla solo conecta en 8 direcciones en planta (más la vertical), así que un rodeo puede medir hasta un 8 % de más.
+- Las sondas pueden quedar hasta `ProbeSpacing / 3` dentro de una pared, para que puertas y pasillos más estrechos que la separación se encuentren. Aun así, huecos de menos de ~0,5 m pueden no detectarse.
+- Un pasaje estrecho junto a una pared hecha con un `MeshCollider` no convexo puede no encontrarse: el sonido no pasa por él, pero tampoco se cuela. Una malla no convexa cuenta como una sola pared.
+- No hay difracción real: el sonido llega por el camino más corto abierto, no se curva alrededor de bordes.
+- Una conexión abierta que ningún camino usa puede estar obsoleta hasta que alguno la pasa por revisión.
+- Si se alcanza `MaxProbes` faltan las sondas lejanas, y los sonidos que dependan de ellas no tienen camino.
+
 ### Qué se simula y qué no
 
 - Solo se simulan los sonidos con *spatial blend* mayor que 0. Un sonido 2D no cambia.
@@ -395,13 +434,13 @@ Los rayos de eco comparten presupuesto con la oclusión: cuando el presupuesto d
 - La comprobación de si un extremo está dentro de un collider solo se hace en colliders convexos: los `MeshCollider` no convexos y el terreno no se comprueban.
 - Una malla abierta no tiene interior definido, así que se le supone un grosor nominal.
 - Los presets de materiales y del perfil son valores de partida que conviene ajustar de oído.
-- El pathing (sonido que rodea esquinas) llega en próximas betas.
+- El pathing tiene sus propias limitaciones (ver su sección).
 - Una sala sin colliders de suelo o techo se estima como espacio abierto y apenas da eco.
 - La reverb es una estimación del espacio alrededor de la fuente con unas decenas de rayos: una sala con huecos pequeños o muy irregulares puede dar un valor aproximado.
 
 ### Depuración en la vista de escena
 
-Marca **Debug Gizmos** en el Acoustics Bootstrap y entra en Play: en la vista de escena (con los *Gizmos* activados) cada sonido simulado dibuja la línea hasta el oyente (verde libre, roja tapada), los rayos de oclusión libres o bloqueados, los puntos donde atraviesa superficies con el nombre de su material, y el volumen y los filtros que recibe. Para el eco dibuja la celda de la sala de cada sonido, una esfera con su recorrido libre medio y un color que va de cian (seco) a magenta (mucho eco) según `Wet`, con el tiempo de decay. Solo existe en la vista de escena, no hay UI de juego. Activarlo copia unos datos por voz; déjalo apagado en builds.
+Marca **Debug Gizmos** en el Acoustics Bootstrap y entra en Play: en la vista de escena (con los *Gizmos* activados) cada sonido simulado dibuja la línea hasta el oyente (verde libre, roja tapada), los rayos de oclusión libres o bloqueados, los puntos donde atraviesa superficies con el nombre de su material, y el volumen y los filtros que recibe. Para el eco dibuja la celda de la sala de cada sonido, una esfera con su recorrido libre medio y un color que va de cian (seco) a magenta (mucho eco) según `Wet`, con el tiempo de decay. Para el pathing dibuja las sondas como puntos azules, las conexiones abiertas como líneas tenues, y por cada voz con camino el recorrido elegido en naranja, el ancla (círculo naranja) y la posición percibida (esfera magenta). Solo existe en la vista de escena, no hay UI de juego. Activarlo copia unos datos por voz; déjalo apagado en builds.
 
 ### Demo
 
@@ -416,7 +455,7 @@ Marca **Debug Gizmos** en el Acoustics Bootstrap y entra en Play: en la vista de
 | R | Suena un chasquido corto en la radio: se oye la cola de eco de la sala después de que acabe |
 | T | Apaga o enciende la radio, para oír el eco del chasquido sin el loop encima |
 
-Cada acción escribe una línea en la consola. Activa la pestaña Scene durante Play para ver los gizmos.
+Cada acción escribe una línea en la consola. Activa la pestaña Scene durante Play para ver los gizmos. La demo no añade teclas para el pathing: con la puerta cerrada la radio se oye solo por transmisión desde el pasillo; ábrela con F y se oye venir desde la puerta. El salón cerrado y la cochera forman regiones de pocas sondas; la cocina y el pasillo no tienen techo, así que la región se extiende hacia fuera hasta `MaxProbes`. Destruye el muro con G para que la región llegue a la cochera.
 
 ## Limitaciones
 

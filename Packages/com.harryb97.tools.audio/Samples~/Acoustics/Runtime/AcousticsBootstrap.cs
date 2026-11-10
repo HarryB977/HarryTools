@@ -6,7 +6,7 @@ namespace HarryTools.Audio.Acoustics {
         // ==================== VARIABLES ===================
         [Tooltip("Profile to simulate with while this component is enabled.")]
         public AcousticProfile Profile;
-        [Tooltip("Draw the occlusion rays, the surfaces they cross and the result of each voice and the room cell and reverb of each sound in the Scene view. Costs a few copies per voice.")]
+        [Tooltip("Draw the occlusion rays, the surfaces they cross, the result of each voice, the room cell and reverb of each sound, and the probes, paths and perceived positions of Pathing in the Scene view. Costs a few copies per voice.")]
         public bool DebugGizmos;
 
         // ==================== LIFECYCLE ===================

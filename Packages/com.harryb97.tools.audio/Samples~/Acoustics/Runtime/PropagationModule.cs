@@ -191,6 +191,33 @@ namespace HarryTools.Audio.Acoustics {
         /// <summary> True when the slot was asked about in the last Evaluate. </summary>
         internal bool IsLive(int _slot) => _slot < slots.Length && slots[_slot].SeenStamp == stamp;
 
+        /// <summary> Path of a live voice for the gizmos: its anchor, the position it is heard from and how many probes its last walk has. </summary>
+        internal bool TryGetPathDebug(int _slot, out Vector3 _anchor, out Vector3 _perceived, out bool _hasPerceived, out int _walkCount) {
+            _anchor = default;
+            _perceived = default;
+            _hasPerceived = false;
+            _walkCount = 0;
+            if (field == null || !IsLive(_slot) || !slots[_slot].Valid) return false;
+
+            _anchor = slots[_slot].Anchor;
+            _perceived = slots[_slot].Perceived;
+            _hasPerceived = slots[_slot].HasPerceived;
+            _walkCount = slots[_slot].WalkCount;
+            return true;
+        }
+
+        /// <summary> Position of a probe of the last walk of a voice, false when that probe was recycled since. </summary>
+        internal bool TryGetWalkPoint(int _slot, int _index, out Vector3 _position) {
+            _position = default;
+            if (field == null || !IsLive(_slot) || _index < 0 || _index >= slots[_slot].WalkCount) return false;
+
+            int _at = _slot * (MaxWalkSteps + 1) + _index;
+            int _probe = lastWalks[_at];
+            if (!field.Graph.IsAlive(_probe) || field.Graph.GenerationOf(_probe) != lastWalkGenerations[_at]) return false;
+            _position = field.PositionOf(_probe);
+            return true;
+        }
+
         private void BeginCapture(in BatchEntry _entry, ReadOnlySpan<AcousticHit> _forward, ReadOnlySpan<AcousticHit> _backward, bool _blocked) {
             if (debugVoices.Length < slots.Length) Array.Resize(ref debugVoices, slots.Length);
             ref DebugVoice _voice = ref debugVoices[_entry.Slot];

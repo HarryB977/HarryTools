@@ -35,6 +35,10 @@ namespace HarryTools.Audio.Acoustics {
         private static readonly Color Dry = new Color(0.2f, 0.85f, 0.95f, 1f);
         private static readonly Color Wet = new Color(0.95f, 0.25f, 0.85f, 1f);
         private static readonly Color Hit = new Color(1f, 0.85f, 0.2f, 1f);
+        private static readonly Color ProbeColor = new Color(0.55f, 0.7f, 1f, 0.55f);
+        private static readonly Color Link = new Color(0.55f, 0.7f, 1f, 0.12f);
+        private static readonly Color Route = new Color(1f, 0.6f, 0.1f, 1f);
+        private static readonly Color Heard = new Color(1f, 0.2f, 0.9f, 1f);
 
         // ==================== DRAWING ===================
         internal static void Draw(PropagationModule _module) {
@@ -44,6 +48,10 @@ namespace HarryTools.Audio.Acoustics {
             Color _previous = Gizmos.color;
             for (int i = 0; i < _voices.Length; i++) {
                 if (_voices[i].Valid && _module.IsLive(i)) DrawVoice(_voices[i]);
+            }
+            DrawProbes(_module.Field);
+            for (int i = 0; i < _voices.Length; i++) {
+                if (_voices[i].Valid) DrawPath(_module, i);
             }
             Gizmos.color = _previous;
         }
@@ -65,6 +73,53 @@ namespace HarryTools.Audio.Acoustics {
 #endif
             }
             Gizmos.color = _previous;
+        }
+
+        /// <summary> Draws the probes as dots and their open connections faintly. Skips blocked and unknown connections. </summary>
+        private static void DrawProbes(ProbeField _field) {
+            if (_field == null) return;
+
+            ProbeGraph _graph = _field.Graph;
+            for (int p = 0; p < _graph.Capacity; p++) {
+                if (!_graph.IsAlive(p)) continue;
+
+                Vector3 _at = _field.PositionOf(p);
+                Gizmos.color = ProbeColor;
+                Gizmos.DrawSphere(_at, 0.04f);
+                Gizmos.color = Link;
+                for (int d = 0; d < ProbeGraph.EdgesPerProbe; d++) {
+                    int _next = _graph.Neighbor(p, d);
+                    if (_next < 0 || _graph.GetEdge(p, d) != EdgeState.Open) continue;
+                    Gizmos.DrawLine(_at, _field.PositionOf(_next));
+                }
+            }
+        }
+
+        /// <summary> Draws the path of a voice in orange from the source's corner to the listener, its anchor and the position it is heard from. </summary>
+        private static void DrawPath(PropagationModule _module, int _slot) {
+            if (!_module.TryGetPathDebug(_slot, out Vector3 _anchor, out Vector3 _perceived, out bool _hasPerceived, out int _walkCount)) return;
+
+            Gizmos.color = Route;
+            bool _hasLast = false;
+            Vector3 _last = default;
+            for (int i = 0; i < _walkCount; i++) {
+                if (!_module.TryGetWalkPoint(_slot, i, out Vector3 _point)) {
+                    _hasLast = false;
+                    continue;
+                }
+                if (_hasLast) Gizmos.DrawLine(_last, _point);
+                _last = _point;
+                _hasLast = true;
+            }
+
+            Gizmos.DrawWireSphere(_anchor, 0.15f);
+            if (!_hasPerceived) return;
+
+            Gizmos.color = Heard;
+            Gizmos.DrawSphere(_perceived, 0.12f);
+#if UNITY_EDITOR
+            UnityEditor.Handles.Label(_perceived + Vector3.up * 0.25f, "heard from here");
+#endif
         }
 
         private static void DrawVoice(in DebugVoice _voice) {
