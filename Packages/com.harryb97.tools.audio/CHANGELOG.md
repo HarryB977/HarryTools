@@ -1,6 +1,6 @@
 # Changelog
 
-## [1.0.0-beta.5] - 2026-11-09
+## [1.0.0-beta.5] - 2026-11-10
 ### Añadido
 - `SpatialSettings.GainAt(distancia)`: ganancia de la curva de rolloff a una distancia del oyente. Es la misma estimación que usa el núcleo para elegir qué voces robar o simular.
 - Sample de acústica: fórmulas de camino (`PathMath`) y los campos de perfil del pathing (`Pathing`, `ProbeRadius`, `ProbeSpacing`, `ProbeVerticalExtent`, `MaxProbes`, `PathRaysPerFrame`, `PathMaxOpen`, `PathMidDbPerMeter`, `PathHighDbPerMeter`).
