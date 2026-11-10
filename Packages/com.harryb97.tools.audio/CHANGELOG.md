@@ -3,13 +3,14 @@
 ## [1.0.0-beta.5] - 2026-11-09
 ### Añadido
 - `SpatialSettings.GainAt(distancia)`: ganancia de la curva de rolloff a una distancia del oyente. Es la misma estimación que usa el núcleo para elegir qué voces robar o simular.
-- Sample de acústica: fórmulas de camino (`PathMath`) y los campos de perfil del pathing (`Pathing`, `ProbeRadius`, `ProbeSpacing`, `ProbeVerticalExtent`, `MaxProbes`, `PathRaysPerFrame`, `PathMaxOpen`, `PathMidDbPerMeter`, `PathHighDbPerMeter`, `PerceivedSpeed`).
+- Sample de acústica: fórmulas de camino (`PathMath`) y los campos de perfil del pathing (`Pathing`, `ProbeRadius`, `ProbeSpacing`, `ProbeVerticalExtent`, `MaxProbes`, `PathRaysPerFrame`, `PathMaxOpen`, `PathMidDbPerMeter`, `PathHighDbPerMeter`).
 - `MaxWallThickness` en el perfil de acústica (0,6 m por defecto): limita el grosor medido para la transmisión.
 - Pathing en el sample de acústica: rejilla de sondas fija al mundo alrededor del oyente, conexiones por rayos (con dos líneas paralelas para puertas más estrechas que la separación), búsqueda de camino troceada por tiempo y detección de colliders que se mueven, aparecen o se destruyen en unos 0,5 s. Un sonido tapado se oye por la puerta o abertura por la que llega, con su volumen y filtros según el rodeo.
 - Gizmos del pathing en la vista de escena: sondas, conexiones abiertas, y por voz el camino elegido, el ancla y la posición percibida.
 
 ### Cambiado
 - Una malla que forma varias paredes ya no mide como grosor todo lo que hay entre ellas: el grosor se limita a `MaxWallThickness`.
+- Los perfiles de acústica existentes reciben `Pathing = true` al actualizar, lo que cuesta rayos, CPU y memoria (unos 2,5 MB con 4096 sondas). Apágalo en el perfil para volver al comportamiento de la beta.4 (salvo por el tope de `MaxWallThickness`).
 
 ## [1.0.0-beta.4] - 2026-11-09
 ### Añadido

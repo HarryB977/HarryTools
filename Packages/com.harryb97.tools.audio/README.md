@@ -335,7 +335,7 @@ Sample opcional (Package Manager > HarryTools Audio > Samples > Acoustics) que h
 
 ### Perfil y overrides por plataforma
 
-`AcousticProfile` agrupa los interruptores (`Occlusion`, `Transmission`, `AirAbsorption`), los presupuestos, las capas que bloquean el sonido (`Geometry`, sin triggers), el material por defecto y los límites del resultado (`FloorDb`, `MinLowPass`, `MaxHighPass`). La lista `PlatformOverrides` sustituye todo el perfil en las plataformas indicadas: por ejemplo, un perfil más barato para móvil con menos rayos y un intervalo mayor.
+`AcousticProfile` agrupa los interruptores (`Occlusion`, `Transmission`, `AirAbsorption`, `Reverb`, `Pathing`), los presupuestos, las capas que bloquean el sonido (`Geometry`, sin triggers), el material por defecto y los límites del resultado (`FloorDb`, `MinLowPass`, `MaxHighPass`). La lista `PlatformOverrides` sustituye todo el perfil en las plataformas indicadas: por ejemplo, un perfil más barato para móvil con menos rayos y un intervalo mayor.
 
 ### Materiales
 
@@ -353,7 +353,7 @@ Añade la extensión **Acoustic Source Extension** a un asset de audio (lista *E
 
 ### Coste y presupuestos
 
-Cada sonido simulado lanza 2 rayos centrales más `OcclusionRays` (8 por defecto). El trabajo se limita por frame con `RayBudgetPerFrame` (256) y `MainThreadBudgetMs` (0,5 ms): lo que no cabe espera al siguiente frame y el sonido conserva su último resultado. Cada voz se reevalúa cada `UpdateInterval` (0,1 s). El núcleo solo simula hasta `MaxSimulated` voces por tick, las más audibles. El módulo no genera basura por tick; solo reserva memoria al crear o ampliar buffers.
+Cada sonido simulado lanza 2 rayos centrales más `OcclusionRays` (8 por defecto). Con `Pathing`, cada sonido tapado suma hasta 16 rayos más por evaluación, también de `RayBudgetPerFrame` (ver Pathing). El trabajo se limita por frame con `RayBudgetPerFrame` (256) y `MainThreadBudgetMs` (0,5 ms): lo que no cabe espera al siguiente frame y el sonido conserva su último resultado. Cada voz se reevalúa cada `UpdateInterval` (0,1 s). El núcleo solo simula hasta `MaxSimulated` voces por tick, las más audibles. El módulo no genera basura por tick; solo reserva memoria al crear o ampliar buffers.
 
 ### Eco por sala
 
@@ -391,31 +391,31 @@ Los rayos de eco comparten presupuesto con la oclusión: cuando el presupuesto d
 
 Con `Pathing` encendido, un sonido tapado por una pared también se oye por donde pueda llegar: la puerta abierta, el arco, el pasillo. En lugar de oírlo atravesar la pared, el oyente lo oye venir desde la abertura, y suena más fuerte cuanto más corto es el rodeo.
 
-**Cómo funciona:** alrededor del oyente se reparte una rejilla de sondas, fija al mundo, con coordenadas `(k + 0,5) · ProbeSpacing` en los tres ejes. La región es un cilindro: `ProbeRadius` en horizontal y `ProbeVerticalExtent` arriba y abajo, con un tope de `MaxProbes`. La inundación avanza desde el oyente, así que al llegar al tope faltan las sondas lejanas, nunca las cercanas. Cada sonda se conecta con sus vecinas (+x, +z, las dos diagonales en planta y +y) lanzando rayos en los dos sentidos; una conexión está abierta si ninguno choca. Un único Dijkstra desde el oyente, troceado por tiempo, da el camino más corto a cada sonda, y su coste no crece con el número de voces.
+**Cómo funciona:** alrededor del oyente se reparte una rejilla de sondas, fija al mundo, con coordenadas `(k + 0,5) · ProbeSpacing` en los tres ejes. La región es un cilindro: `ProbeRadius` en horizontal y `ProbeVerticalExtent` arriba y abajo, con un tope de `MaxProbes`. La inundación avanza desde el oyente, así que en la inundación inicial con el oyente quieto, al llegar al tope faltan las sondas lejanas, nunca las cercanas. Cada sonda se conecta con sus vecinas (+x, +z, las dos diagonales en planta y +y) lanzando rayos en los dos sentidos; una conexión está abierta si la línea central entre las dos sondas, o una de las dos paralelas a ±`ProbeSpacing / 3`, está libre en los dos sentidos. Un único Dijkstra desde el oyente, troceado por tiempo, da el camino más corto a cada sonda, y su coste no crece con el número de voces.
 
-Solo usan camino las voces cuya fracción abierta es menor que `PathMaxOpen`: un sonido con vista directa no paga nada. El sonido del camino se mezcla por energía con el directo y se oye desde el punto donde el camino llega al oyente (`PerceivedPosition`, que el módulo mueve a `PerceivedSpeed` para que no haya saltos). El volumen del camino sigue desde dónde se oye la voz y nunca pasa del que tendría con línea abierta. El suelo de audibilidad se aplica al final, también con camino.
+Solo usan camino las voces cuya fracción abierta es menor que `PathMaxOpen`: un sonido con vista directa no paga nada. El sonido del camino se mezcla por energía con el directo y se oye desde el punto donde el camino llega al oyente (`PerceivedPosition`). El núcleo aplica esa posición al instante y suaviza el volumen en 0,1 s, así que el módulo suaviza la posición con el mismo filtro y da el volumen de la posición final: los dos llegan a la vez y el nivel pasa de uno a otro sin saltos ni subidas. El volumen del camino nunca pasa del que tendría con línea abierta. El suelo de audibilidad se aplica al final, también con camino.
 
 Parámetros del perfil:
 
-- `Pathing`: enciende o apaga todo. Apagado, el resultado de cada voz es idéntico al de la beta.4 y no se lanza ningún rayo de sondas.
+- `Pathing`: enciende o apaga todo. Apagado no se lanza ningún rayo de sondas y el resultado de cada voz es el de la beta.4, salvo por el tope de `MaxWallThickness`: una pared de más de 0,6 m deja pasar ahora más sonido que antes.
 - `ProbeRadius` (32 m) y `ProbeVerticalExtent` (6 m): tamaño de la región.
 - `ProbeSpacing` (1,5 m): separación entre sondas. Más pequeña detecta huecos más estrechos y cuesta más sondas.
 - `MaxProbes` (4096): tope de sondas. Todos los arrays se dimensionan al configurar.
 - `PathRaysPerFrame` (96): rayos por frame para el campo. Usa como mucho la mitad de lo que quede del presupuesto, para dejar rayos al eco de sala, que corre después.
 - `PathMaxOpen` (0,75): fracción abierta desde la que una voz ya no usa camino.
 - `PathMidDbPerMeter` (0,03) y `PathHighDbPerMeter` (0,12): pérdida por metro de rodeo en medios y agudos.
-- `PerceivedSpeed` (30 m/s): velocidad máxima a la que se mueve la posición percibida.
 - `MaxWallThickness` (0,6 m): grosor máximo medido para la transmisión. Una malla que forma varias paredes no cuenta como grosor todo lo que hay entre ellas.
 
 **Cambios en la escena:** las conexiones reaccionan a colliders que se mueven, aparecen, se desactivan o se destruyen en unos 0,5 s (una puerta que se abre, un muro que cae). Una conexión bloqueada vigila el collider que la bloquea. Las conexiones abiertas solo se revisan, cada 0,25 s, cuando algún camino las usa.
 
-**Coste:** el campo gasta como mucho `min(PathRaysPerFrame, rayos restantes / 2)` por frame, tomados del mismo presupuesto que la oclusión. Una conexión abierta cuesta dos rayos y una bloqueada hasta seis (la línea central y dos paralelas). Sin GC por tick: la memoria se reserva al configurar. Con el perfil de la demo la casa entera está lista en menos de 0,3 s; llenar las 4096 sondas del cilindro en un exterior abierto tarda unos 13 s, sin afectar a las sondas cercanas, que están listas primero.
+**Coste:** el campo gasta como mucho `min(PathRaysPerFrame, rayos restantes / 2)` por frame, tomados del mismo presupuesto que la oclusión. Avanza siempre que haya alguna voz simulada, aunque ninguna esté tapada. Una conexión con la línea central libre cuesta dos rayos. Si la central choca se prueban las paralelas, y cada una cuesta hasta seis (la línea y la comprobación desde el punto libre de cada extremo): una conexión bloqueada cuesta hasta 14 rayos (2 + 6 + 6) y una que abre una paralela, normalmente 8. Además, cada voz tapada lanza hasta 16 rayos por evaluación (a las 8 esquinas de su celda y del oyente a 8 sondas de su camino), que salen de `RayBudgetPerFrame` y no de `PathRaysPerFrame`. Sin GC por tick: la memoria se reserva al configurar. Con el perfil de la demo la casa entera está lista en menos de 0,3 s; llenar las 4096 sondas del cilindro en un exterior abierto tarda unos 13 s, sin afectar a las sondas cercanas, que están listas primero.
 
 **Requisitos:**
 
 - Necesita `Occlusion` o `Transmission` encendidos: sin ellos no hay voces tapadas que encaminar.
-- Un perfil cuyo presupuesto de rayos deje menos de 20 rayos por frame para el campo no tiene pathing (el módulo sigue con directo y transmisión).
-- Al arrancar o tras un teletransporte del oyente la región se rehace, y durante aproximadamente el primer segundo no hay camino. La voz suena con directo y transmisión mientras tanto.
+- El campo solo lanza rayos en un frame si `min(PathRaysPerFrame, rayos restantes / 2)` llega a 10, es decir, si quedan al menos 20 rayos tras las voces. Con menos no avanza y no hay pathing (el módulo sigue con directo y transmisión).
+- Una voz tapada solo traza su camino si le caben en el frame 2 + `OcclusionRays` + hasta 16 rayos. Si no le caben, la siguiente vez va primera; si ni siendo la primera le caben, conserva su último camino como mucho 0,5 s y después vuelve a directo y transmisión.
+- Al arrancar o tras un teletransporte del oyente la región se rehace, y durante aproximadamente el primer segundo no hay camino. La voz suena con directo y transmisión mientras tanto. Justo después de un teletransporte puede usarse durante unos frames el árbol de caminos anterior.
 
 **Limitaciones:**
 
@@ -425,6 +425,14 @@ Parámetros del perfil:
 - No hay difracción real: el sonido llega por el camino más corto abierto, no se curva alrededor de bordes.
 - Una conexión abierta que ningún camino usa puede estar obsoleta hasta que alguno la pasa por revisión.
 - Si se alcanza `MaxProbes` faltan las sondas lejanas, y los sonidos que dependan de ellas no tienen camino.
+- Los rayos del oyente a las sondas y de la fuente a las esquinas de su celda van en un solo sentido, y un rayo no choca con una cara por detrás. Con una pared de una sola cara (un plano o una malla abierta), un oyente o una fuente a menos de una celda de su lado trasero puede ver sondas al otro lado, y el camino se cuela.
+- Un collider que gira sin que cambie su caja envolvente (AABB) no cuenta como cambio.
+- Una voz nueva traza su camino a partir de su segunda evaluación, así que un sonido tapado de menos de unos 0,2 s nunca usa camino.
+- El campo solo avanza mientras hay alguna voz simulada.
+- Una abertura ancha que se cierra puede tardar varias rondas de 0,25 s en dejar de usarse, una por cada conexión abierta que el camino siguiente intenta.
+- La memoria del campo ronda los 2,5 MB con 4096 sondas.
+- Los gizmos de sondas pesan mucho con muchas sondas.
+- Los colliders que se mueven en las capas acústicas hacen que sus conexiones se vuelvan a trazar y el camino se vuelva a buscar cada 0,25 s.
 
 ### Qué se simula y qué no
 
@@ -455,7 +463,7 @@ Marca **Debug Gizmos** en el Acoustics Bootstrap y entra en Play: en la vista de
 | R | Suena un chasquido corto en la radio: se oye la cola de eco de la sala después de que acabe |
 | T | Apaga o enciende la radio, para oír el eco del chasquido sin el loop encima |
 
-Cada acción escribe una línea en la consola. Activa la pestaña Scene durante Play para ver los gizmos. La demo no añade teclas para el pathing: con la puerta cerrada la radio se oye solo por transmisión desde el pasillo; ábrela con F y se oye venir desde la puerta. El salón cerrado y la cochera forman regiones de pocas sondas; la cocina y el pasillo no tienen techo, así que la región se extiende hacia fuera hasta `MaxProbes`. Destruye el muro con G para que la región llegue a la cochera.
+Cada acción escribe una línea en la consola. Activa la pestaña Scene durante Play para ver los gizmos. La demo no añade teclas para el pathing: con la puerta cerrada la radio se oye solo por transmisión desde el pasillo; ábrela con F y se oye venir desde la puerta. El salón y la cochera tienen techo, así que la región no se escapa por arriba desde ellos; la cocina y el pasillo no tienen techo, así que la región se extiende hacia fuera hasta `MaxProbes`. Destruye el muro con G para que la región llegue a la cochera.
 
 ## Limitaciones
 
