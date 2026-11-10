@@ -28,6 +28,11 @@ namespace HarryTools.Audio.Acoustics {
             public bool HasPerceived;
             // Probes of the last walk that succeeded, kept in lastWalks.
             public int WalkCount;
+            // Band energies of the last read, so the loudness follows where the voice is heard from on every tick.
+            public Vector3 DirectEnergy;
+            public Vector3 PathEnergy;
+            public float DirectRoll;
+            public bool HasEnergy;
         }
 
         private struct BatchEntry {
@@ -231,7 +236,7 @@ namespace HarryTools.Audio.Acoustics {
                 if (slotOfQuery[i] >= 0) continue;
                 int _free = LeastRecentlySeen();
                 if (_free < debugVoices.Length) debugVoices[_free].Valid = false;
-                slots[_free] = new Slot { Handle = _queries[i].Handle, Result = AcousticResult.Neutral, SeenStamp = stamp, SourceProbe = -1 };
+                slots[_free] = new Slot { Handle = _queries[i].Handle, Result = AcousticResult.Neutral, SeenStamp = stamp, SourceProbe = -1, LastOpen = 1f };
                 slotOfQuery[i] = _free;
             }
         }
@@ -329,6 +334,8 @@ namespace HarryTools.Audio.Acoustics {
         private void Finish(int _slot, in AcousticResult _result, float _now, float _interval) {
             slots[_slot].Result = _result;
             slots[_slot].Share = 0f;
+            slots[_slot].Valid = false;
+            slots[_slot].HasEnergy = false;
             slots[_slot].PickedStamp = stamp;
             slots[_slot].NextDue = _now + _interval;
         }
@@ -456,7 +463,8 @@ namespace HarryTools.Audio.Acoustics {
             float _open = _blocked ? 0f : 1f;
             Vector3 _gains = profile.Occlusion ? Occlude(_entry, _hits, _counts, _forward, _backward, _blocked, _through, out _open) : _through;
             _gains = ApplyAir(_gains, _entry.Distance);
-            AcousticResult _result = field != null ? Mix(_entry, _hits, _counts, _gains, _open) : ToResult(_gains);
+            // A voice still heard away from its source after Pathing was turned off keeps the mix until it is back.
+            AcousticResult _result = field != null || slots[_entry.Slot].HasPerceived ? Mix(_entry, _hits, _counts, _gains, _open) : ToResult(_gains);
             if (CaptureDebug) debugVoices[_entry.Slot].Result = _result;
             return _result;
         }
@@ -575,6 +583,7 @@ namespace HarryTools.Audio.Acoustics {
 
         // ==================== PATHING ===================
         // Direct and path energies summed per band, heard from between the source and the anchor in proportion to the path's share. The floor applies last.
+        // The energies are kept so WriteResults can compensate for where the voice is really heard from while the perceived position moves.
         private AcousticResult Mix(in BatchEntry _entry, ReadOnlySpan<AcousticHit> _hits, ReadOnlySpan<int> _counts, Vector3 _gains, float _open) {
             ref Slot _slot = ref slots[_entry.Slot];
             _slot.LastOpen = _open;
@@ -582,23 +591,38 @@ namespace HarryTools.Audio.Acoustics {
             else if (_entry.Path != PathRays.Kept || _open >= profile.PathMaxOpen) _slot.Valid = false;
 
             _slot.Share = 0f;
-            if (!_slot.Valid || _entry.Asset == null) return ToResult(_gains);
+            _slot.HasEnergy = false;
+            if (_entry.Asset == null) return ToResult(_gains);
 
             SpatialSettings _spatial = _entry.Asset.GetSpatial();
             float _directRoll = _spatial.GainAt(_entry.Distance);
-            float _pathRoll = _spatial.GainAt(_slot.Length);
             Vector3 _direct = _gains * (_directRoll * _directRoll);
-            Vector3 _bend = PathMath.BendLoss(_slot.Length - _entry.Distance, profile.PathMidDbPerMeter, profile.PathHighDbPerMeter);
-            Vector3 _path = Vector3.Scale(_bend, ApplyAir(Vector3.one, _slot.Length)) * (PathMath.PathWeight(_open, profile.PathMaxOpen) * _pathRoll * _pathRoll);
+            Vector3 _path = Vector3.zero;
+            if (_slot.Valid) {
+                float _pathRoll = _spatial.GainAt(_slot.Length);
+                Vector3 _bend = PathMath.BendLoss(_slot.Length - _entry.Distance, profile.PathMidDbPerMeter, profile.PathHighDbPerMeter);
+                _path = Vector3.Scale(_bend, ApplyAir(Vector3.one, _slot.Length)) * (PathMath.PathWeight(_open, profile.PathMaxOpen) * _pathRoll * _pathRoll);
+            }
 
             float _share = PathMath.PathShare(_direct.y, _path.y);
-            if (!(_share > 0f)) return ToResult(_gains);
-            _slot.Share = _share;
+            _slot.Share = _share > 0f ? _share : 0f;
+            _slot.DirectEnergy = _direct;
+            _slot.PathEnergy = _path;
+            _slot.DirectRoll = _directRoll;
+            _slot.HasEnergy = true;
+            // Nothing heard away from the source: the same result as with no path at all.
+            if (!(_share > 0f) && !_slot.HasPerceived) return ToResult(_gains);
 
-            Vector3 _target = Vector3.Lerp(_entry.Source, _slot.Anchor, _share);
-            float _perceivedRoll = _spatial.GainAt(Vector3.Distance(_target, _entry.Listener));
-            Vector3 _output = PathMath.Output(_direct, _path, _perceivedRoll);
-            return AcousticMath.ToResult(_output, PathMath.FloorDb(profile.FloorDb, _directRoll, _perceivedRoll), profile.MinLowPass, profile.MaxHighPass);
+            Vector3 _target = Vector3.Lerp(_entry.Source, _slot.Anchor, _slot.Share);
+            return MixedResult(_slot, _spatial.GainAt(Vector3.Distance(_target, _entry.Listener)));
+        }
+
+        // Never louder than the open sound at the real distance, compensated for the roll-off of where the voice is heard from, with the floor relative to no acoustics.
+        private AcousticResult MixedResult(in Slot _slot, float _heardRoll) {
+            float _open = _slot.DirectRoll * _slot.DirectRoll;
+            Vector3 _sum = Vector3.Min(_slot.DirectEnergy + _slot.PathEnergy, new Vector3(_open, _open, _open));
+            Vector3 _output = PathMath.Output(_sum, Vector3.zero, _heardRoll);
+            return AcousticMath.ToResult(_output, PathMath.FloorDb(profile.FloorDb, _slot.DirectRoll, _heardRoll), profile.MinLowPass, profile.MaxHighPass);
         }
 
         // Source probe: the visible corner with the cheapest way to the listener. Anchor: the visible candidate on its walk farthest from the listener, or the root.
@@ -740,10 +764,11 @@ namespace HarryTools.Audio.Acoustics {
             return new Vector3Int(_index & 1, (_index >> 1) & 1, (_index >> 2) & 1);
         }
 
+        // The perceived position is kept, so it still returns to the source smoothly.
         private static void ForgetPath(ref Slot _slot) {
             _slot.Valid = false;
             _slot.Share = 0f;
-            _slot.HasPerceived = false;
+            _slot.PathEnergy = Vector3.zero;
             _slot.SourceProbe = -1;
             _slot.WalkCount = 0;
         }
@@ -755,12 +780,17 @@ namespace HarryTools.Audio.Acoustics {
             for (int i = 0; i < _queries.Length; i++) {
                 ref Slot _slot = ref slots[slotOfQuery[i]];
                 AcousticResult _result = _slot.Result;
-                if (field != null) {
+                if (field != null || _slot.HasPerceived) {
                     Vector3 _source = _queries[i].SourcePosition;
                     if (!_slot.HasPerceived) _slot.Perceived = _source;
                     Vector3 _target = _slot.Share > 0f ? Vector3.Lerp(_source, _slot.Anchor, _slot.Share) : _source;
                     _slot.Perceived = Vector3.MoveTowards(_slot.Perceived, _target, _step);
                     _slot.HasPerceived = _slot.Share >= MinShare || (_slot.Perceived - _source).sqrMagnitude >= PerceivedSnapSqr;
+                    AudioAsset _asset = _queries[i].Asset;
+                    if (_slot.HasEnergy && _asset != null && (_slot.HasPerceived || _slot.Share > 0f)) {
+                        Vector3 _heard = _slot.HasPerceived ? _slot.Perceived : _source;
+                        _result = MixedResult(_slot, _asset.GetSpatial().GainAt(Vector3.Distance(_heard, _queries[i].ListenerPosition)));
+                    }
                     _result.HasPerceivedPosition = _slot.HasPerceived;
                     _result.PerceivedPosition = _slot.HasPerceived ? _slot.Perceived : Vector3.zero;
                 }
