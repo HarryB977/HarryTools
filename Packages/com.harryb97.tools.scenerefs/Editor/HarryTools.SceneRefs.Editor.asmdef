@@ -1,0 +1,20 @@
+{
+    "name": "HarryTools.SceneRefs.Editor",
+    "rootNamespace": "HarryTools.SceneRefs.Editor",
+    "references": [
+        "GUID:a5ee42b199b28a848837ae87b94b1785",
+        "GUID:5a48a51724773b745ac570afd65b9606",
+        "GUID:e9438e756332f8b49902de137df9187b"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

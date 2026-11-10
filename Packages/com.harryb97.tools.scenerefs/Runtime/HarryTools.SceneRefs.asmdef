@@ -1,0 +1,17 @@
+{
+    "name": "HarryTools.SceneRefs",
+    "rootNamespace": "HarryTools.SceneRefs",
+    "references": [
+        "GUID:5a48a51724773b745ac570afd65b9606",
+        "GUID:e9438e756332f8b49902de137df9187b"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
