@@ -22,6 +22,7 @@ namespace HarryTools.SceneRefs.Editor
         [SerializeField] private List<string> staleScenes = new List<string>();
 
         [ClearOnReload] private static SceneIdIndex overrideIndex;
+        [ClearOnReload] private static bool overridden;
         [ClearOnReload] private static SceneIdIndex cached;
 
         [NonSerialized] private int batchDepth;
@@ -40,30 +41,39 @@ namespace HarryTools.SceneRefs.Editor
         /// <summary>
         /// The index in use. Loads the project index, creating it on first use.
         /// Tests assign an in-memory instance; assigning null goes back to the project index.
+        /// While an override is set the project asset is never loaded or created, even if the override was destroyed (then this is null).
         /// </summary>
         public static SceneIdIndex Active
         {
             get
             {
+                if (overridden) return overrideIndex;
                 SceneIdIndex _existing = Existing;
                 return _existing != null ? _existing : CreateProjectIndex();
             }
-            set => overrideIndex = value;
+            set
+            {
+                overrideIndex = value;
+                overridden = !ReferenceEquals(value, null);
+            }
         }
+
+        /// <summary>True while a test index replaces the project index.</summary>
+        internal static bool IsOverridden => overridden;
 
         /// <summary>The index in use without creating the asset. Null when the project has none yet.</summary>
         internal static SceneIdIndex Existing
         {
             get
             {
-                if (overrideIndex != null) return overrideIndex;
+                if (overridden) return overrideIndex;
                 if (cached == null) cached = AssetDatabase.LoadAssetAtPath<SceneIdIndex>(DefaultPath);
                 return cached;
             }
         }
 
         /// <summary>The index in use only if it is already in memory. Never loads or creates the asset.</summary>
-        internal static SceneIdIndex Loaded => overrideIndex != null ? overrideIndex : cached;
+        internal static SceneIdIndex Loaded => overridden ? overrideIndex : cached;
 
         // ==================== PUBLIC API ====================
 

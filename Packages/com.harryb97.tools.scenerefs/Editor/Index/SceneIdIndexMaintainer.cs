@@ -57,7 +57,15 @@ namespace HarryTools.SceneRefs.Editor
             if (_index == null || _index.StaleScenes.Count == 0) return;
 
             List<string> _stale = new List<string>(_index.StaleScenes);
-            for (int _i = 0; _i < _stale.Count; _i++) Reindex(_index, _stale[_i]);
+            _index.BeginBatch();
+            try
+            {
+                for (int _i = 0; _i < _stale.Count; _i++) SafeReindex(_index, _stale[_i]);
+            }
+            finally
+            {
+                _index.EndBatch();
+            }
         }
 
         // ==================== INTERNAL ====================
@@ -74,6 +82,7 @@ namespace HarryTools.SceneRefs.Editor
             if (_askToSave && !EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return false;
 
             SceneIdIndex _index = SceneIdIndex.Active;
+            if (_index == null) return false;
             HashSet<string> _found = new HashSet<string>(StringComparer.Ordinal);
             List<string> _prefabs = new List<string>();
             _index.BeginBatch();
@@ -89,8 +98,17 @@ namespace HarryTools.SceneRefs.Editor
                     if (!IsProjectScene(_path)) continue;
 
                     EditorUtility.DisplayProgressBar(ProgressTitle, _path, _i / _total);
-                    _index.ReplaceScene(_sceneGuids[_i], ReadScene(_path));
+                    // A scene that cannot be read keeps its old entries and stays stale; it is not removed.
                     _found.Add(_sceneGuids[_i]);
+                    try
+                    {
+                        _index.ReplaceScene(_sceneGuids[_i], ReadScene(_path));
+                    }
+                    catch (Exception _exception)
+                    {
+                        _index.MarkStale(_sceneGuids[_i]);
+                        Logger.LogWarning(Category, $"Could not index scene '{_path}': {_exception.Message}");
+                    }
                 }
 
                 List<string> _known = _index.SceneGuids();
@@ -101,8 +119,18 @@ namespace HarryTools.SceneRefs.Editor
                 for (int _i = 0; _i < _prefabGuids.Length; _i++)
                 {
                     string _path = AssetDatabase.GUIDToAssetPath(_prefabGuids[_i]);
+                    // t:Prefab also matches model files; only real prefab assets can hold a SceneId.
+                    if (!_path.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase)) continue;
+
                     EditorUtility.DisplayProgressBar(ProgressTitle, _path, (_sceneGuids.Length + _i) / _total);
-                    if (PrefabHasIds(_path)) _prefabs.Add(_path);
+                    try
+                    {
+                        if (PrefabHasIds(_path)) _prefabs.Add(_path);
+                    }
+                    catch (Exception _exception)
+                    {
+                        Logger.LogWarning(Category, $"Could not check prefab '{_path}' for scene ids: {_exception.Message}");
+                    }
                 }
 
                 _index.SetPrefabsWithIds(_prefabs);
@@ -129,7 +157,7 @@ namespace HarryTools.SceneRefs.Editor
             List<SceneIdIndexEntry> _entries = SceneIndexer.FromLoadedScene(_scene);
             SceneIdIndex _index = SceneIdIndex.Existing;
             // The index asset is only created once there is something to store.
-            if (_index == null && _entries.Count == 0) return;
+            if (_index == null && (_entries.Count == 0 || SceneIdIndex.IsOverridden)) return;
             if (_index == null) _index = SceneIdIndex.Active;
 
             _index.BeginBatch();
@@ -208,6 +236,7 @@ namespace HarryTools.SceneRefs.Editor
             pendingMissingSweep = false;
 
             SceneIdIndex _index = SceneIdIndex.Existing;
+            if (_index == null && SceneIdIndex.IsOverridden) return;
             if (_index == null)
             {
                 // No index yet: create it only if an imported scene has ids.
@@ -226,7 +255,7 @@ namespace HarryTools.SceneRefs.Editor
                 for (int _i = 0; _i < _imported.Count; _i++)
                 {
                     _index.MarkStale(_imported[_i]);
-                    Reindex(_index, _imported[_i]);
+                    SafeReindex(_index, _imported[_i]);
                 }
             }
             finally
@@ -244,6 +273,20 @@ namespace HarryTools.SceneRefs.Editor
         }
 
         // ==================== READING ====================
+
+        /// <summary>Reindex that never stops the caller: a scene that throws stays stale.</summary>
+        private static void SafeReindex(SceneIdIndex _index, string _sceneGuid)
+        {
+            try
+            {
+                Reindex(_index, _sceneGuid);
+            }
+            catch (Exception _exception)
+            {
+                _index.MarkStale(_sceneGuid);
+                Logger.LogWarning(Category, $"Could not index scene '{AssetDatabase.GUIDToAssetPath(_sceneGuid)}': {_exception.Message}");
+            }
+        }
 
         /// <summary>Reads one stale scene again. Scenes that cannot be read stay stale until Rebuild.</summary>
         private static void Reindex(SceneIdIndex _index, string _sceneGuid)
@@ -285,14 +328,16 @@ namespace HarryTools.SceneRefs.Editor
 
             // A scene shown unloaded in the hierarchy is unloaded again afterwards instead of removed.
             bool _wasInHierarchy = _scene.IsValid();
-            _scene = EditorSceneManager.OpenScene(_path, OpenSceneMode.Additive);
+            Scene _opened = default;
             try
             {
-                return SceneIndexer.FromLoadedScene(_scene);
+                _opened = EditorSceneManager.OpenScene(_path, OpenSceneMode.Additive);
+                if (!_opened.IsValid() || !_opened.isLoaded) throw new InvalidOperationException("the scene could not be opened.");
+                return SceneIndexer.FromLoadedScene(_opened);
             }
             finally
             {
-                EditorSceneManager.CloseScene(_scene, !_wasInHierarchy);
+                if (_opened.IsValid()) EditorSceneManager.CloseScene(_opened, !_wasInHierarchy);
             }
         }
 
@@ -305,14 +350,15 @@ namespace HarryTools.SceneRefs.Editor
 
         private static bool PrefabHasIds(string _path)
         {
-            GameObject _root = PrefabUtility.LoadPrefabContents(_path);
+            GameObject _root = null;
             try
             {
-                return _root.GetComponentsInChildren<SceneId>(true).Length > 0;
+                _root = PrefabUtility.LoadPrefabContents(_path);
+                return _root != null && _root.GetComponentsInChildren<SceneId>(true).Length > 0;
             }
             finally
             {
-                PrefabUtility.UnloadPrefabContents(_root);
+                if (_root != null) PrefabUtility.UnloadPrefabContents(_root);
             }
         }
 

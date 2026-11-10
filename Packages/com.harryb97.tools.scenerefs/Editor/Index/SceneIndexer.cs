@@ -81,8 +81,11 @@ namespace HarryTools.SceneRefs.Editor
             {
                 Component _component = componentBuffer[_i];
                 // Missing scripts come back as null.
-                if (_component == null || _component is Transform || _component is SceneId) continue;
-                _types.Add(_component.GetType().FullName);
+                if (_component == null) continue;
+                // Only Transform itself is left out; RectTransform tells UI objects apart and is kept.
+                System.Type _type = _component.GetType();
+                if (_type == typeof(Transform) || _type == typeof(SceneId)) continue;
+                _types.Add(_type.FullName);
             }
 
             componentBuffer.Clear();

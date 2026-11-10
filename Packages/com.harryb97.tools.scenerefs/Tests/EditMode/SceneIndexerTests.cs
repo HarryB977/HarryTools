@@ -55,6 +55,21 @@ namespace HarryTools.SceneRefs.Tests
         }
 
         [Test]
+        public void FromLoadedScene_KeepsRectTransform()
+        {
+            Scene _scene = util.NewScene("Rect");
+            GameObject _ui = SceneIndexTestUtil.NewObject(_scene, "Panel");
+            _ui.AddComponent<RectTransform>();
+            SceneIndexTestUtil.AddId(_ui, ChildGuid, "Panel");
+
+            List<SceneIdIndexEntry> _entries = SceneIndexer.FromLoadedScene(_scene);
+
+            Assert.AreEqual(1, _entries.Count);
+            CollectionAssert.Contains(_entries[0].ComponentTypes, "UnityEngine.RectTransform");
+            CollectionAssert.DoesNotContain(_entries[0].ComponentTypes, "UnityEngine.Transform");
+        }
+
+        [Test]
         public void FromLoadedScene_UnsavedScene_UsesHandleKey()
         {
             Scene _scene = SceneIndexTestUtil.UntitledScene();

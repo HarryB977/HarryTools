@@ -38,7 +38,12 @@ namespace HarryTools.SceneRefs.Editor
             SceneIdIndex _index = (SceneIdIndex)target;
 
             EditorGUILayout.HelpBox("Cache of every scene id in the project. It is updated automatically; Rebuild Index reads every scene and prefab again.", MessageType.None);
-            if (GUILayout.Button("Rebuild Index")) SceneIdIndexMaintainer.Rebuild();
+            // Rebuild opens scenes and shows dialogs, so it runs outside this GUI pass.
+            if (GUILayout.Button("Rebuild Index"))
+            {
+                EditorApplication.delayCall += SceneIdIndexMaintainer.Rebuild;
+                GUIUtility.ExitGUI();
+            }
 
             if (_index.StaleScenes.Count > 0)
                 EditorGUILayout.HelpBox($"{_index.StaleScenes.Count} scene(s) waiting to be read again.", MessageType.Info);

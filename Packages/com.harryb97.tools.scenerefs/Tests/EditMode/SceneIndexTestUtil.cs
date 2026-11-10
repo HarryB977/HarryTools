@@ -29,6 +29,8 @@ namespace HarryTools.SceneRefs.Tests
         {
             if (!AssetDatabase.IsValidFolder(Folder)) AssetDatabase.CreateFolder("Assets", "__SceneRefsTests__");
             Index = ScriptableObject.CreateInstance<SceneIdIndex>();
+            // Keeps the in-memory index alive through the asset refreshes the tests trigger.
+            Index.hideFlags = HideFlags.HideAndDontSave;
             SceneIdIndex.Active = Index;
         }
 
@@ -37,6 +39,7 @@ namespace HarryTools.SceneRefs.Tests
             for (int _i = 0; _i < opened.Count; _i++)
                 if (opened[_i].IsValid() && opened[_i].isLoaded) EditorSceneManager.CloseScene(opened[_i], true);
             opened.Clear();
+            UnityEngine.TestTools.LogAssert.ignoreFailingMessages = false;
 
             AssetDatabase.DeleteAsset(Folder);
             SceneIdIndexMaintainer.FlushPending();

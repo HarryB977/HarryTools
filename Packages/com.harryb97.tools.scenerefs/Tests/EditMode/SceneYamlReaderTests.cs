@@ -61,12 +61,19 @@ namespace HarryTools.SceneRefs.Tests
         [Test]
         public void FromFile_IgnoresOtherMonoBehaviours()
         {
+            // Any runtime MonoBehaviour that is not SceneId works; EventSystem comes with uGUI. Looked up by name to keep the asmdef free of a uGUI reference.
+            System.Type _other = System.Type.GetType("UnityEngine.EventSystems.EventSystem, UnityEngine.UI");
+            if (_other == null) Assert.Ignore("uGUI is not installed.");
+
             Scene _scene = util.NewScene("Mixed");
             GameObject _go = SceneIndexTestUtil.NewObject(_scene, "Mixed");
-            _go.AddComponent<SceneIndexerTestBehaviour>();
-            SceneIndexTestUtil.NewObject(_scene, "OnlyOther").AddComponent<SceneIndexerTestBehaviour>();
+            Assert.IsNotNull(_go.AddComponent(_other));
+            Assert.IsNotNull(SceneIndexTestUtil.NewObject(_scene, "OnlyOther").AddComponent(_other));
             SceneIndexTestUtil.AddId(_go, ChildGuid, "Mixed");
             SceneIndexTestUtil.Save(_scene);
+
+            string _text = System.IO.File.ReadAllText(SceneIndexTestUtil.ScenePath("Mixed"));
+            Assert.AreEqual(3, System.Text.RegularExpressions.Regex.Matches(_text, "MonoBehaviour:").Count, "Two other MonoBehaviours and the SceneId are saved.");
 
             List<SceneIdIndexEntry> _light = SceneYamlReader.FromFile(SceneIndexTestUtil.ScenePath("Mixed"));
 

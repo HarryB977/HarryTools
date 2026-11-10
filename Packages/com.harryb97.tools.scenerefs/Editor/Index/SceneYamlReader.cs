@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using System.Text.RegularExpressions;
+using HarryTools.DomainReload;
 using UnityEditor;
 
 namespace HarryTools.SceneRefs.Editor
@@ -25,7 +26,7 @@ namespace HarryTools.SceneRefs.Editor
         private static readonly Regex fileIdRegex = new Regex(@"fileID: (-?\d+)", RegexOptions.Compiled);
         private static readonly Regex guidRegex = new Regex(@"guid: ([0-9a-fA-F]{32})", RegexOptions.Compiled);
 
-        private static string sceneIdScriptGuid;
+        [ClearOnReload] private static string sceneIdScriptGuid;
 
         // ==================== TYPES ====================
 

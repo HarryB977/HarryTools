@@ -5,6 +5,7 @@ using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using UnityEngine.TestTools;
 
 namespace HarryTools.SceneRefs.Tests
 {
@@ -132,6 +133,60 @@ namespace HarryTools.SceneRefs.Tests
             Assert.IsNotNull(_entries[0].ComponentTypes, "Rebuild uses the exact path.");
             Assert.AreEqual(0, util.EntriesOf("stale-scene").Count);
             CollectionAssert.AreEqual(new[] { _prefabPath }, util.Index.PrefabsWithIds);
+        }
+
+        [Test]
+        public void Rebuild_CorruptScene_ContinuesAndIndexesGoodScene()
+        {
+            Scene _scene = util.NewScene("Good");
+            SceneIndexTestUtil.AddId(SceneIndexTestUtil.NewObject(_scene, "Good"), GuidA, "Good");
+            SceneIndexTestUtil.Save(_scene);
+            string _goodGuid = AssetDatabase.AssetPathToGUID(SceneIndexTestUtil.ScenePath("Good"));
+            util.Close(_scene);
+
+            // Unity logs import and load errors for the broken files; they are expected here.
+            LogAssert.ignoreFailingMessages = true;
+
+            // Names sort before "Good" so the broken scenes are read first.
+            string _corruptPath = SceneIndexTestUtil.ScenePath("Corrupt");
+            System.IO.File.WriteAllText(_corruptPath, "%YAML 1.1\n%TAG !u! tag:unity3d.com,2011:\n--- !u!1 &1\nGameObject: [ this is not\n  {{ valid\n");
+            System.IO.File.WriteAllText(SceneIndexTestUtil.Folder + "/AAA_Garbage.unity", "\u0000\u0001 not a scene at all");
+            AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
+            SceneIdIndexMaintainer.FlushPending();
+            int _sceneCount = SceneManager.sceneCount;
+
+            bool _completed = SceneIdIndexMaintainer.Rebuild(false, new[] { SceneIndexTestUtil.Folder });
+
+            Assert.IsTrue(_completed);
+            Assert.AreEqual(_sceneCount, SceneManager.sceneCount, "Rebuild must close every scene it opened.");
+            List<SceneIdIndexEntry> _entries = util.EntriesOf(_goodGuid);
+            Assert.AreEqual(1, _entries.Count);
+            Assert.AreEqual("Good", _entries[0].Id);
+        }
+
+        [Test]
+        public void DestroyedOverride_NeverTouchesProjectIndex()
+        {
+            bool _existedBefore = System.IO.File.Exists(SceneIdIndex.DefaultPath);
+            SceneIdIndex _doomed = ScriptableObject.CreateInstance<SceneIdIndex>();
+            SceneIdIndex.Active = _doomed;
+            Object.DestroyImmediate(_doomed);
+            try
+            {
+                Assert.IsTrue(SceneIdIndex.Active == null);
+                Assert.IsFalse(SceneIdIndexMaintainer.Rebuild(false, new[] { SceneIndexTestUtil.Folder }));
+
+                Scene _scene = util.NewScene("Orphan");
+                SceneIndexTestUtil.AddId(SceneIndexTestUtil.NewObject(_scene, "Orphan"), GuidA, "Orphan");
+                SceneIndexTestUtil.Save(_scene);
+                SceneIdIndexMaintainer.FlushPending();
+
+                if (!_existedBefore) Assert.IsFalse(System.IO.File.Exists(SceneIdIndex.DefaultPath), "The project index must not be created while a test override is set.");
+            }
+            finally
+            {
+                SceneIdIndex.Active = util.Index;
+            }
         }
 
         [Test]
