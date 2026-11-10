@@ -52,13 +52,15 @@ namespace HarryTools.Audio.Acoustics {
             elapsed = 0f;
         }
 
-        /// <summary> Starts watching a collider from its current state. Does nothing if it is already watched. </summary>
+        /// <summary> Starts watching a collider from its current state. Does nothing if it is already watched. One that is already absent is reported by its first check. </summary>
         public void Add(int _colliderId) {
             if (_colliderId == 0 || slots.ContainsKey(_colliderId)) return;
             if (count == ids.Length) Grow();
 
             ids[count] = _colliderId;
-            present[count] = geometry.TryGetColliderBounds(_colliderId, out bounds[count]);
+            geometry.TryGetColliderBounds(_colliderId, out bounds[count]);
+            // One already absent counts as present, so its first check reports it gone: whoever added it holds state that depends on it.
+            present[count] = true;
             marked[count] = false;
             touchedPass[count] = pass;
             slots.Add(_colliderId, count);

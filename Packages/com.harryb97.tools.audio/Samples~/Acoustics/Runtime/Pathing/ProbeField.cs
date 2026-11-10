@@ -727,7 +727,8 @@ namespace HarryTools.Audio.Acoustics {
 
         private static int KeyOf(int _probe, int _direction) => _probe * ProbeGraph.DirectionCount + _direction;
 
-        // With both ends alive a connection is always queued from the side that stores it, so it is never traced twice.
+        // With both ends alive a connection is queued from the side that stores it, so the two ends share one queue entry.
+        // One traced while its far probe was absent has the key of the side that traced it, so it can be traced again under the canonical key once that probe exists.
         private static int CanonicalKey(int _probe, int _direction, int _neighbor) {
             return _direction < ProbeGraph.EdgesPerProbe ? KeyOf(_probe, _direction) : KeyOf(_neighbor, _direction - ProbeGraph.EdgesPerProbe);
         }
