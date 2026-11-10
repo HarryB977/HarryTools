@@ -102,6 +102,9 @@ namespace HarryTools.Audio.Acoustics {
         private byte[] blockerCount;
         // Time a connection was last resolved, for MarkInUse.
         private float[] lastTraced;
+        // A connection in the batch in flight, and one invalidated while in flight whose result was cast against the old geometry.
+        private bool[] inFlight;
+        private bool[] restart;
         private AcousticRay[] rays = Array.Empty<AcousticRay>();
         private BatchEdge[] entries = Array.Empty<BatchEdge>();
         private readonly BatchRoot[] roots = new BatchRoot[Corners];
@@ -166,6 +169,8 @@ namespace HarryTools.Audio.Acoustics {
             blockerCount = new byte[_keys];
             lastTraced = new float[_keys];
             for (int i = 0; i < _keys; i++) lastTraced[i] = float.NegativeInfinity;
+            inFlight = new bool[_keys];
+            restart = new bool[_keys];
             watch.Clear();
             rays = new AcousticRay[Mathf.Max(1, pathRays)];
             entries = new BatchEdge[pathRays / RaysPerLine + 1];
@@ -226,6 +231,7 @@ namespace HarryTools.Audio.Acoustics {
                 int _ray = rootCount + i * RaysPerLine;
                 int _forward = _counts[_ray] > 0 ? _hits[_ray].ColliderId : 0;
                 int _backward = _counts[_ray + 1] > 0 ? _hits[_ray + 1].ColliderId : 0;
+                inFlight[entries[i].Key] = false;
                 ResolveEdge(entries[i], _counts[_ray] > 0, _counts[_ray + 1] > 0, _forward, _backward);
             }
             if (rootCount > 0) StartSearch(_counts);
@@ -237,7 +243,18 @@ namespace HarryTools.Audio.Acoustics {
             int _direction = _entry.Key % ProbeGraph.DirectionCount;
 
             if (!graph.IsAlive(_probe) || graph.GenerationOf(_probe) != _entry.Generation) {
+                restart[_entry.Key] = false;
                 Forget(_entry.Key);
+                return;
+            }
+
+            // Still queued: it starts again from the center line, ahead of the flood.
+            if (restart[_entry.Key]) {
+                restart[_entry.Key] = false;
+                nextLine[_entry.Key] = 0;
+                nextStage[_entry.Key] = 0;
+                pendingSolid[_entry.Key] = 0;
+                rings[RingInvalidated].Push(_entry.Key);
                 return;
             }
 
@@ -512,6 +529,7 @@ namespace HarryTools.Audio.Acoustics {
                 int _line = nextLine[_key];
                 int _stage = nextStage[_key];
                 entries[entryCount++] = new BatchEdge { Key = _key, Generation = graph.GenerationOf(_probe), Line = _line, Stage = _stage, Ring = _ring };
+                inFlight[_key] = true;
                 WriteEdgeRays(_probe, _key % ProbeGraph.DirectionCount, _line, _stage, _rayCount);
                 _rayCount += RaysPerLine;
             }
@@ -639,9 +657,12 @@ namespace HarryTools.Audio.Acoustics {
         }
 
         // Back to Unknown, with what was learnt from the old geometry forgotten, and queued to be traced again.
+        // A connection in flight is restarted when its result arrives instead.
         private void Invalidate(int _key) {
             int _probe = _key / ProbeGraph.DirectionCount;
             int _direction = _key % ProbeGraph.DirectionCount;
+            int _traced = _key;
+            if (inFlight[_key]) restart[_key] = true;
             blockerCount[_key] = 0;
             pendingSolid[_key] = 0;
             nextLine[_key] = 0;
@@ -657,12 +678,13 @@ namespace HarryTools.Audio.Acoustics {
                 }
                 // Blockers found while the far probe was absent sit under the key of the side that traced them.
                 _key = CanonicalKey(_probe, _direction, _neighbor);
+                if (inFlight[_key]) restart[_key] = true;
                 blockerCount[_key] = 0;
                 pendingSolid[_key] = 0;
                 nextLine[_key] = 0;
                 nextStage[_key] = 0;
             }
-            if (queued[_key]) return;
+            if (restart[_traced] || restart[_key] || queued[_key]) return;
             queued[_key] = true;
             rings[RingInvalidated].Push(_key);
         }
@@ -695,6 +717,10 @@ namespace HarryTools.Audio.Acoustics {
         // ==================== HELPERS ===================
         private void DropBatch() {
             if (batch != NoBatch) geometry.Release(batch);
+            for (int i = 0; i < entryCount && inFlight != null; i++) {
+                inFlight[entries[i].Key] = false;
+                restart[entries[i].Key] = false;
+            }
             batch = NoBatch;
             entryCount = 0;
             rootCount = 0;

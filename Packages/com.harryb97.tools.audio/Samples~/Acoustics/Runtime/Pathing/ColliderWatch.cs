@@ -5,7 +5,7 @@ using UnityEngine;
 namespace HarryTools.Audio.Acoustics {
     /// <summary>
     /// Watches colliders for a change in bounds, a disable or a destroy, spreading the checks so each one is seen once per period.
-    /// A collider found changed is dropped from the watch; whoever still cares adds it again.
+    /// A collider found changed stays watched from its new state, so a later move, or a return after it went away, is reported again.
     /// </summary>
     internal sealed class ColliderWatch {
         // ==================== VARIABLES ===================
@@ -66,15 +66,11 @@ namespace HarryTools.Audio.Acoustics {
             elapsed += Mathf.Max(0f, _deltaTime);
             int _due = _period <= 0f || elapsed >= _period ? count : Mathf.CeilToInt(count * elapsed / _period);
 
-            while (cursor < Mathf.Min(_due, count)) {
-                if (HasChanged(cursor)) {
-                    if (changedCount == changed.Length) Array.Resize(ref changed, changed.Length * 2);
-                    changed[changedCount++] = ids[cursor];
-                    // The last collider moves into this slot and is checked next, still within this pass.
-                    RemoveAt(cursor);
-                } else {
-                    cursor++;
-                }
+            int _end = Mathf.Min(_due, count);
+            for (; cursor < _end; cursor++) {
+                if (!Refresh(cursor)) continue;
+                if (changedCount == changed.Length) Array.Resize(ref changed, changed.Length * 2);
+                changed[changedCount++] = ids[cursor];
             }
 
             if (cursor >= count) {
@@ -85,24 +81,18 @@ namespace HarryTools.Audio.Acoustics {
         }
 
         // ==================== HELPERS ===================
-        private bool HasChanged(int _slot) {
+        // Compares the collider with its snapshot and takes the new state as the snapshot when it changed.
+        private bool Refresh(int _slot) {
             bool _present = geometry.TryGetColliderBounds(ids[_slot], out Bounds _bounds);
-            if (_present != present[_slot]) return true;
-            if (!_present) return false;
-            Bounds _old = bounds[_slot];
-            return (_bounds.center - _old.center).sqrMagnitude > MoveToleranceSqr || (_bounds.extents - _old.extents).sqrMagnitude > MoveToleranceSqr;
-        }
-
-        private void RemoveAt(int _slot) {
-            slots.Remove(ids[_slot]);
-            int _last = count - 1;
-            if (_slot != _last) {
-                ids[_slot] = ids[_last];
-                bounds[_slot] = bounds[_last];
-                present[_slot] = present[_last];
-                slots[ids[_slot]] = _slot;
+            bool _changed = _present != present[_slot];
+            if (!_changed && _present) {
+                Bounds _old = bounds[_slot];
+                _changed = (_bounds.center - _old.center).sqrMagnitude > MoveToleranceSqr || (_bounds.extents - _old.extents).sqrMagnitude > MoveToleranceSqr;
             }
-            count = _last;
+            if (!_changed) return false;
+            present[_slot] = _present;
+            bounds[_slot] = _bounds;
+            return true;
         }
 
         private void Grow() {
