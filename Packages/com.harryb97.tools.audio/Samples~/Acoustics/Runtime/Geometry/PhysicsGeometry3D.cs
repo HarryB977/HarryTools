@@ -90,6 +90,14 @@ namespace HarryTools.Audio.Acoustics {
             }
         }
 
+        public bool TryGetColliderBounds(int _colliderId, out Bounds _bounds) {
+            _bounds = default;
+            if (!colliders.TryGetValue(_colliderId, out Collider _collider) || _collider == null) return false;
+            if (!_collider.enabled || !_collider.gameObject.activeInHierarchy) return false;
+            _bounds = _collider.bounds;
+            return true;
+        }
+
         public void Dispose() {
             if (disposed) return;
             disposed = true;

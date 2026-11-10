@@ -31,6 +31,9 @@ namespace HarryTools.Audio.Acoustics {
         /// <summary> True when the point is inside a solid collider. False when the collider no longer exists or its inside is undefined (open or non-convex meshes). </summary>
         bool ContainsPoint(int _colliderId, Vector3 _point);
 
+        /// <summary> World bounds of a collider. False when the collider no longer exists, is disabled or its object is inactive. </summary>
+        bool TryGetColliderBounds(int _colliderId, out Bounds _bounds);
+
         /// <summary> Applies the layer mask and materials of <paramref name="_profile"/> to batches scheduled from now on. </summary>
         void Configure(AcousticProfile _profile);
     }

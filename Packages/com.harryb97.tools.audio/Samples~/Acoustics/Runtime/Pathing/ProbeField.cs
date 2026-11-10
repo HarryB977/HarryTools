@@ -58,6 +58,11 @@ namespace HarryTools.Audio.Acoustics {
         private const float MinSpacing = 0.05f;
         private const float SearchMoveSqr = 0.1f * 0.1f;
         private const float SearchInterval = 0.5f;
+        // Seconds to check every watched collider, and the least time between two checks of a connection in use.
+        private const float WatchPeriod = 0.25f;
+        private const float InUsePeriod = 0.25f;
+        // Colliders kept per connection that made one of its rays fail. A new one past this replaces the oldest.
+        private const int MaxBlockers = 3;
 
         // What the two rays of a batch edge trace: the line itself, or the way from a solid end's entry point to the line.
         private const int StageLine = 0;
@@ -74,6 +79,7 @@ namespace HarryTools.Audio.Acoustics {
 
         private readonly IAcousticGeometry geometry;
         private readonly RayBudget budget;
+        private readonly ColliderWatch watch;
 
         private ProbeGraph graph;
         private ProbeSearch search;
@@ -91,6 +97,11 @@ namespace HarryTools.Audio.Acoustics {
         // Free point a probe was entered from, on its own side of whatever it is embedded in.
         private Vector3[] entryPoint;
         private bool[] hasEntry;
+        // Up to MaxBlockers colliders per connection, oldest first, hit by any ray of it that failed.
+        private int[] blockers;
+        private byte[] blockerCount;
+        // Time a connection was last resolved, for MarkInUse.
+        private float[] lastTraced;
         private AcousticRay[] rays = Array.Empty<AcousticRay>();
         private BatchEdge[] entries = Array.Empty<BatchEdge>();
         private readonly BatchRoot[] roots = new BatchRoot[Corners];
@@ -124,6 +135,7 @@ namespace HarryTools.Audio.Acoustics {
         public ProbeField(IAcousticGeometry _geometry, RayBudget _budget) {
             geometry = _geometry;
             budget = _budget;
+            watch = new ColliderWatch(_geometry);
         }
 
         /// <summary> Applies the profile. Drops the batch in flight and empties the graph and the search. </summary>
@@ -150,6 +162,11 @@ namespace HarryTools.Audio.Acoustics {
             pendingSolid = new int[_keys];
             entryPoint = new Vector3[graph.Capacity];
             hasEntry = new bool[graph.Capacity];
+            blockers = new int[_keys * MaxBlockers];
+            blockerCount = new byte[_keys];
+            lastTraced = new float[_keys];
+            for (int i = 0; i < _keys; i++) lastTraced[i] = float.NegativeInfinity;
+            watch.Clear();
             rays = new AcousticRay[Mathf.Max(1, pathRays)];
             entries = new BatchEdge[pathRays / RaysPerLine + 1];
 
@@ -173,6 +190,7 @@ namespace HarryTools.Audio.Acoustics {
 
             listener = _listener;
             ReadBatch();
+            WatchColliders();
             AdvanceSearch(_owner, _deadline);
             SweepRegion();
             SeedCorners();
@@ -189,12 +207,14 @@ namespace HarryTools.Audio.Acoustics {
                 Mathf.FloorToInt(_position.z / spacing - 0.5f));
         }
 
-        /// <summary> Asks for a connection used by a path to be traced again. </summary>
+        /// <summary> Asks for a connection used by a path to be traced again, unless it was checked less than 0.25 s ago. Its state stays until the new result. </summary>
         public void MarkInUse(int _probe, int _direction) {
             if (disposed || graph == null || _direction < 0 || _direction >= ProbeGraph.DirectionCount) return;
             int _neighbor = graph.Neighbor(_probe, _direction);
             if (_neighbor < 0) return;
-            Enqueue(RingInUse, CanonicalKey(_probe, _direction, _neighbor));
+            int _key = CanonicalKey(_probe, _direction, _neighbor);
+            if (Time.unscaledTime - lastTraced[_key] < InUsePeriod) return;
+            Enqueue(RingInUse, _key);
         }
 
         // ==================== READING ===================
@@ -220,6 +240,9 @@ namespace HarryTools.Audio.Acoustics {
                 Forget(_entry.Key);
                 return;
             }
+
+            if (_forwardHit) AddBlocker(_entry.Key, _forwardCollider);
+            if (_backwardHit) AddBlocker(_entry.Key, _backwardCollider);
 
             if (_entry.Stage != StageLine) {
                 ResolveEntryCheck(_entry, _probe, _direction, !_forwardHit && !_backwardHit);
@@ -262,6 +285,7 @@ namespace HarryTools.Audio.Acoustics {
         private void FinishEdge(in BatchEdge _entry, int _probe, int _direction, bool _open) {
             int _farCollider = pendingSolid[_entry.Key];
             Forget(_entry.Key);
+            lastTraced[_entry.Key] = Time.unscaledTime;
             if (_open) MarkOpen(_probe, _direction, _farCollider, _entry.Line);
             else MarkBlocked(_probe, _direction);
         }
@@ -293,11 +317,11 @@ namespace HarryTools.Audio.Acoustics {
         // Rays do not hit a surface from behind, so the end whose outgoing ray saw nothing is the one inside the collider the other ray hit.
         private void NoteEndInsideSolid(int _key, int _probe, int _direction, bool _farEnd, int _collider) {
             if (!_farEnd) {
-                solidCollider[_probe] = _collider;
+                SetSolid(_probe, _collider);
                 return;
             }
             int _neighbor = graph.Neighbor(_probe, _direction);
-            if (_neighbor >= 0) solidCollider[_neighbor] = _collider;
+            if (_neighbor >= 0) SetSolid(_neighbor, _collider);
             else pendingSolid[_key] = _collider;
         }
 
@@ -337,7 +361,7 @@ namespace HarryTools.Audio.Acoustics {
                 if (_neighbor < 0) return;
             }
 
-            if (_farCollider != 0) solidCollider[_neighbor] = _farCollider;
+            if (_farCollider != 0) SetSolid(_neighbor, _farCollider);
             if (_line > 0) {
                 // Kept on free probes too: one can turn out to be embedded later, when a center line first hits it from one side.
                 LineEnds(_probe, _direction, _line, out Vector3 _from, out Vector3 _to);
@@ -361,7 +385,13 @@ namespace HarryTools.Audio.Acoustics {
 
         // Without this the next probe along a surface would count as free and its center lines would be trusted, letting the flood into the solid.
         private void InheritSolid(int _from, int _to) {
-            if (solidCollider[_from] != 0 && solidCollider[_to] == 0 && geometry.ContainsPoint(solidCollider[_from], PositionOf(_to))) solidCollider[_to] = solidCollider[_from];
+            if (solidCollider[_from] != 0 && solidCollider[_to] == 0 && geometry.ContainsPoint(solidCollider[_from], PositionOf(_to))) SetSolid(_to, solidCollider[_from]);
+        }
+
+        // The collider is watched so a probe embedded in a wall is freed when the wall moves or goes away.
+        private void SetSolid(int _probe, int _collider) {
+            solidCollider[_probe] = _collider;
+            watch.Add(_collider);
         }
 
         // ==================== SEARCH ===================
@@ -436,6 +466,7 @@ namespace HarryTools.Audio.Acoustics {
                 nextLine[_first + d] = 0;
                 nextStage[_first + d] = 0;
                 pendingSolid[_first + d] = 0;
+                blockerCount[_first + d] = 0;
             }
         }
 
@@ -553,8 +584,87 @@ namespace HarryTools.Audio.Acoustics {
             int _direction = _key % ProbeGraph.DirectionCount;
             if (!graph.IsAlive(_probe)) return false;
             int _neighbor = graph.Neighbor(_probe, _direction);
-            if (_ring != RingFlood) return _neighbor >= 0;
-            return _neighbor >= 0 ? graph.GetEdge(_probe, _direction) == EdgeState.Unknown : WantsAbsent(_probe, _direction);
+            if (_neighbor >= 0) return _ring != RingFlood || graph.GetEdge(_probe, _direction) == EdgeState.Unknown;
+            switch (_ring) {
+                case RingFlood: return WantsAbsent(_probe, _direction);
+                // Only the flood of a reached probe opens connections towards cells without probes.
+                case RingInvalidated: return reached[_probe] && WantsAbsent(_probe, _direction);
+                default: return false;
+            }
+        }
+
+        // ==================== CHANGES ===================
+        private void AddBlocker(int _key, int _collider) {
+            if (_collider == 0) return;
+            int _first = _key * MaxBlockers;
+            int _count = blockerCount[_key];
+            for (int i = 0; i < _count; i++) {
+                if (blockers[_first + i] == _collider) return;
+            }
+            if (_count == MaxBlockers) {
+                for (int i = 1; i < MaxBlockers; i++) blockers[_first + i - 1] = blockers[_first + i];
+                _count--;
+            }
+            blockers[_first + _count] = _collider;
+            blockerCount[_key] = (byte)(_count + 1);
+            watch.Add(_collider);
+        }
+
+        private void WatchColliders() {
+            int _changed = watch.Tick(Time.unscaledDeltaTime, WatchPeriod);
+            if (_changed == 0) return;
+            ReadOnlySpan<int> _ids = watch.Changed;
+
+            for (int _key = 0; _key < blockerCount.Length; _key++) {
+                int _first = _key * MaxBlockers;
+                for (int i = 0; i < blockerCount[_key]; i++) {
+                    if (_ids.IndexOf(blockers[_first + i]) < 0) continue;
+                    Invalidate(_key);
+                    break;
+                }
+            }
+
+            // A freed probe finds out what it is embedded in again when its connections are traced.
+            for (int _probe = 0; _probe < graph.Capacity; _probe++) {
+                if (solidCollider[_probe] == 0 || _ids.IndexOf(solidCollider[_probe]) < 0) continue;
+                solidCollider[_probe] = 0;
+                hasEntry[_probe] = false;
+                if (!graph.IsAlive(_probe)) continue;
+                for (int d = 0; d < ProbeGraph.DirectionCount; d++) {
+                    int _neighbor = graph.Neighbor(_probe, d);
+                    if (_neighbor >= 0) Invalidate(CanonicalKey(_probe, d, _neighbor));
+                    else if ((closedToAbsent[_probe] & (1 << d)) != 0) Invalidate(KeyOf(_probe, d));
+                }
+            }
+        }
+
+        // Back to Unknown, with what was learnt from the old geometry forgotten, and queued to be traced again.
+        private void Invalidate(int _key) {
+            int _probe = _key / ProbeGraph.DirectionCount;
+            int _direction = _key % ProbeGraph.DirectionCount;
+            blockerCount[_key] = 0;
+            pendingSolid[_key] = 0;
+            nextLine[_key] = 0;
+            nextStage[_key] = 0;
+            if (!graph.IsAlive(_probe)) return;
+
+            closedToAbsent[_probe] &= (ushort)~(1 << _direction);
+            int _neighbor = graph.Neighbor(_probe, _direction);
+            if (_neighbor >= 0) {
+                if (graph.GetEdge(_probe, _direction) != EdgeState.Unknown) {
+                    graph.SetEdge(_probe, _direction, EdgeState.Unknown);
+                    edgesChanged = true;
+                }
+                // Blockers found while the far probe was absent sit under the key of the side that traced them.
+                _key = CanonicalKey(_probe, _direction, _neighbor);
+                blockerCount[_key] = 0;
+                pendingSolid[_key] = 0;
+                nextLine[_key] = 0;
+                nextStage[_key] = 0;
+            }
+            if (queued[_key]) return;
+            queued[_key] = true;
+            rings[RingInvalidated].Push(_key);
         }
 
         // ==================== QUEUES ===================
@@ -564,6 +674,7 @@ namespace HarryTools.Audio.Acoustics {
             nextLine[_key] = 0;
             nextStage[_key] = 0;
             pendingSolid[_key] = 0;
+            blockerCount[_key] = 0;
             rings[_ring].Push(_key);
         }
 
