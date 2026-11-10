@@ -30,6 +30,8 @@ namespace HarryTools.SceneRefs
             id = _id;
         }
 
+        private void OnDestroy() => SceneRefs.Unregister(this);
+
         #region Hide Flags
 
         private void Reset() => Hide();
