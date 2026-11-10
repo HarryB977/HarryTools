@@ -6,26 +6,35 @@ namespace HarryTools.Audio.Acoustics {
     /// <summary>
     /// Watches colliders for a change in bounds, a disable or a destroy, spreading the checks so each one is seen once per period.
     /// A collider found changed stays watched from its new state, so a later move, or a return after it went away, is reported again.
+    /// One still absent a whole pass after it was reported is dropped; whoever hits it again adds it again.
     /// </summary>
     internal sealed class ColliderWatch {
         // ==================== VARIABLES ===================
         private const int InitialCapacity = 64;
         private const float MoveToleranceSqr = 1e-6f;
+        // Passes a collider survives a prune after it was added or changed, while whoever refers to it traces it again.
+        private const int GracePasses = 2;
 
         private readonly IAcousticGeometry geometry;
         private readonly Dictionary<int, int> slots = new Dictionary<int, int>(InitialCapacity);
         private int[] ids = new int[InitialCapacity];
         private Bounds[] bounds = new Bounds[InitialCapacity];
         private bool[] present = new bool[InitialCapacity];
+        private bool[] marked = new bool[InitialCapacity];
+        private int[] touchedPass = new int[InitialCapacity];
         private int[] changed = new int[InitialCapacity];
         private int count;
         private int changedCount;
 
-        // Position of the current pass: colliders before the cursor were already checked in it.
+        // Colliders before the cursor were already checked in the current pass.
         private int cursor;
         private float elapsed;
+        private int pass;
 
         // ==================== PROPERTIES ===================
+        /// <summary> Colliders being watched. </summary>
+        public int Count => count;
+
         /// <summary> Ids found changed by the last <see cref="Tick"/>. </summary>
         public ReadOnlySpan<int> Changed => new ReadOnlySpan<int>(changed, 0, changedCount);
 
@@ -50,6 +59,8 @@ namespace HarryTools.Audio.Acoustics {
 
             ids[count] = _colliderId;
             present[count] = geometry.TryGetColliderBounds(_colliderId, out bounds[count]);
+            marked[count] = false;
+            touchedPass[count] = pass;
             slots.Add(_colliderId, count);
             count++;
         }
@@ -64,35 +75,104 @@ namespace HarryTools.Audio.Acoustics {
             }
 
             elapsed += Mathf.Max(0f, _deltaTime);
-            int _due = _period <= 0f || elapsed >= _period ? count : Mathf.CeilToInt(count * elapsed / _period);
-
-            int _end = Mathf.Min(_due, count);
-            for (; cursor < _end; cursor++) {
-                if (!Refresh(cursor)) continue;
-                if (changedCount == changed.Length) Array.Resize(ref changed, changed.Length * 2);
-                changed[changedCount++] = ids[cursor];
+            bool _wholePass = _period <= 0f || elapsed >= _period;
+            while (cursor < (_wholePass ? count : Mathf.Min(count, Mathf.CeilToInt(count * elapsed / _period)))) {
+                switch (Refresh(cursor)) {
+                    case Check.Changed:
+                        if (changedCount == changed.Length) Array.Resize(ref changed, changed.Length * 2);
+                        changed[changedCount++] = ids[cursor];
+                        cursor++;
+                        break;
+                    case Check.Gone:
+                        // The last collider moves into this slot and is checked next, still within this pass.
+                        RemoveAt(cursor);
+                        break;
+                    default:
+                        cursor++;
+                        break;
+                }
             }
 
             if (cursor >= count) {
                 cursor = 0;
+                pass++;
                 elapsed = _period > 0f ? Mathf.Clamp(elapsed - _period, 0f, _period) : 0f;
             }
             return changedCount;
         }
 
+        /// <summary> Starts a prune: no collider is referenced until <see cref="Mark"/> says so. </summary>
+        public void ClearMarks() {
+            for (int i = 0; i < count; i++) marked[i] = false;
+        }
+
+        /// <summary> Keeps a watched collider through the next <see cref="DropUnmarked"/>. </summary>
+        public void Mark(int _colliderId) {
+            if (_colliderId != 0 && slots.TryGetValue(_colliderId, out int _slot)) marked[_slot] = true;
+        }
+
+        /// <summary> Drops colliders nobody marked, except those added or changed in the last passes. Returns how many were dropped. </summary>
+        public int DropUnmarked() {
+            int _dropped = 0;
+            int i = 0;
+            while (i < count) {
+                if (marked[i] || pass - touchedPass[i] <= GracePasses) {
+                    i++;
+                    continue;
+                }
+                // Another collider moves into this slot, so it is looked at again.
+                RemoveAt(i);
+                _dropped++;
+            }
+            return _dropped;
+        }
+
         // ==================== HELPERS ===================
+        private enum Check {
+            Same,
+            Changed,
+            Gone
+        }
+
         // Compares the collider with its snapshot and takes the new state as the snapshot when it changed.
-        private bool Refresh(int _slot) {
+        private Check Refresh(int _slot) {
             bool _present = geometry.TryGetColliderBounds(ids[_slot], out Bounds _bounds);
+            if (!_present && !present[_slot]) return Check.Gone;
+
             bool _changed = _present != present[_slot];
-            if (!_changed && _present) {
+            if (!_changed) {
                 Bounds _old = bounds[_slot];
                 _changed = (_bounds.center - _old.center).sqrMagnitude > MoveToleranceSqr || (_bounds.extents - _old.extents).sqrMagnitude > MoveToleranceSqr;
             }
-            if (!_changed) return false;
+            if (!_changed) return Check.Same;
             present[_slot] = _present;
             bounds[_slot] = _bounds;
-            return true;
+            touchedPass[_slot] = pass;
+            return Check.Changed;
+        }
+
+        // Keeps the slots before the cursor checked and those from it on unchecked, so nothing is skipped or checked twice in a pass.
+        private void RemoveAt(int _slot) {
+            slots.Remove(ids[_slot]);
+            int _last = count - 1;
+            if (_slot < cursor) {
+                cursor--;
+                Move(cursor, _slot);
+                Move(_last, cursor);
+            } else {
+                Move(_last, _slot);
+            }
+            count = _last;
+        }
+
+        private void Move(int _from, int _to) {
+            if (_from == _to) return;
+            ids[_to] = ids[_from];
+            bounds[_to] = bounds[_from];
+            present[_to] = present[_from];
+            marked[_to] = marked[_from];
+            touchedPass[_to] = touchedPass[_from];
+            slots[ids[_to]] = _to;
         }
 
         private void Grow() {
@@ -100,6 +180,8 @@ namespace HarryTools.Audio.Acoustics {
             Array.Resize(ref ids, _size);
             Array.Resize(ref bounds, _size);
             Array.Resize(ref present, _size);
+            Array.Resize(ref marked, _size);
+            Array.Resize(ref touchedPass, _size);
         }
     }
 }

@@ -133,6 +133,8 @@ namespace HarryTools.Audio.Acoustics {
         public ProbeGraph Graph => graph;
         public ProbeSearch Search => search;
         public float Spacing => spacing;
+        /// <summary> Colliders watched for changes: the blockers of live connections and the solids live probes sit in, plus recent changes. </summary>
+        public int WatchedColliders => watch.Count;
 
         // ==================== INITIALIZATION ===================
         public ProbeField(IAcousticGeometry _geometry, RayBudget _budget) {
@@ -444,6 +446,7 @@ namespace HarryTools.Audio.Acoustics {
             for (int i = 0; i < cursorSteps; i++) {
                 int _probe = cursor;
                 cursor = (cursor + 1) % graph.Capacity;
+                if (cursor == 0) PruneWatch();
                 if (!graph.IsAlive(_probe)) continue;
                 if (!InRegion(graph.CoordOf(_probe))) RemoveProbe(_probe);
                 else if (reached[_probe]) Expand(_probe);
@@ -654,6 +657,21 @@ namespace HarryTools.Audio.Acoustics {
                     else if ((closedToAbsent[_probe] & (1 << d)) != 0) Invalidate(KeyOf(_probe, d));
                 }
             }
+        }
+
+        // Once per sweep of the region, so the watch costs what the live probes refer to and not every collider ever hit.
+        private void PruneWatch() {
+            watch.ClearMarks();
+            for (int _probe = 0; _probe < graph.Capacity; _probe++) {
+                if (!graph.IsAlive(_probe)) continue;
+                watch.Mark(solidCollider[_probe]);
+                int _firstKey = _probe * ProbeGraph.DirectionCount;
+                for (int d = 0; d < ProbeGraph.DirectionCount; d++) {
+                    int _key = _firstKey + d;
+                    for (int i = 0; i < blockerCount[_key]; i++) watch.Mark(blockers[_key * MaxBlockers + i]);
+                }
+            }
+            watch.DropUnmarked();
         }
 
         // Back to Unknown, with what was learnt from the old geometry forgotten, and queued to be traced again.
