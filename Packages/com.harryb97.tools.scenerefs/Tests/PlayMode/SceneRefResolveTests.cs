@@ -72,6 +72,20 @@ namespace HarryTools.SceneRefs.Tests
         }
 
         [Test]
+        public void ByGuid_ComponentIndex_CountsExactTypeOnly()
+        {
+            Scene _scene = SceneRefsTestUtil.NewScene("ResExact", scenes);
+            GameObject _go = SceneRefsTestUtil.NewObject(_scene, "B", "g1", "Behaviours");
+            // A subclass placed before the target must not shift its index.
+            _go.AddComponent<DerivedTestBehaviour>();
+            BaseTestBehaviour _base = _go.AddComponent<BaseTestBehaviour>();
+            SceneRefs.ScanScene(_scene);
+
+            string _type = $"{typeof(BaseTestBehaviour).FullName}, {typeof(BaseTestBehaviour).Assembly.GetName().Name}";
+            Assert.AreSame(_base, MakeRef<BaseTestBehaviour>("g1", _type, 0, "Behaviours in ResExact").Value);
+        }
+
+        [Test]
         public void ByGuid_ComponentMissing_ReturnsNullAndWarns()
         {
             Scene _scene = SceneRefsTestUtil.NewScene("ResD", scenes);

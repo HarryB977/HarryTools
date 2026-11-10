@@ -103,8 +103,18 @@ namespace HarryTools.SceneRefs
             }
             _gameObject.GetComponents(_type, componentBuffer);
 
-            Component _component = componentIndex >= 0 && componentIndex < componentBuffer.Count ? componentBuffer[componentIndex] : null;
-            int _count = componentBuffer.Count;
+            // The editor stores the index among components of the exact concrete type, so subclasses are not counted.
+            // Without a stored type (hand-built references) every component assignable to T counts.
+            bool _exact = !string.IsNullOrEmpty(componentType);
+            Component _component = null;
+            int _count = 0;
+            for (int _i = 0; _i < componentBuffer.Count; _i++)
+            {
+                Component _candidate = componentBuffer[_i];
+                if (_candidate == null || (_exact && _candidate.GetType() != _type)) continue;
+                if (_count == componentIndex) _component = _candidate;
+                _count++;
+            }
             componentBuffer.Clear();
 
             if (_component == null || !_fallbackType.IsInstanceOfType(_component))
