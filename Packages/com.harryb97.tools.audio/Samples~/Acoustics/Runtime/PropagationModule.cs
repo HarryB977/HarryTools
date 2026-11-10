@@ -19,10 +19,15 @@ namespace HarryTools.Audio.Acoustics {
             public int PickedStamp;
             // Pathing: corner probe the path starts from, open fraction of the last read, last valid path and the smoothed perceived position.
             public int SourceProbe;
+            public int SourceGeneration;
             public float LastOpen;
             public Vector3 Anchor;
+            public int AnchorProbe;
+            public int AnchorGeneration;
             public float Length;
             public bool Valid;
+            // When rays last confirmed the path. A path kept without rays is dropped once it is older than MaxPathAge.
+            public float PathTime;
             public float Share;
             public Vector3 Perceived;
             public bool HasPerceived;
@@ -75,6 +80,9 @@ namespace HarryTools.Audio.Acoustics {
         private const int MaxWalkSteps = 256;
         private const float MinShare = 0.01f;
         private const float PerceivedSnapSqr = 0.05f * 0.05f;
+        // The time constant the core smooths volume and filters with.
+        private const float CoreSmoothingTime = 0.1f;
+        private const float MaxPathAge = 0.5f;
         private static readonly float DefaultRadius = new AcousticSourceExtension().Radius;
         private static readonly ProfilerMarker Marker = new ProfilerMarker("Acoustics.Propagation");
 
@@ -137,6 +145,7 @@ namespace HarryTools.Audio.Acoustics {
                 slots[i].NextDue = 0f;
                 // Probe ids of the old graph mean nothing in the new one.
                 slots[i].SourceProbe = -1;
+                slots[i].AnchorProbe = -1;
                 slots[i].WalkCount = 0;
             }
 
@@ -263,7 +272,7 @@ namespace HarryTools.Audio.Acoustics {
                 if (slotOfQuery[i] >= 0) continue;
                 int _free = LeastRecentlySeen();
                 if (_free < debugVoices.Length) debugVoices[_free].Valid = false;
-                slots[_free] = new Slot { Handle = _queries[i].Handle, Result = AcousticResult.Neutral, SeenStamp = stamp, SourceProbe = -1, LastOpen = 1f };
+                slots[_free] = new Slot { Handle = _queries[i].Handle, Result = AcousticResult.Neutral, SeenStamp = stamp, SourceProbe = -1, AnchorProbe = -1, LastOpen = 1f };
                 slotOfQuery[i] = _free;
             }
         }
@@ -329,9 +338,11 @@ namespace HarryTools.Audio.Acoustics {
 
                 int _cornerCount = 0;
                 int _candidateCount = 0;
-                PathRays _path = WantsPath(slots[_slot], _query) ? CollectPathProbes(entryCount, _query.SourcePosition, out _cornerCount, out _candidateCount) : PathRays.None;
-                // Path rays go only when everything fits; otherwise the last valid path is kept.
+                PathRays _path = WantsPath(slots[_slot], _query) ? CollectPathProbes(entryCount, _query.SourcePosition, slots[_slot], out _cornerCount, out _candidateCount) : PathRays.None;
+                // Path rays go only when everything fits. A voice that is not first waits for the next frame, where it is the most overdue and goes first;
+                // only the first voice of a frame keeps its last valid path without them.
                 if (_path == PathRays.Traced && CenterRays + _sphereRays + _cornerCount + _candidateCount > _available) {
+                    if (entryCount > 0) break;
                     _path = PathRays.Kept;
                     _cornerCount = 0;
                     _candidateCount = 0;
@@ -412,8 +423,9 @@ namespace HarryTools.Audio.Acoustics {
         }
 
         // The corners of the source cell that the search reached, and the last probes of the walk from the best of them, which is where the path reaches the listener.
-        // Which corner the source sees is only known when the rays come back, so the walk here starts from the cheapest one.
-        private PathRays CollectPathProbes(int _entry, Vector3 _source, out int _cornerCount, out int _candidateCount) {
+        // Which corner the source sees is only known when the rays come back, so the walk here starts from the one it saw last time, or else from the cheapest one.
+        // The cheapest can be across the wall from a source near it, and a walk from there would give candidates that are not on the path read back.
+        private PathRays CollectPathProbes(int _entry, Vector3 _source, in Slot _slot, out int _cornerCount, out int _candidateCount) {
             int _first = _entry * PathProbesPerEntry;
             _cornerCount = 0;
             _candidateCount = 0;
@@ -435,7 +447,9 @@ namespace HarryTools.Audio.Acoustics {
             }
             if (_cornerCount == 0) return PathRays.NoProbes;
 
-            int _steps = Walk(_cheapest, false);
+            int _steps = -1;
+            if (IsCornerOf(_slot.SourceProbe, _slot.SourceGeneration, _base)) _steps = Walk(_slot.SourceProbe, false);
+            if (_steps <= 0) _steps = Walk(_cheapest, false);
             for (int i = Mathf.Max(0, _steps - Candidates); i < _steps; i++) {
                 int _probe = walk[i];
                 pathProbes[_first + Corners + _candidateCount] = _probe;
@@ -610,12 +624,14 @@ namespace HarryTools.Audio.Acoustics {
 
         // ==================== PATHING ===================
         // Direct and path energies summed per band, heard from between the source and the anchor in proportion to the path's share. The floor applies last.
-        // The energies are kept so WriteResults can compensate for where the voice is really heard from while the perceived position moves.
+        // The energies are kept so WriteResults can follow the listener on every tick.
         private AcousticResult Mix(in BatchEntry _entry, ReadOnlySpan<AcousticHit> _hits, ReadOnlySpan<int> _counts, Vector3 _gains, float _open) {
             ref Slot _slot = ref slots[_entry.Slot];
             _slot.LastOpen = _open;
             if (_entry.Path == PathRays.Traced) ReadPath(_entry, _hits, _counts, ref _slot);
-            else if (_entry.Path != PathRays.Kept || _open >= profile.PathMaxOpen) _slot.Valid = false;
+            else if (_entry.Path != PathRays.Kept || _open >= profile.PathMaxOpen || !KeptWalkHolds(_entry.Slot, ref _slot)) _slot.Valid = false;
+            // Rays starved for too long: the path may cross a door that closed since, so the voice goes back to direct.
+            if (_slot.Valid && Time.unscaledTime - _slot.PathTime > MaxPathAge) _slot.Valid = false;
 
             _slot.Share = 0f;
             _slot.HasEnergy = false;
@@ -681,18 +697,29 @@ namespace HarryTools.Audio.Acoustics {
 
             int _anchor = walk[_steps - 1];
             float _anchorDistance = field.Search.DistanceOf(_anchor);
+            bool _seen = false;
             for (int i = 0; i < _entry.CandidateCount; i++) {
                 int _probe = pathProbes[_first + Corners + i];
                 if (_counts[_candidateRay + i] > 0 || !IsSame(_probe, pathGenerations[_first + Corners + i]) || !IsOnWalk(_probe, _steps)) continue;
+                _seen = true;
                 float _distance = field.Search.DistanceOf(_probe);
                 if (_distance <= _anchorDistance) continue;
                 _anchor = _probe;
                 _anchorDistance = _distance;
             }
+            // The candidates came from another walk, or the listener saw none of them: the last anchor, if still on this walk, beats the root.
+            if (!_seen && _slot.AnchorProbe >= 0 && IsSame(_slot.AnchorProbe, _slot.AnchorGeneration) && IsOnWalk(_slot.AnchorProbe, _steps)) {
+                _anchor = _slot.AnchorProbe;
+                _anchorDistance = field.Search.DistanceOf(_anchor);
+            }
 
             Vector3 _sourcePosition = field.PositionOf(_source);
             Vector3 _anchorPosition = field.PositionOf(_anchor);
             _slot.SourceProbe = _source;
+            _slot.SourceGeneration = field.Graph.GenerationOf(_source);
+            _slot.AnchorProbe = _anchor;
+            _slot.AnchorGeneration = field.Graph.GenerationOf(_anchor);
+            _slot.PathTime = Time.unscaledTime;
             _slot.Anchor = _anchorPosition;
             _slot.Length = Vector3.Distance(_entry.Source, _sourcePosition) + field.Search.DistanceOf(_source) - _anchorDistance + Vector3.Distance(_anchorPosition, _entry.Listener);
             _slot.Valid = true;
@@ -755,6 +782,31 @@ namespace HarryTools.Audio.Acoustics {
             }
         }
 
+        // A path kept without rays is checked against the graph instead: every probe of its last walk still alive and no connection on it blocked.
+        // Its connections are asked to be traced again, so a door that closes on it is noticed even while the voice gets no rays.
+        private bool KeptWalkHolds(int _slotIndex, ref Slot _slot) {
+            if (field == null || !_slot.Valid || _slot.WalkCount == 0) return false;
+            int _first = _slotIndex * (MaxWalkSteps + 1);
+            for (int i = 0; i < _slot.WalkCount; i++) {
+                int _probe = lastWalks[_first + i];
+                if (!field.Graph.IsAlive(_probe) || field.Graph.GenerationOf(_probe) != lastWalkGenerations[_first + i]) return false;
+                if (i + 1 == _slot.WalkCount) break;
+
+                int _next = lastWalks[_first + i + 1];
+                if (!field.Graph.IsAlive(_next) || field.Graph.GenerationOf(_next) != lastWalkGenerations[_first + i + 1]) return false;
+                int _direction = DirectionTo(_probe, _next);
+                if (_direction < 0) return false;
+                if (field.Graph.GetEdge(_probe, _direction) == EdgeState.Blocked) {
+                    MarkAround(_probe);
+                    MarkAround(_next);
+                    _slot.WalkCount = 0;
+                    return false;
+                }
+                field.MarkInUse(_probe, _direction);
+            }
+            return true;
+        }
+
         private void KeepWalk(int _slotIndex, ref Slot _slot, int _steps) {
             int _first = _slotIndex * (MaxWalkSteps + 1);
             for (int i = 0; i < _steps; i++) {
@@ -787,6 +839,12 @@ namespace HarryTools.Audio.Acoustics {
 
         private bool IsSame(int _probe, int _generation) => HasDistance(_probe) && field.Graph.GenerationOf(_probe) == _generation;
 
+        private bool IsCornerOf(int _probe, int _generation, Vector3Int _base) {
+            if (_probe < 0 || !IsSame(_probe, _generation)) return false;
+            Vector3Int _offset = field.Graph.CoordOf(_probe) - _base;
+            return _offset.x >= 0 && _offset.x <= 1 && _offset.y >= 0 && _offset.y <= 1 && _offset.z >= 0 && _offset.z <= 1;
+        }
+
         private static Vector3Int CornerOffset(int _index) {
             return new Vector3Int(_index & 1, (_index >> 1) & 1, (_index >> 2) & 1);
         }
@@ -797,13 +855,15 @@ namespace HarryTools.Audio.Acoustics {
             _slot.Share = 0f;
             _slot.PathEnergy = Vector3.zero;
             _slot.SourceProbe = -1;
+            _slot.AnchorProbe = -1;
             _slot.WalkCount = 0;
         }
 
         // ==================== RESULTS ===================
-        // The core applies the perceived position as is, so it moves here at PerceivedSpeed: towards the doorway when the path takes over, back to the source along the same way.
+        // The core applies the perceived position as is and smooths the volume, so the position is smoothed here with the same filter and the volume is the one for the target.
+        // Both then reach the core's output in step, and what is heard moves from one level to the other without a bump: towards the doorway when the path takes over, back to the source along the same way.
         private void WriteResults(ReadOnlySpan<AcousticQuery> _queries, Span<AcousticResult> _results) {
-            float _step = Mathf.Max(0f, profile.PerceivedSpeed) * Time.unscaledDeltaTime;
+            float _alpha = 1f - Mathf.Exp(-Mathf.Max(0f, Time.unscaledDeltaTime) / CoreSmoothingTime);
             for (int i = 0; i < _queries.Length; i++) {
                 ref Slot _slot = ref slots[slotOfQuery[i]];
                 AcousticResult _result = _slot.Result;
@@ -811,12 +871,11 @@ namespace HarryTools.Audio.Acoustics {
                     Vector3 _source = _queries[i].SourcePosition;
                     if (!_slot.HasPerceived) _slot.Perceived = _source;
                     Vector3 _target = _slot.Share > 0f ? Vector3.Lerp(_source, _slot.Anchor, _slot.Share) : _source;
-                    _slot.Perceived = Vector3.MoveTowards(_slot.Perceived, _target, _step);
+                    _slot.Perceived = Vector3.Lerp(_slot.Perceived, _target, _alpha);
                     _slot.HasPerceived = _slot.Share >= MinShare || (_slot.Perceived - _source).sqrMagnitude >= PerceivedSnapSqr;
                     AudioAsset _asset = _queries[i].Asset;
                     if (_slot.HasEnergy && _asset != null && (_slot.HasPerceived || _slot.Share > 0f)) {
-                        Vector3 _heard = _slot.HasPerceived ? _slot.Perceived : _source;
-                        _result = MixedResult(_slot, _asset.GetSpatial().GainAt(Vector3.Distance(_heard, _queries[i].ListenerPosition)));
+                        _result = MixedResult(_slot, _asset.GetSpatial().GainAt(Vector3.Distance(_target, _queries[i].ListenerPosition)));
                     }
                     _result.HasPerceivedPosition = _slot.HasPerceived;
                     _result.PerceivedPosition = _slot.HasPerceived ? _slot.Perceived : Vector3.zero;

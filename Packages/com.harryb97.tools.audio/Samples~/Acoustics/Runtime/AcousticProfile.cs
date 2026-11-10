@@ -42,6 +42,7 @@ namespace HarryTools.Audio.Acoustics {
         public float MainThreadBudgetMs = 0.5f;
 
         [Tooltip("Longest wall thickness in meters counted for transmission. Stops one mesh that forms several walls from measuring everything between them.")]
+        [Min(0.01f)]
         public float MaxWallThickness = 0.6f;
 
         [Header("Geometry")]
@@ -97,8 +98,6 @@ namespace HarryTools.Audio.Acoustics {
         public float PathMidDbPerMeter = 0.03f;
         [Tooltip("High band loss per meter of detour, in dB.")]
         public float PathHighDbPerMeter = 0.12f;
-        [Tooltip("Meters per second the perceived position may move.")]
-        public float PerceivedSpeed = 30f;
 
         [Header("Platforms")]
         [Tooltip("Profiles that replace this one on specific platforms.")]
