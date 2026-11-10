@@ -109,6 +109,22 @@ namespace HarryTools.SceneRefs.Tests
             LogAssert.Expect(LogType.Warning, SceneRefsRegex);
             Assert.IsNull(_ref.Value);
             Assert.IsNull(_ref.Value);
+            LogAssert.NoUnexpectedReceived();
+        }
+
+        [Test]
+        public void UnresolvableComponentType_ReturnsNullAndWarns()
+        {
+            Scene _scene = SceneRefsTestUtil.NewScene("ResG", scenes);
+            GameObject _go = SceneRefsTestUtil.NewObject(_scene, "S", "g1", "Speaker");
+            _go.AddComponent<AudioSource>();
+            SceneRefs.ScanScene(_scene);
+            SceneRef<Component> _ref = MakeRef<Component>("g1", "Nope.Missing, NoAssembly", 0, "Speaker in ResG");
+
+            LogAssert.Expect(LogType.Warning, SceneRefsRegex);
+            Assert.IsNull(_ref.Value);
+            Assert.IsNull(_ref.Value);
+            LogAssert.NoUnexpectedReceived();
         }
 
         [Test]

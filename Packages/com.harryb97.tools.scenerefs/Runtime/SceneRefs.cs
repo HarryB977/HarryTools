@@ -138,6 +138,14 @@ namespace HarryTools.SceneRefs
             byId[_id] = _sceneId;
         }
 
+        /// <summary>Registers only when no other live instance holds the guid (no error otherwise).</summary>
+        internal static void RegisterIfFree(SceneId _sceneId)
+        {
+            if (_sceneId == null || string.IsNullOrEmpty(_sceneId.Guid)) return;
+            if (byGuid.TryGetValue(_sceneId.Guid, out SceneId _owner) && _owner != null && _owner != _sceneId) return;
+            Register(_sceneId);
+        }
+
         internal static void Unregister(SceneId _sceneId)
         {
             if (ReferenceEquals(_sceneId, null)) return;

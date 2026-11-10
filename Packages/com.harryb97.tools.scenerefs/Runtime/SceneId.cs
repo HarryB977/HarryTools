@@ -30,6 +30,9 @@ namespace HarryTools.SceneRefs
             id = _id;
         }
 
+        // Registers objects that move to DontDestroyOnLoad in their own Awake before the scene scan. Clones of a registered object are skipped silently.
+        private void Awake() => SceneRefs.RegisterIfFree(this);
+
         private void OnDestroy() => SceneRefs.Unregister(this);
 
         #region Hide Flags

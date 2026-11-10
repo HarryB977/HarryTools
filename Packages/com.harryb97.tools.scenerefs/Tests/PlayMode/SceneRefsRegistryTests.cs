@@ -130,5 +130,42 @@ namespace HarryTools.SceneRefs.Tests
             Assert.AreEqual(_first, _winner.gameObject);
             Assert.IsTrue(SceneRefs.TryGetByGuid("dup2", out _));
         }
+
+        [UnityTest]
+        public IEnumerator AwakeDontDestroyOnLoad_IsFindable()
+        {
+            GameObject _go = new GameObject("Persistent");
+            _go.SetActive(false);
+            _go.AddComponent<SceneId>().Set("pg1", "Persistent01");
+            _go.AddComponent<DontDestroyOnAwake>();
+            _go.SetActive(true);
+            yield return null;
+
+            Assert.IsTrue(SceneRefs.TryGetByGuid("pg1", out SceneId _sceneId));
+            Assert.AreEqual(_go, _sceneId.gameObject);
+            Assert.AreEqual(_go, SceneRefs.Find("persistent01"));
+            Object.Destroy(_go);
+        }
+
+        [Test]
+        public void Instantiate_CloneNotRegistered_NoError()
+        {
+            Scene _scene = SceneRefsTestUtil.NewScene("RegH", scenes);
+            GameObject _original = SceneRefsTestUtil.NewObject(_scene, "A", "g1", "Orig");
+            SceneRefs.ScanScene(_scene);
+
+            GameObject _clone = Object.Instantiate(_original);
+
+            LogAssert.NoUnexpectedReceived();
+            Assert.IsTrue(SceneRefs.TryGetByGuid("g1", out SceneId _owner));
+            Assert.AreEqual(_original, _owner.gameObject);
+            Assert.AreEqual(_original, SceneRefs.Find("Orig"));
+            Object.DestroyImmediate(_clone);
+        }
+
+        private sealed class DontDestroyOnAwake : MonoBehaviour
+        {
+            private void Awake() => DontDestroyOnLoad(gameObject);
+        }
     }
 }

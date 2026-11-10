@@ -96,6 +96,11 @@ namespace HarryTools.SceneRefs
         private Component FindComponent(GameObject _gameObject, Type _fallbackType)
         {
             Type _type = ResolveComponentType(_fallbackType);
+            if (_type == null)
+            {
+                WarnOnce($"SceneRef '{guid}' has a component type that cannot be resolved ('{componentType}'){LastKnown()}.");
+                return null;
+            }
             _gameObject.GetComponents(_type, componentBuffer);
 
             Component _component = componentIndex >= 0 && componentIndex < componentBuffer.Count ? componentBuffer[componentIndex] : null;
@@ -116,7 +121,7 @@ namespace HarryTools.SceneRefs
             if (resolvedType != null && resolvedTypeName == componentType) return resolvedType;
 
             Type _type = Type.GetType(componentType);
-            if (_type == null || !typeof(Component).IsAssignableFrom(_type)) return _fallbackType;
+            if (_type == null || !typeof(Component).IsAssignableFrom(_type)) return null;
 
             resolvedType = _type;
             resolvedTypeName = componentType;
