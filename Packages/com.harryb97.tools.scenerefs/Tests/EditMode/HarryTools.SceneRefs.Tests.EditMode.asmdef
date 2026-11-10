@@ -3,6 +3,7 @@
     "rootNamespace": "HarryTools.SceneRefs.Tests",
     "references": [
         "GUID:a5ee42b199b28a848837ae87b94b1785",
+        "GUID:8848c4361d8b9144392f42f45c77e7d4",
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner"
     ],

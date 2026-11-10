@@ -1,0 +1,85 @@
+using System.Collections.Generic;
+using HarryTools.SceneRefs.Editor;
+using NUnit.Framework;
+using UnityEditor;
+using UnityEngine;
+using UnityEngine.SceneManagement;
+
+namespace HarryTools.SceneRefs.Tests
+{
+    public class SceneYamlReaderTests
+    {
+        // ==================== VARIABLES ====================
+
+        private const string ChildGuid = "0123456789abcdef0123456789abcdef";
+        private const string OtherGuid = "abcdefabcdefabcdefabcdefabcdef01";
+
+        private SceneIndexTestUtil util;
+
+        // ==================== SETUP ====================
+
+        [SetUp]
+        public void SetUp()
+        {
+            util = new SceneIndexTestUtil();
+            util.SetUp();
+        }
+
+        [TearDown]
+        public void TearDown() => util.TearDown();
+
+        // ==================== TESTS ====================
+
+        [Test]
+        public void FromFile_ReadsGuidIdNameAndPath_TypesNull()
+        {
+            Scene _scene = util.NewScene("Yaml");
+            GameObject _root = SceneIndexTestUtil.NewObject(_scene, "Root");
+            GameObject _child = SceneIndexTestUtil.NewObject(_scene, "Child", _root);
+            _child.AddComponent<Light>();
+            SceneIndexTestUtil.AddId(_child, ChildGuid, "Lamp");
+            SceneIndexTestUtil.AddId(SceneIndexTestUtil.NewObject(_scene, "Other: 'quoted'"), OtherGuid, "Other");
+            SceneIndexTestUtil.Save(_scene);
+            List<SceneIdIndexEntry> _exact = SceneIndexer.FromLoadedScene(_scene);
+
+            List<SceneIdIndexEntry> _light = SceneYamlReader.FromFile(SceneIndexTestUtil.ScenePath("Yaml"));
+
+            Assert.AreEqual(2, _light.Count);
+            _exact.Sort((_a, _b) => string.CompareOrdinal(_a.Guid, _b.Guid));
+            _light.Sort((_a, _b) => string.CompareOrdinal(_a.Guid, _b.Guid));
+            for (int _i = 0; _i < _exact.Count; _i++)
+            {
+                Assert.AreEqual(_exact[_i].Guid, _light[_i].Guid);
+                Assert.AreEqual(_exact[_i].Id, _light[_i].Id);
+                Assert.AreEqual(_exact[_i].SceneGuid, _light[_i].SceneGuid);
+                Assert.AreEqual(_exact[_i].SceneName, _light[_i].SceneName);
+                Assert.AreEqual(_exact[_i].HierarchyPath, _light[_i].HierarchyPath);
+                Assert.IsNull(_light[_i].ComponentTypes);
+            }
+        }
+
+        [Test]
+        public void FromFile_IgnoresOtherMonoBehaviours()
+        {
+            Scene _scene = util.NewScene("Mixed");
+            GameObject _go = SceneIndexTestUtil.NewObject(_scene, "Mixed");
+            _go.AddComponent<SceneIndexerTestBehaviour>();
+            SceneIndexTestUtil.NewObject(_scene, "OnlyOther").AddComponent<SceneIndexerTestBehaviour>();
+            SceneIndexTestUtil.AddId(_go, ChildGuid, "Mixed");
+            SceneIndexTestUtil.Save(_scene);
+
+            List<SceneIdIndexEntry> _light = SceneYamlReader.FromFile(SceneIndexTestUtil.ScenePath("Mixed"));
+
+            Assert.AreEqual(1, _light.Count);
+            Assert.AreEqual(ChildGuid, _light[0].Guid);
+            Assert.AreEqual("Mixed", _light[0].Id);
+            Assert.AreEqual("Mixed", _light[0].HierarchyPath);
+        }
+
+        [Test]
+        public void FromFile_MissingFile_ReturnsEmpty()
+        {
+            Assert.AreEqual(0, SceneYamlReader.FromFile(SceneIndexTestUtil.ScenePath("DoesNotExist")).Count);
+        }
+    }
+}
