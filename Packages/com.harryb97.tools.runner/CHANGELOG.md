@@ -1,5 +1,9 @@
 # Change Log:
 
+## 1.0.9
+
+    - Paquete obsoleto: es la última versión y no recibirá más cambios. Usa `com.harryb97.tools.gameloop`, que cubre lo mismo (Update, FixedUpdate y LateUpdate sin MonoBehaviour) con varios loops, pausa por loop e iteración segura al quitar suscriptores
+
 ## 1.0.8
 
     - `displayName` de `Runner` a `HarryTools Runner`, para distinguirlo en la carpeta Packages y en el Package Manager. Los samples nuevos se importan en `Assets/Samples/HarryTools Runner/`

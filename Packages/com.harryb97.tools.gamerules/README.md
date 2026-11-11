@@ -1,5 +1,7 @@
 # GameRules
 
+> **Obsoleto.** Esta es la última versión y no recibirá más cambios. Usa [Conditions](https://github.com/HarryB977/HarryTools/tree/main/Packages/com.harryb97.tools.conditions) (`openupm add com.harryb97.tools.conditions`), que cubre lo mismo y está mantenido.
+
 Reglas que se comprueban para permitir o denegar una acción del juego. Se eligen y configuran desde el inspector.
 
 ## Instalación

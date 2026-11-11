@@ -1,5 +1,7 @@
 # Runner
 
+> **Obsoleto.** Esta es la última versión y no recibirá más cambios. Usa [Game Loop](https://github.com/HarryB977/HarryTools/tree/main/Packages/com.harryb97.tools.gameloop) (`openupm add com.harryb97.tools.gameloop`), que cubre lo mismo y está mantenido.
+
 Un único `MonoBehaviour` que reparte `Update`, `LateUpdate` y `FixedUpdate` a clases normales, sin que tengan que ser `MonoBehaviour`.
 
 ## Instalación

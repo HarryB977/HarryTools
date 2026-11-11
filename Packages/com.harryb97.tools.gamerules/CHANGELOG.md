@@ -1,5 +1,9 @@
 # Change Log:
 
+## 1.0.6
+
+    - Paquete obsoleto: es la última versión y no recibirá más cambios. Usa `com.harryb97.tools.conditions`, que cubre lo mismo (condiciones `[SerializeReference]` combinables con Todas / Alguna / Not) y está mantenido
+
 ## 1.0.5
 
     - `displayName` de `GameRules` a `HarryTools GameRules`, para distinguirlo en la carpeta Packages y en el Package Manager. Los samples nuevos se importan en `Assets/Samples/HarryTools GameRules/`
