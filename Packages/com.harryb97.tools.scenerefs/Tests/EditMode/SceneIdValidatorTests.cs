@@ -140,6 +140,25 @@ namespace HarryTools.SceneRefs.Tests
         }
 
         [Test]
+        public void ValidationThatThrows_BlocksPlayAndBuild_AndLogs()
+        {
+            SceneIdValidator.projectValidationForTests = () => throw new System.InvalidOperationException("broken index");
+            try
+            {
+                LogAssert.Expect(LogType.Error, new Regex("broken index"));
+                Assert.IsTrue(PlayModeGuard.ShouldBlock(out List<SceneIdConflict> _conflicts));
+                Assert.IsEmpty(_conflicts);
+
+                LogAssert.Expect(LogType.Error, new Regex("broken index"));
+                Assert.Throws<BuildFailedException>(() => new BuildGuard().OnPreprocessBuild(null));
+            }
+            finally
+            {
+                SceneIdValidator.projectValidationForTests = null;
+            }
+        }
+
+        [Test]
         public void BuildGuard_Passes_WithoutConflicts()
         {
             Scene _a = util.NewScene("BuildOk");

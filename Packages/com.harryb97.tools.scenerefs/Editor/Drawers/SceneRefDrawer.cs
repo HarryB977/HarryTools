@@ -237,6 +237,8 @@ namespace HarryTools.SceneRefs.Editor
         private void HandleDrag(Rect _line, SerializedProperty _property)
         {
             Event _event = Event.current;
+            // A disabled or read-only inspector takes no drops.
+            if (!GUI.enabled) return;
             if ((_event.type != EventType.DragUpdated && _event.type != EventType.DragPerform) || !_line.Contains(_event.mousePosition)) return;
 
             Object _accepted = null;
@@ -262,7 +264,8 @@ namespace HarryTools.SceneRefs.Editor
             Object[] _targets = _property.serializedObject.targetObjects;
             string _path = _property.propertyPath;
             GenericMenu _menu = new GenericMenu();
-            _menu.AddItem(new GUIContent("Clear"), false, () => Edit(_targets, _path, SceneRefAssign.Clear));
+            if (GUI.enabled) _menu.AddItem(new GUIContent("Clear"), false, () => Edit(_targets, _path, SceneRefAssign.Clear));
+            else _menu.AddDisabledItem(new GUIContent("Clear"));
             _menu.ShowAsContext();
             _event.Use();
         }

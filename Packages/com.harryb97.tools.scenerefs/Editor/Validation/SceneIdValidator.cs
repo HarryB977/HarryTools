@@ -51,6 +51,12 @@ namespace HarryTools.SceneRefs.Editor
             return Validate(SceneIndexer.ProjectEntries(_index), _index != null ? _index.PrefabsWithIds : null);
         }
 
+        // Tests replace the project validation to simulate a failure.
+        internal static Func<List<SceneIdConflict>> projectValidationForTests;
+
+        /// <summary>The project validation the Play and build guards run.</summary>
+        internal static List<SceneIdConflict> ValidateProjectForGuard() => (projectValidationForTests ?? ValidateProject)();
+
         // ==================== PRIVATE ====================
 
         private static void Collect(Dictionary<string, SceneIdConflict> _map, List<SceneIdConflict> _order, SceneIdConflictKind _kind, string _key, SceneIdIndexEntry _entry)
