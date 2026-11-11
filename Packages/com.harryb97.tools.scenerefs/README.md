@@ -62,7 +62,7 @@ Arrastra un GameObject o un componente de una escena al campo.
 - Si el objeto no tenía ID, se le añade uno automáticamente, a partir de su nombre.
 - Si el campo pide `T` y arrastras un GameObject, toma su `T`. Si no la tiene, se rechaza. Los assets también se rechazan.
 - Entre dos escenas distintas Unity no deja guardar la referencia directa, así que solo se guarda el guid. Esto es lo que permite usarlo desde un ScriptableObject.
-- El botón `▾` abre un selector con buscador con todos los objetos del índice que tienen un `T`, agrupados por escena, **incluidas las escenas cerradas**.
+- El botón `▾` abre un selector con buscador con todos los objetos del índice que tienen un `T`, agrupados por escena, **incluidas las escenas cerradas**. De las escenas abiertas lista los objetos tal como están, también los que aún no se han guardado.
 - El campo muestra el objeto, el ID y la escena (`Manzana01 · Cocina`). Si el guid no está en el índice, se muestra en rojo con `missing`.
 
 ### La fila de ID en la cabecera
@@ -86,7 +86,7 @@ Al duplicar un objeto (Ctrl+D) o pegarlo, la copia recibe guid nuevo y el ID inc
 
 ### Índice y Rebuild
 
-El índice es un asset solo de editor (`Assets/HarryTools/SceneRefs/SceneIdIndex.asset`, se crea solo) con todos los IDs del proyecto: en qué escena están, su ruta en la jerarquía y los tipos de componente de cada objeto. Es **una caché**: todo su contenido se puede reconstruir a partir de las escenas, así que no hace falta editarlo a mano ni resolver sus conflictos de git.
+El índice es un asset solo de editor (`Assets/HarryTools/SceneRefs/SceneIdIndex.asset`, se crea solo) con todos los IDs del proyecto: en qué escena están, su ruta en la jerarquía y los tipos de componente de cada objeto. Es **una caché**: todo su contenido se puede reconstruir a partir de las escenas, así que no hace falta editarlo a mano ni resolver sus conflictos de git (ver [Equipos y git](#equipos-y-git)).
 
 - Se actualiza al guardar una escena. Las escenas que cambian fuera del editor (git pull, merge, duplicar el asset) se reindexan leyendo su YAML, sin abrirlas, siempre que estén guardadas como texto. Esa lectura ligera no conoce los tipos de componente; se completan en el siguiente guardado o Rebuild.
 - Su inspector es de solo lectura: tabla con buscador, conflictos en rojo, el botón **Rebuild Index** y un botón **Regenerate IDs in scene** por cada escena en conflicto.
@@ -100,7 +100,7 @@ Estos conflictos impiden entrar en Play y hacer una build (la build comprueba to
 - Dos objetos con el mismo ID visible (sin distinguir mayúsculas).
 - Un `SceneId` dentro de un prefab de Assets.
 
-Cada conflicto se informa en consola; al hacer clic en el mensaje se selecciona el objeto si su escena está abierta. Antes de entrar en Play se tienen en cuenta los cambios sin guardar de las escenas abiertas.
+Cada conflicto se informa en consola; al hacer clic en el mensaje se selecciona el objeto si su escena está abierta. Antes de entrar en Play se tienen en cuenta los cambios sin guardar de las escenas abiertas. Si la propia validación falla con un error, Play y la build también se bloquean y el error sale en consola.
 
 Los casos típicos son una escena duplicada desde la ventana Project o un merge de git que trae un guid repetido. No se elige automáticamente quién cambia: usa **Regenerate IDs in scene** en el inspector del índice para la escena que quieras corregir, o ⟳ en un objeto concreto. Regenerar una escena da a cada objeto un guid nuevo y un ID incrementado, y actualiza las `SceneRef` de esa escena que apuntaban a sus propios objetos.
 
@@ -110,8 +110,15 @@ Los prefabs de la carpeta Assets no tienen ID.
 
 - Al crear o guardar un prefab, la herramienta quita los `SceneId` del asset. Si lo creaste desde un objeto de escena con ID, la instancia que queda en la escena lo conserva (mismo guid y mismo ID) como componente añadido.
 - Una instancia de prefab en una escena puede tener su propio ID. Ese es el caso normal.
-- Una referencia entre objetos del mismo prefab se guarda solo como referencia directa, sin ID.
+- Una referencia entre objetos del mismo prefab se guarda solo como referencia directa, sin ID. Vale tanto en el asset como en cada instancia de la escena: una instancia cuyo componente apunta a un hijo suyo no recibe ID ni overrides.
 - Un prefab de Assets que apunte a un objeto de escena (solo posible desde el selector `▾`) guarda solo el guid.
+
+### Equipos y git
+
+- **Sube el índice al repositorio** (`Assets/HarryTools/SceneRefs/SceneIdIndex.asset` y su `.meta`). Sin él, un clon nuevo o la build en CI no conocen las escenas cerradas: la validación no las comprueba y el selector `▾` no las muestra hasta hacer un Rebuild.
+- El índice se reescribe al guardar escenas, así que es normal que tenga conflictos de merge. **Si hay un conflicto en el índice, o no se puede cargar, pulsa Rebuild Index** (en su inspector o en **Tools > HarryTools > SceneRefs > Rebuild Id Index**). No hace falta resolver el conflicto a mano: quédate con cualquiera de las dos versiones y reconstruye. Si el archivo no se puede cargar (por ejemplo, con marcadores de conflicto), se recrea vacío y un aviso en consola pide el Rebuild.
+- **Save Scene As o duplicar una escena duplica sus IDs.** La copia tiene los mismos guid e IDs que el original, así que Play y la build quedan bloqueados hasta que pulses **Regenerate IDs in scene** en la escena que quieras cambiar.
+- **Para mover un objeto a otra escena, arrástralo en la Hierarchy** de una escena a otra. Así conserva su guid. Copiar y pegar crea un objeto nuevo con guid nuevo: las referencias al original se rompen cuando borras el original.
 
 ### Desde código
 

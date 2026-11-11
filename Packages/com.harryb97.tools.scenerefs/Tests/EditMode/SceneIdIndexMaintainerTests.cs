@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Text.RegularExpressions;
 using HarryTools.SceneRefs.Editor;
 using NUnit.Framework;
 using UnityEditor;
@@ -229,6 +230,30 @@ namespace HarryTools.SceneRefs.Tests
             {
                 SceneIdIndex.Active = util.Index;
             }
+        }
+
+        [Test]
+        public void UnloadableIndex_RecreatedWithWarningToRebuild()
+        {
+            string _path = SceneIndexTestUtil.Folder + "/BrokenIndex.asset";
+            LogAssert.ignoreFailingMessages = true;
+            try
+            {
+                // An index left with git conflict markers.
+                System.IO.File.WriteAllText(_path, "<<<<<<< HEAD\n  entries: []\n=======\n  entries: [x]\n>>>>>>> other\n");
+                AssetDatabase.ImportAsset(_path, ImportAssetOptions.ForceSynchronousImport);
+            }
+            finally
+            {
+                LogAssert.ignoreFailingMessages = false;
+            }
+            Assume.That(AssetDatabase.LoadAssetAtPath<SceneIdIndex>(_path) == null, "The broken index must not load.");
+
+            LogAssert.Expect(LogType.Warning, new Regex("BrokenIndex\\.asset.*Rebuild"));
+            SceneIdIndex _index = SceneIdIndex.CreateIndexAt(_path);
+
+            Assert.IsTrue(_index != null && EditorUtility.IsPersistent(_index));
+            Assert.AreEqual(0, _index.Entries.Count);
         }
 
         [Test]

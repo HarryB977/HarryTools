@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using HarryTools.DomainReload;
 using UnityEditor;
 using UnityEngine;
+using Logger = HarryTools.LoggerTool.Logger;
 
 namespace HarryTools.SceneRefs.Editor
 {
@@ -13,6 +15,8 @@ namespace HarryTools.SceneRefs.Editor
     internal sealed class SceneIdIndex : ScriptableObject, ISerializationCallbackReceiver
     {
         // ==================== VARIABLES ====================
+
+        private const string Category = "SceneRefs";
 
         internal const string DefaultFolder = "Assets/HarryTools/SceneRefs";
         internal const string DefaultPath = DefaultFolder + "/SceneIdIndex.asset";
@@ -179,10 +183,24 @@ namespace HarryTools.SceneRefs.Editor
             if (!AssetDatabase.IsValidFolder("Assets/HarryTools")) AssetDatabase.CreateFolder("Assets", "HarryTools");
             if (!AssetDatabase.IsValidFolder(DefaultFolder)) AssetDatabase.CreateFolder("Assets/HarryTools", "SceneRefs");
 
+            cached = CreateIndexAt(DefaultPath);
+            return cached;
+        }
+
+        /// <summary>
+        /// Creates an empty index asset at the path (the folder must exist). When a file is already there it could not be loaded
+        /// (git conflict markers or a broken file): it is replaced and a warning asks for a Rebuild.
+        /// </summary>
+        internal static SceneIdIndex CreateIndexAt(string _path)
+        {
+            bool _unloadable = File.Exists(_path);
+
             SceneIdIndex _index = CreateInstance<SceneIdIndex>();
-            AssetDatabase.CreateAsset(_index, DefaultPath);
+            AssetDatabase.CreateAsset(_index, _path);
             AssetDatabase.SaveAssetIfDirty(_index);
-            cached = _index;
+
+            if (_unloadable)
+                Logger.LogWarning(Category, $"The scene id index '{_path}' could not be loaded (a git merge conflict or a broken file) and was recreated empty. Run Tools > HarryTools > SceneRefs > Rebuild Id Index.");
             return _index;
         }
 
