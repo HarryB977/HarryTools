@@ -107,32 +107,45 @@ namespace HarryTools.SceneRefs.Tests
             string _sceneGuid = AssetDatabase.AssetPathToGUID(SceneIndexTestUtil.ScenePath("Rebuild"));
             util.Close(_scene);
 
-            Scene _scratch = util.NewScene("Scratch");
-            GameObject _prefabSource = SceneIndexTestUtil.NewObject(_scratch, "WithId");
-            SceneIndexTestUtil.AddId(SceneIndexTestUtil.NewObject(_scratch, "Inner", _prefabSource), GuidB, "Inner");
             string _prefabPath = SceneIndexTestUtil.Folder + "/WithId.prefab";
-            PrefabUtility.SaveAsPrefabAsset(_prefabSource, _prefabPath);
-            PrefabUtility.SaveAsPrefabAsset(SceneIndexTestUtil.NewObject(_scratch, "NoId"), SceneIndexTestUtil.Folder + "/NoId.prefab");
-            util.Close(_scratch);
+            string _noIdPath = SceneIndexTestUtil.Folder + "/NoId.prefab";
+            try
+            {
+                // The prefab keeps its SceneId on purpose, so the stripper is held back while it is saved.
+                using (PrefabIdStripper.Suspend())
+                {
+                    Scene _scratch = util.NewScene("Scratch");
+                    GameObject _prefabSource = SceneIndexTestUtil.NewObject(_scratch, "WithId");
+                    SceneIndexTestUtil.AddId(SceneIndexTestUtil.NewObject(_scratch, "Inner", _prefabSource), GuidB, "Inner");
+                    PrefabUtility.SaveAsPrefabAsset(_prefabSource, _prefabPath);
+                    PrefabUtility.SaveAsPrefabAsset(SceneIndexTestUtil.NewObject(_scratch, "NoId"), _noIdPath);
+                    util.Close(_scratch);
+                }
 
-            int _sceneCount = SceneManager.sceneCount;
-            util.Index.ReplaceScene("stale-scene", new List<SceneIdIndexEntry> { new SceneIdIndexEntry { Guid = GuidC, Id = "Gone", SceneGuid = "stale-scene" } });
-            SceneIdIndexMaintainer.FlushPending();
+                int _sceneCount = SceneManager.sceneCount;
+                util.Index.ReplaceScene("stale-scene", new List<SceneIdIndexEntry> { new SceneIdIndexEntry { Guid = GuidC, Id = "Gone", SceneGuid = "stale-scene" } });
+                SceneIdIndexMaintainer.FlushPending();
 
-            bool _rebuilt = false;
-            System.Action _onRebuilt = () => _rebuilt = true;
-            SceneIdIndexMaintainer.Rebuilt += _onRebuilt;
-            try { SceneIdIndexMaintainer.Rebuild(false, new[] { SceneIndexTestUtil.Folder }); }
-            finally { SceneIdIndexMaintainer.Rebuilt -= _onRebuilt; }
+                bool _rebuilt = false;
+                System.Action _onRebuilt = () => _rebuilt = true;
+                SceneIdIndexMaintainer.Rebuilt += _onRebuilt;
+                try { SceneIdIndexMaintainer.Rebuild(false, new[] { SceneIndexTestUtil.Folder }); }
+                finally { SceneIdIndexMaintainer.Rebuilt -= _onRebuilt; }
 
-            Assert.IsTrue(_rebuilt);
-            Assert.AreEqual(_sceneCount, SceneManager.sceneCount, "Rebuild must close the scenes it opens.");
-            List<SceneIdIndexEntry> _entries = util.EntriesOf(_sceneGuid);
-            Assert.AreEqual(1, _entries.Count);
-            Assert.AreEqual(GuidA, _entries[0].Guid);
-            Assert.IsNotNull(_entries[0].ComponentTypes, "Rebuild uses the exact path.");
-            Assert.AreEqual(0, util.EntriesOf("stale-scene").Count);
-            CollectionAssert.AreEqual(new[] { _prefabPath }, util.Index.PrefabsWithIds);
+                Assert.IsTrue(_rebuilt);
+                Assert.AreEqual(_sceneCount, SceneManager.sceneCount, "Rebuild must close the scenes it opens.");
+                List<SceneIdIndexEntry> _entries = util.EntriesOf(_sceneGuid);
+                Assert.AreEqual(1, _entries.Count);
+                Assert.AreEqual(GuidA, _entries[0].Guid);
+                Assert.IsNotNull(_entries[0].ComponentTypes, "Rebuild uses the exact path.");
+                Assert.AreEqual(0, util.EntriesOf("stale-scene").Count);
+                CollectionAssert.AreEqual(new[] { _prefabPath }, util.Index.PrefabsWithIds);
+            }
+            finally
+            {
+                AssetDatabase.DeleteAsset(_prefabPath);
+                AssetDatabase.DeleteAsset(_noIdPath);
+            }
         }
 
         [Test]
