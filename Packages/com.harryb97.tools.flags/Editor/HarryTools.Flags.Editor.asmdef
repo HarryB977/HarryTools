@@ -1,0 +1,20 @@
+{
+    "name": "HarryTools.Flags.Editor",
+    "rootNamespace": "HarryTools.Flags.Editor",
+    "references": [
+        "GUID:0a596e3d7651ae8428780af8f319866f",
+        "GUID:5a48a51724773b745ac570afd65b9606",
+        "GUID:e9438e756332f8b49902de137df9187b"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

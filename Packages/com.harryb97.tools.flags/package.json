@@ -1,0 +1,33 @@
+{
+  "name": "com.harryb97.tools.flags",
+  "version": "1.0.0-beta.1",
+  "displayName": "HarryTools Flags",
+  "description": "Flags booleanos de estado del mundo, globales y locales por escena, con condiciones y acciones listas para usar.",
+  "unity": "6000.0",
+  "author": {
+    "name": "HarryB97",
+    "url": "https://github.com/HarryB977"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/HarryB977/HarryTools.git",
+    "directory": "Packages/com.harryb97.tools.flags"
+  },
+  "keywords": [
+    "flags",
+    "state",
+    "world-state",
+    "save"
+  ],
+  "hideInEditor": true,
+  "license": "MIT",
+  "dependencies": {
+    "com.harryb97.tools.conditions": "2.0.0-beta.1",
+    "com.harryb97.tools.actions": "2.0.0-beta.1",
+    "com.harryb97.tools.serializereferences": "1.0.3",
+    "com.harryb97.tools.localdata": "2.0.3",
+    "com.harryb97.tools.logger": "1.0.3",
+    "com.harryb97.tools.domainreload": "1.0.3",
+    "com.cysharp.unitask": "2.5.10"
+  }
+}

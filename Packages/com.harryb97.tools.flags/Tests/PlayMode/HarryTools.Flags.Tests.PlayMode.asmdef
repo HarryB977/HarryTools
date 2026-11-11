@@ -1,0 +1,25 @@
+{
+    "name": "HarryTools.Flags.Tests.PlayMode",
+    "rootNamespace": "HarryTools.Flags.Tests",
+    "references": [
+        "GUID:0a596e3d7651ae8428780af8f319866f",
+        "GUID:976ab130102fdc04c9bbc3159f83ad15",
+        "GUID:29de7d2b7e640ec46a8c18880806d777",
+        "GUID:f51ebe6a0ceec4240a699833d6309b23",
+        "UnityEngine.TestRunner",
+        "UnityEditor.TestRunner"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "nunit.framework.dll"
+    ],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

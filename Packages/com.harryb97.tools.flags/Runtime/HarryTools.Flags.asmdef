@@ -1,0 +1,22 @@
+{
+    "name": "HarryTools.Flags",
+    "rootNamespace": "HarryTools.Flags",
+    "references": [
+        "GUID:5a48a51724773b745ac570afd65b9606",
+        "GUID:e9438e756332f8b49902de137df9187b",
+        "GUID:976ab130102fdc04c9bbc3159f83ad15",
+        "GUID:29de7d2b7e640ec46a8c18880806d777",
+        "GUID:ce4097fb1cd381e499cd9508a42275ce",
+        "GUID:7800b52ab87a52d49afa76850b7060be",
+        "GUID:f51ebe6a0ceec4240a699833d6309b23"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
