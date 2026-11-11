@@ -164,12 +164,12 @@ namespace HarryTools.SceneRefs.Tests
             Light _light = _target.AddComponent<Light>();
             SceneRefHolder _holder = SceneIndexTestUtil.NewObject(_scene, "Holder").AddComponent<SceneRefHolder>();
 
-            Assert.IsTrue(SceneRefAssign.TryAssign(Property(_holder, "light"), _target, typeof(Light)));
+            Assert.IsTrue(SceneRefAssign.TryAssign(Property(_holder, "lamp"), _target, typeof(Light)));
 
-            Assert.AreEqual(_light, _holder.light.direct);
-            Assert.AreEqual(TypeName<Light>(), _holder.light.componentType);
-            Assert.AreEqual(0, _holder.light.componentIndex);
-            Assert.AreEqual(_target.GetComponent<SceneId>().Guid, _holder.light.guid);
+            Assert.AreEqual(_light, _holder.lamp.direct);
+            Assert.AreEqual(TypeName<Light>(), _holder.lamp.componentType);
+            Assert.AreEqual(0, _holder.lamp.componentIndex);
+            Assert.AreEqual(_target.GetComponent<SceneId>().Guid, _holder.lamp.guid);
         }
 
         [Test]
@@ -179,9 +179,9 @@ namespace HarryTools.SceneRefs.Tests
             GameObject _target = SceneIndexTestUtil.NewObject(_scene, "Empty");
             SceneRefHolder _holder = SceneIndexTestUtil.NewObject(_scene, "Holder").AddComponent<SceneRefHolder>();
 
-            Assert.IsFalse(SceneRefAssign.TryAssign(Property(_holder, "light"), _target, typeof(Light)));
+            Assert.IsFalse(SceneRefAssign.TryAssign(Property(_holder, "lamp"), _target, typeof(Light)));
 
-            Assert.IsFalse(_holder.light.IsAssigned);
+            Assert.IsFalse(_holder.lamp.IsAssigned);
             Assert.IsNull(_target.GetComponent<SceneId>());
         }
 
@@ -305,13 +305,13 @@ namespace HarryTools.SceneRefs.Tests
             };
             util.Index.ReplaceScene("closedscene", new List<SceneIdIndexEntry> { _entry });
 
-            SceneRefAssign.AssignFromIndex(Property(_holder, "light"), _entry, 0, typeof(Light));
+            SceneRefAssign.AssignFromIndex(Property(_holder, "lamp"), _entry, 0, typeof(Light));
 
-            Assert.IsTrue(_holder.light.direct == null);
-            Assert.AreEqual(GuidB, _holder.light.guid);
-            Assert.AreEqual(TypeName<Light>(), _holder.light.componentType);
-            Assert.AreEqual(0, _holder.light.componentIndex);
-            Assert.AreEqual("Lamp in Kitchen", _holder.light.label);
+            Assert.IsTrue(_holder.lamp.direct == null);
+            Assert.AreEqual(GuidB, _holder.lamp.guid);
+            Assert.AreEqual(TypeName<Light>(), _holder.lamp.componentType);
+            Assert.AreEqual(0, _holder.lamp.componentIndex);
+            Assert.AreEqual("Lamp in Kitchen", _holder.lamp.label);
         }
 
         [Test]

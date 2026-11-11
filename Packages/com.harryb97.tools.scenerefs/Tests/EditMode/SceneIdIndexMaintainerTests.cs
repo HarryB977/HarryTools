@@ -178,18 +178,26 @@ namespace HarryTools.SceneRefs.Tests
             string _goodGuid = AssetDatabase.AssetPathToGUID(SceneIndexTestUtil.ScenePath("Good"));
             util.Close(_scene);
 
-            // Unity logs import and load errors for the broken files; they are expected here.
+            // Unity logs import and load errors for the broken files; they are expected here, and only here.
             LogAssert.ignoreFailingMessages = true;
+            int _sceneCount;
+            bool _completed;
+            try
+            {
+                // Names sort before "Good" so the broken scenes are read first.
+                string _corruptPath = SceneIndexTestUtil.ScenePath("Corrupt");
+                System.IO.File.WriteAllText(_corruptPath, "%YAML 1.1\n%TAG !u! tag:unity3d.com,2011:\n--- !u!1 &1\nGameObject: [ this is not\n  {{ valid\n");
+                System.IO.File.WriteAllText(SceneIndexTestUtil.Folder + "/AAA_Garbage.unity", "\u0000\u0001 not a scene at all");
+                AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
+                SceneIdIndexMaintainer.FlushPending();
+                _sceneCount = SceneManager.sceneCount;
 
-            // Names sort before "Good" so the broken scenes are read first.
-            string _corruptPath = SceneIndexTestUtil.ScenePath("Corrupt");
-            System.IO.File.WriteAllText(_corruptPath, "%YAML 1.1\n%TAG !u! tag:unity3d.com,2011:\n--- !u!1 &1\nGameObject: [ this is not\n  {{ valid\n");
-            System.IO.File.WriteAllText(SceneIndexTestUtil.Folder + "/AAA_Garbage.unity", "\u0000\u0001 not a scene at all");
-            AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
-            SceneIdIndexMaintainer.FlushPending();
-            int _sceneCount = SceneManager.sceneCount;
-
-            bool _completed = SceneIdIndexMaintainer.Rebuild(false, new[] { SceneIndexTestUtil.Folder });
+                _completed = SceneIdIndexMaintainer.Rebuild(false, new[] { SceneIndexTestUtil.Folder });
+            }
+            finally
+            {
+                LogAssert.ignoreFailingMessages = false;
+            }
 
             Assert.IsTrue(_completed);
             Assert.AreEqual(_sceneCount, SceneManager.sceneCount, "Rebuild must close every scene it opened.");
