@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using Logger = HarryTools.LoggerTool.Logger;
 using UnityEngine;
 
@@ -16,6 +17,8 @@ namespace HarryTools.SceneRefs
         private const string Category = "SceneRefs";
 
         private static readonly List<Component> componentBuffer = new List<Component>();
+        // The loaded assemblies only change with a domain reload, which also resets this cache.
+        private static readonly Dictionary<string, Type> typeByFullName = new Dictionary<string, Type>(StringComparer.Ordinal);
 
         [SerializeField] internal UnityEngine.Object direct;
         [SerializeField] internal string guid;
@@ -130,12 +133,33 @@ namespace HarryTools.SceneRefs
             if (string.IsNullOrEmpty(componentType)) return _fallbackType;
             if (resolvedType != null && resolvedTypeName == componentType) return resolvedType;
 
-            Type _type = Type.GetType(componentType);
+            Type _type = Type.GetType(componentType) ?? FindByFullName(componentType);
             if (_type == null || !typeof(Component).IsAssignableFrom(_type)) return null;
 
             resolvedType = _type;
             resolvedTypeName = componentType;
             return _type;
+        }
+
+        /// <summary>
+        /// Fallback for "Full.Name, Assembly" when the script moved to another assembly: the first loaded type with that full name.
+        /// Results are cached per stored name, misses included.
+        /// </summary>
+        private static Type FindByFullName(string _storedName)
+        {
+            if (typeByFullName.TryGetValue(_storedName, out Type _cached)) return _cached;
+
+            int _comma = _storedName.IndexOf(',');
+            string _fullName = (_comma >= 0 ? _storedName.Substring(0, _comma) : _storedName).Trim();
+            Type _found = null;
+            foreach (Assembly _assembly in AppDomain.CurrentDomain.GetAssemblies())
+            {
+                _found = _assembly.GetType(_fullName, false);
+                if (_found != null) break;
+            }
+
+            typeByFullName[_storedName] = _found;
+            return _found;
         }
 
         private string LastKnown() => string.IsNullOrEmpty(label) ? string.Empty : $" (last known as {label})";

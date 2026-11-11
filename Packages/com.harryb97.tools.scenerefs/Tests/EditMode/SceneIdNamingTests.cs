@@ -19,6 +19,11 @@ namespace HarryTools.SceneRefs.Tests
         [TestCase("Manzana09", "Manzana10")]
         [TestCase("Manzana99", "Manzana100")]
         [TestCase("Puerta", "Puerta1")]
+        [TestCase("9", "10")]
+        [TestCase("Item0", "Item1")]
+        // Longer than any number type: incremented digit by digit.
+        [TestCase("Big123456789012345678901234567899", "Big123456789012345678901234567900")]
+        [TestCase("Big999999999999999999999999999999", "Big1000000000000000000000000000000")]
         public void Increment(string _in, string _out) => Assert.AreEqual(_out, SceneIdNaming.Increment(_in));
 
         // ==================== MAKE UNIQUE ====================

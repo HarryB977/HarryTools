@@ -64,10 +64,15 @@ namespace HarryTools.SceneRefs
 
             if (_start == _id.Length) return _id + "1";
 
+            // Digit by digit, so a run of any length never overflows a number type.
+            char[] _digits = _id.Substring(_start).ToCharArray();
+            int _i = _digits.Length - 1;
+            while (_i >= 0 && _digits[_i] == '9') _digits[_i--] = '0';
+
             string _prefix = _id.Substring(0, _start);
-            string _digits = _id.Substring(_start);
-            string _next = (decimal.Parse(_digits) + 1).ToString();
-            return _prefix + _next.PadLeft(_digits.Length, '0');
+            if (_i < 0) return _prefix + "1" + new string(_digits);
+            _digits[_i]++;
+            return _prefix + new string(_digits);
         }
 
         /// <summary>Returns _baseId if it is free, otherwise the first incremented id that is free.</summary>

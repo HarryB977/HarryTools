@@ -21,11 +21,12 @@ namespace HarryTools.SceneRefs
         private static readonly List<SceneId> idBuffer = new List<SceneId>();
         private static readonly List<string> removeBuffer = new List<string>();
 
-        [ClearOnReload(1)] private static int loadVersion = 1;
+        // Never goes back: with domain reload off, a SceneRef owned by an asset keeps the version it last warned at between Play sessions.
+        private static int loadVersion = 1;
 
         // ==================== PROPERTIES ====================
 
-        /// <summary>Increases with every scene load or unload. SceneRef uses it to warn once per load.</summary>
+        /// <summary>Increases with every scene load or unload and every Play session. SceneRef uses it to warn once per load.</summary>
         internal static int LoadVersion => loadVersion;
 
         // ==================== PUBLIC API ====================
@@ -196,11 +197,11 @@ namespace HarryTools.SceneRefs
         // ==================== INITIALIZATION ====================
 
         [ExecuteOnReload]
-        private static void ResetState()
+        internal static void ResetState()
         {
             byGuid.Clear();
             byId.Clear();
-            loadVersion = 1;
+            loadVersion++;
         }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]

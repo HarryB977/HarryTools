@@ -127,6 +127,35 @@ namespace HarryTools.SceneRefs.Tests
         }
 
         [Test]
+        public void NewSession_WarnsAgain_EvenWhenLoadCountRepeats()
+        {
+            // Domain reload off: an asset-owned SceneRef keeps its warned state between Play sessions.
+            SceneRef<Light> _ref = MakeRef<Light>("missing", LightType, 0, "Lamp in Cocina");
+            SceneRefs.ResetState();
+
+            LogAssert.Expect(LogType.Warning, SceneRefsRegex);
+            Assert.IsNull(_ref.Value);
+
+            SceneRefs.ResetState();
+
+            LogAssert.Expect(LogType.Warning, SceneRefsRegex);
+            Assert.IsNull(_ref.Value);
+            LogAssert.NoUnexpectedReceived();
+        }
+
+        [Test]
+        public void ComponentTypeFromOtherAssembly_FallsBackToFullName()
+        {
+            Scene _scene = SceneRefsTestUtil.NewScene("ResMoved", scenes);
+            GameObject _go = SceneRefsTestUtil.NewObject(_scene, "L", "g1", "Lamp");
+            Light _light = _go.AddComponent<Light>();
+            SceneRefs.ScanScene(_scene);
+
+            // The script moved to another assembly since the reference was stored.
+            Assert.AreEqual(_light, MakeRef<Light>("g1", "UnityEngine.Light, Some.Old.Assembly", 0, "Lamp in ResMoved").Value);
+        }
+
+        [Test]
         public void UnresolvableComponentType_ReturnsNullAndWarns()
         {
             Scene _scene = SceneRefsTestUtil.NewScene("ResG", scenes);
