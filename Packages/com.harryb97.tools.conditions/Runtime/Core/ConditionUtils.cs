@@ -3,7 +3,7 @@ using System.Collections.Generic;
 namespace HarryTools.Conditions {
     public static class ConditionUtils {
         // ==================== METHODS ====================
-        /// <summary> Todas las condiciones se cumplen. Las vacías (null) se ignoran y una lista vacía devuelve true </summary>
+        /// <summary> Every condition passes. Null entries are ignored and an empty list returns true </summary>
         public static bool CheckAll(this IReadOnlyList<ICondition> _conditions, LogicContext _context) {
             if (_conditions == null) return true;
 
@@ -14,8 +14,8 @@ namespace HarryTools.Conditions {
             return true;
         }
 
-        /// <summary> Al menos una condición se cumple. Las vacías (null) se ignoran </summary>
-        /// <param name="_resultIfEmpty"> Resultado si no hay ninguna condición asignada </param>
+        /// <summary> At least one condition passes. Null entries are ignored </summary>
+        /// <param name="_resultIfEmpty"> Result when no condition is assigned </param>
         public static bool CheckAny(this IReadOnlyList<ICondition> _conditions, LogicContext _context, bool _resultIfEmpty = false) {
             if (IsNullOrEmpty(_conditions)) return _resultIfEmpty;
 

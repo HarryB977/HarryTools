@@ -2,7 +2,7 @@ using UnityEditor;
 using UnityEngine;
 
 namespace HarryTools.Conditions.Editor {
-    /// <summary> Dibuja 'TargetGameObject' y 'TargetComponent&lt;T&gt;' en una sola línea: [Origen][Objeto] </summary>
+    /// <summary> Draws 'TargetGameObject' and 'TargetComponent&lt;T&gt;' on a single line: [Source][SceneRef] </summary>
     [CustomPropertyDrawer(typeof(TargetReference), true)]
     public class TargetReferenceDrawer : PropertyDrawer {
         // ==================== VARIABLES ===================
@@ -19,7 +19,7 @@ namespace HarryTools.Conditions.Editor {
 
             Rect _fieldRect = EditorGUI.PrefixLabel(_position, _label);
 
-            // PrefixLabel no reinicia la sangría, así que se desactiva para los campos internos
+            // PrefixLabel does not reset the indent, so it is disabled for the inner fields
             int _indent = EditorGUI.indentLevel;
             EditorGUI.indentLevel = 0;
 

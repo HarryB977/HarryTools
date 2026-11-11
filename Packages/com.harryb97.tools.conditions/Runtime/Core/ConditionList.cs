@@ -34,7 +34,7 @@ namespace HarryTools.Conditions {
         }
 
         // ==================== METHODS ====================
-        /// <summary> Una lista vacía siempre se cumple </summary>
+        /// <summary> An empty list always passes </summary>
         public bool Check(LogicContext _context) {
             return mode == EvaluationMode.All ? conditions.CheckAll(_context) : conditions.CheckAny(_context, true);
         }

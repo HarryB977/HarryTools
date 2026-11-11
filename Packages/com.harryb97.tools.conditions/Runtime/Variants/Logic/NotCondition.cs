@@ -4,7 +4,7 @@ using UnityEngine;
 using HarryTools.SerializeReferences;
 
 namespace HarryTools.Conditions.Variants {
-    /// <summary> Invierte el resultado de otra condición </summary>
+    /// <summary> Inverts the result of another condition </summary>
     [Serializable, TypeMenu("Logic/Not", -97)]
     public class NotCondition : ICondition {
         // ==================== VARIABLES ===================

@@ -1,8 +1,8 @@
 {
   "name": "com.harryb97.tools.conditions",
-  "version": "1.0.4",
+  "version": "2.0.0-beta.1",
   "displayName": "HarryTools Conditions",
-  "description": "Condiciones modulares configurables desde el inspector con [SerializeReference]. Se combinan con listas (Todas / Alguna) y operadores lógicos",
+  "description": "Modular conditions configurable from the inspector with [SerializeReference]. They combine with lists (All / Any) and logic operators",
   "unity": "6000.0",
   "keywords": [
     "design",
@@ -21,6 +21,7 @@
   "hideInEditor": true,
   "license": "MIT",
   "dependencies": {
-    "com.harryb97.tools.serializereferences": "1.0.2"
+    "com.harryb97.tools.serializereferences": "1.0.3",
+    "com.harryb97.tools.scenerefs": "1.0.0-beta.1"
   }
 }

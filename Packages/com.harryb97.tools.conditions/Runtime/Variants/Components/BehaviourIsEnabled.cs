@@ -8,14 +8,15 @@ namespace HarryTools.Conditions.Variants {
     public class BehaviourIsEnabled : Condition {
         // ==================== VARIABLES ===================
         #region Private Variables
-        [SerializeField] private Behaviour behaviour;
-        [Tooltip("Además, el GameObject debe estar activo"), SerializeField] private bool activeAndEnabled = true;
+        [SerializeField] private TargetComponent<Behaviour> behaviour = new();
+        [Tooltip("The GameObject must also be active"), SerializeField] private bool activeAndEnabled = true;
         #endregion
 
         // ==================== METHODS ====================
         protected override bool Evaluate(LogicContext _context) {
-            if (behaviour == null) return false;
-            return activeAndEnabled ? behaviour.isActiveAndEnabled : behaviour.enabled;
+            Behaviour _behaviour = behaviour.Resolve(_context);
+            if (_behaviour == null) return false;
+            return activeAndEnabled ? _behaviour.isActiveAndEnabled : _behaviour.enabled;
         }
     }
 }

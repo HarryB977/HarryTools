@@ -1,5 +1,20 @@
 # Change Log:
 
+## [2.0.0-beta.1] - 2026-11-11
+
+    Cambiado (incompatible):
+    - El campo `Custom` de `TargetGameObject` y `TargetComponent<T>` pasa de una referencia directa a un `SceneRef<T>` del paquete `com.harryb97.tools.scenerefs`. El formato serializado cambia, así que hay que volver a asignar las referencias `Custom` existentes
+    - `BehaviourIsEnabled.behaviour` pasa de `Behaviour` a `TargetComponent<Behaviour>`, con origen `Custom` por defecto. Hay que volver a asignar su referencia
+    - Nueva dependencia `com.harryb97.tools.scenerefs` 1.0.0-beta.1. `serializereferences` sube a 1.0.3
+
+    Añadido:
+    - Los objetos de escena se pueden referenciar por ID desde assets y otras escenas
+    - Pruebas de `TargetReference` en `Tests/`
+
+    Otros:
+    - Los constructores `TargetGameObject(TargetSource, GameObject)` y `TargetComponent<T>(TargetSource, T)` se mantienen y envuelven el valor en un `SceneRef`
+    - Todos los comentarios, tooltips y mensajes del código pasan a inglés
+
 ## 1.0.4
 
     - `displayName` de `Conditions` a `HarryTools Conditions`, para distinguirlo en la carpeta Packages y en el Package Manager. Los samples nuevos se importan en `Assets/Samples/HarryTools Conditions/`

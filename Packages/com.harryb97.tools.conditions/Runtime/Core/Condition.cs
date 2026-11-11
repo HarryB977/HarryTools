@@ -2,12 +2,12 @@ using System;
 using UnityEngine;
 
 namespace HarryTools.Conditions {
-    /// <summary> Base opcional para condiciones: añade la opción de invertir el resultado desde el inspector </summary>
+    /// <summary> Optional base for conditions: adds an option to invert the result from the inspector </summary>
     [Serializable]
     public abstract class Condition : ICondition {
         // ==================== VARIABLES ===================
         #region Private Variables
-        [Tooltip("Invierte el resultado de la condición"), SerializeField] private bool invert;
+        [Tooltip("Inverts the result of the condition"), SerializeField] private bool invert;
         #endregion
 
         // ==================== METHODS ====================

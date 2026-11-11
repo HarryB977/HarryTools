@@ -9,7 +9,7 @@ namespace HarryTools.Conditions.Variants {
         // ==================== VARIABLES ===================
         #region Private Variables
         [SerializeField] private TargetGameObject target = new();
-        [Tooltip("Tiene en cuenta si los padres están activos"), SerializeField] private bool inHierarchy = true;
+        [Tooltip("Also requires the parents to be active"), SerializeField] private bool inHierarchy = true;
         #endregion
 
         // ==================== METHODS ====================

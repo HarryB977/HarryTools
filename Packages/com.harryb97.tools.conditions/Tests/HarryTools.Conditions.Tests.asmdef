@@ -1,0 +1,25 @@
+{
+	"name": "HarryTools.Conditions.Tests",
+	"rootNamespace": "HarryTools.Conditions.Tests",
+	"references": [
+		"GUID:976ab130102fdc04c9bbc3159f83ad15",
+		"GUID:a5ee42b199b28a848837ae87b94b1785",
+		"UnityEngine.TestRunner",
+		"UnityEditor.TestRunner"
+	],
+	"includePlatforms": [
+		"Editor"
+	],
+	"excludePlatforms": [],
+	"allowUnsafeCode": false,
+	"overrideReferences": true,
+	"precompiledReferences": [
+		"nunit.framework.dll"
+	],
+	"autoReferenced": false,
+	"defineConstraints": [
+		"UNITY_INCLUDE_TESTS"
+	],
+	"versionDefines": [],
+	"noEngineReferences": false
+}

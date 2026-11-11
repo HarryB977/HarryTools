@@ -4,7 +4,7 @@ using UnityEngine;
 using HarryTools.SerializeReferences;
 
 namespace HarryTools.Conditions.Variants {
-    /// <summary> Se cumple al menos una condición (OR) </summary>
+    /// <summary> At least one condition passes (OR) </summary>
     [Serializable, TypeMenu("Logic/Any (OR)", -98)]
     public class AnyCondition : Condition {
         // ==================== VARIABLES ===================

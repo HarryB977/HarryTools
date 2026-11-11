@@ -2,18 +2,18 @@ using UnityEngine;
 
 namespace HarryTools.Conditions {
     /// <summary>
-    /// Información sobre quién ejecuta la lógica. Permite crear condiciones y acciones reutilizables
-    /// que actúan sobre 'Self' o 'Target' sin necesidad de arrastrar referencias en el inspector.
+    /// Information about who runs the logic. Allows reusable conditions and actions
+    /// that act on 'Self' or 'Target' without dragging references in the inspector.
     /// </summary>
     public readonly struct LogicContext {
         // ==================== VARIABLES ===================
         #region Public Variables
         public static LogicContext Empty => default;
 
-        /// <summary> Objeto que ejecuta la lógica (normalmente, el dueño del componente) </summary>
+        /// <summary> Object that runs the logic (usually the owner of the component) </summary>
         public GameObject Self { get; }
 
-        /// <summary> Objeto secundario opcional (el que entra en un trigger, el que interactúa, etc.) </summary>
+        /// <summary> Optional secondary object (the one entering a trigger, the one interacting, etc.) </summary>
         public GameObject Target { get; }
         #endregion
 

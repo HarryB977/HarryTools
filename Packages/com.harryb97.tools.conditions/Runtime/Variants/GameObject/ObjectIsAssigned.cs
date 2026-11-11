@@ -6,7 +6,7 @@ using HarryTools.SerializeReferences;
 using Object = UnityEngine.Object;
 
 namespace HarryTools.Conditions.Variants {
-    /// <summary> El objeto está asignado y no ha sido destruido </summary>
+    /// <summary> The object is assigned and has not been destroyed </summary>
     [Serializable, TypeMenu("GameObject/Object Is Assigned")]
     public class ObjectIsAssigned : Condition {
         // ==================== VARIABLES ===================

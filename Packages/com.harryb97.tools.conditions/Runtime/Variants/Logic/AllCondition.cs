@@ -4,7 +4,7 @@ using UnityEngine;
 using HarryTools.SerializeReferences;
 
 namespace HarryTools.Conditions.Variants {
-    /// <summary> Se cumplen todas las condiciones (AND). Útil para anidar grupos dentro de una lista 'Any' </summary>
+    /// <summary> Every condition passes (AND). Useful to nest groups inside an 'Any' list </summary>
     [Serializable, TypeMenu("Logic/All (AND)", -99)]
     public class AllCondition : Condition {
         // ==================== VARIABLES ===================
