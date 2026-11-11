@@ -40,7 +40,14 @@ namespace HarryTools.SceneRefs.Editor
         /// A direct reference to another scene than the owner's is cleared afterwards and the guid is kept.
         /// References to prefab objects (assets or Prefab Mode) stay direct only.
         /// </summary>
-        public static void SyncProperty(SerializedProperty _ref) => SyncProperty(_ref, null);
+        public static void SyncProperty(SerializedProperty _ref) => SyncProperty(_ref, (HashSet<string>)null);
+
+        /// <summary>
+        /// Like <see cref="SyncProperty(SerializedProperty)"/> but for a given target instead of the stored direct reference.
+        /// Needed when the owner is an asset: Unity silently refuses a scene object in its direct field, so reading it back gives null.
+        /// The direct field is set only when owner and target share a scene.
+        /// </summary>
+        public static void SyncProperty(SerializedProperty _ref, Object _target) => SyncProperty(_ref, _target, null);
 
         /// <summary>Syncs every SceneRef of every script in the scene.</summary>
         public static void SyncScene(Scene _scene)
@@ -68,14 +75,18 @@ namespace HarryTools.SceneRefs.Editor
 
         // ==================== INTERNAL ====================
 
+        /// <summary>Syncs against the stored direct reference.</summary>
         internal static void SyncProperty(SerializedProperty _ref, HashSet<string> _taken)
         {
             if (_ref == null) return;
+            SyncProperty(_ref, _ref.FindPropertyRelative(SceneRefPropertyWalker.DirectField).objectReferenceValue, _taken);
+        }
+
+        internal static void SyncProperty(SerializedProperty _ref, Object _target, HashSet<string> _taken)
+        {
+            if (_ref == null || _target == null) return;
 
             SerializedProperty _direct = _ref.FindPropertyRelative(SceneRefPropertyWalker.DirectField);
-            Object _target = _direct.objectReferenceValue;
-            if (_target == null) return;
-
             GameObject _go = GameObjectOf(_target);
             if (_go == null || !IsSceneObject(_go)) return;
 
@@ -91,9 +102,11 @@ namespace HarryTools.SceneRefs.Editor
                 _changed |= SetInt(_ref, SceneRefPropertyWalker.ComponentIndexField, _component != null ? IndexAmongSameType(_component) : 0);
             }
 
-            if (!InSameScene(_ref.serializedObject.targetObject, _go))
+            // Built from the target, never read back: an asset owner would have dropped it already.
+            Object _keep = InSameScene(_ref.serializedObject.targetObject, _go) ? _target : null;
+            if (_direct.objectReferenceValue != _keep)
             {
-                _direct.objectReferenceValue = null;
+                _direct.objectReferenceValue = _keep;
                 _changed = true;
             }
 

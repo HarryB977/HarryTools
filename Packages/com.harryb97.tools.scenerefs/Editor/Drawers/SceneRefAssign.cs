@@ -37,10 +37,9 @@ namespace HarryTools.SceneRefs.Editor
                 return true;
             }
 
-            // The direct reference is set without applying: SyncProperty clears it when it would cross scenes or land in an asset,
-            // so Unity never stores a reference it cannot keep.
-            _ref.FindPropertyRelative(SceneRefPropertyWalker.DirectField).objectReferenceValue = _target;
-            SceneRefSync.SyncProperty(_ref);
+            // The target is passed in, not written to the direct field first: an asset owner refuses scene objects there,
+            // so reading it back would find nothing. The sync sets the direct field only when owner and target share a scene.
+            SceneRefSync.SyncProperty(_ref, _target);
             _ref.serializedObject.ApplyModifiedProperties();
             return true;
         }

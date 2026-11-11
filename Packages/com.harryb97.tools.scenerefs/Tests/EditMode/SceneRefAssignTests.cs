@@ -35,6 +35,23 @@ namespace HarryTools.SceneRefs.Tests
 
         private static SerializedProperty Property(Object _owner, string _field) => new SerializedObject(_owner).FindProperty(_field);
 
+        /// <summary>
+        /// A holder saved as a real .asset and loaded back. Unity only refuses scene objects in persistent owners,
+        /// so an in-memory instance would hide that case.
+        /// </summary>
+        private static SceneRefAssetHolder NewAsset(string _name)
+        {
+            string _path = $"{SceneIndexTestUtil.Folder}/{_name}.asset";
+            SceneRefAssetHolder _created = ScriptableObject.CreateInstance<SceneRefAssetHolder>();
+            AssetDatabase.CreateAsset(_created, _path);
+            AssetDatabase.SaveAssetIfDirty(_created);
+
+            SceneRefAssetHolder _asset = AssetDatabase.LoadAssetAtPath<SceneRefAssetHolder>(_path);
+            Assert.IsNotNull(_asset);
+            Assert.IsTrue(EditorUtility.IsPersistent(_asset));
+            return _asset;
+        }
+
         // ==================== TRY ASSIGN ====================
 
         [Test]
@@ -70,24 +87,73 @@ namespace HarryTools.SceneRefs.Tests
         }
 
         [Test]
-        public void TryAssign_ToScriptableObject_GuidOnly()
+        public void TryAssign_ToScriptableObjectAsset_GuidOnly()
         {
             Scene _scene = util.NewScene("AssignAsset");
             GameObject _target = SceneIndexTestUtil.NewObject(_scene, "Target");
             SceneIndexTestUtil.AddId(_target, GuidA, "Target");
-            SceneRefAssetHolder _holder = ScriptableObject.CreateInstance<SceneRefAssetHolder>();
-            try
-            {
-                Assert.IsTrue(SceneRefAssign.TryAssign(Property(_holder, "target"), _target, typeof(GameObject)));
+            SceneRefAssetHolder _holder = NewAsset("AssignAssetHolder");
 
-                Assert.IsTrue(_holder.target.direct == null);
-                Assert.AreEqual(GuidA, _holder.target.guid);
-                Assert.AreEqual("Target in AssignAsset", _holder.target.label);
-            }
-            finally
+            Assert.IsTrue(SceneRefAssign.TryAssign(Property(_holder, "target"), _target, typeof(GameObject)));
+
+            Assert.IsTrue(_holder.target.direct == null);
+            Assert.AreEqual(GuidA, _holder.target.guid);
+            Assert.AreEqual("Target in AssignAsset", _holder.target.label);
+        }
+
+        [Test]
+        public void TryAssign_ToScriptableObjectAsset_AddsSceneIdIfMissing()
+        {
+            Scene _scene = util.NewScene("AssignAssetNewId");
+            GameObject _target = SceneIndexTestUtil.NewObject(_scene, "Apple");
+            SceneRefAssetHolder _holder = NewAsset("AssignAssetNewIdHolder");
+
+            Assert.IsTrue(SceneRefAssign.TryAssign(Property(_holder, "target"), _target, typeof(GameObject)));
+
+            SceneId _id = _target.GetComponent<SceneId>();
+            Assert.IsNotNull(_id);
+            Assert.AreEqual(_id.Guid, _holder.target.guid);
+            Assert.IsTrue(_holder.target.direct == null);
+            Assert.AreEqual("Apple in AssignAssetNewId", _holder.target.label);
+        }
+
+        [Test]
+        public void AssignFromIndex_LoadedObject_IntoScriptableObjectAsset()
+        {
+            Scene _scene = util.NewScene("PickAsset");
+            GameObject _target = SceneIndexTestUtil.NewObject(_scene, "Apple");
+            SceneIndexTestUtil.AddId(_target, GuidA, "Apple");
+            SceneRefAssetHolder _holder = NewAsset("PickAssetHolder");
+            SceneIdIndexEntry _entry = new SceneIdIndexEntry
             {
-                Object.DestroyImmediate(_holder);
-            }
+                Guid = GuidA, Id = "Apple", SceneGuid = AssetDatabase.AssetPathToGUID(_scene.path), SceneName = "PickAsset", HierarchyPath = "Apple",
+                ComponentTypes = new string[0],
+            };
+
+            SceneRefAssign.AssignFromIndex(Property(_holder, "target"), _entry, 0, typeof(GameObject));
+
+            Assert.IsTrue(_holder.target.direct == null);
+            Assert.AreEqual(GuidA, _holder.target.guid);
+            Assert.AreEqual("Apple in PickAsset", _holder.target.label);
+        }
+
+        [Test]
+        public void TryAssign_SerializeReferenceListInScriptableObjectAsset_GuidOnly()
+        {
+            Scene _scene = util.NewScene("AssignAssetList");
+            GameObject _target = SceneIndexTestUtil.NewObject(_scene, "Apple");
+            SceneIndexTestUtil.AddId(_target, GuidA, "Apple");
+            SceneRefAssetHolder _holder = NewAsset("AssignAssetListHolder");
+            _holder.items.Add(new SceneRefListItem());
+            EditorUtility.SetDirty(_holder);
+            AssetDatabase.SaveAssetIfDirty(_holder);
+
+            Assert.IsTrue(SceneRefAssign.TryAssign(Property(_holder, "items.Array.data[0].target"), _target, typeof(GameObject)));
+
+            SceneRefListItem _item = (SceneRefListItem)_holder.items[0];
+            Assert.IsTrue(_item.target.direct == null);
+            Assert.AreEqual(GuidA, _item.target.guid);
+            Assert.AreEqual("Apple in AssignAssetList", _item.target.label);
         }
 
         [Test]
