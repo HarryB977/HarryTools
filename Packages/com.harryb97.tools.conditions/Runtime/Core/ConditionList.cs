@@ -4,13 +4,13 @@ using UnityEngine;
 using HarryTools.SerializeReferences;
 
 namespace HarryTools.Conditions {
-    /// <summary> Lista de condiciones lista para usar como campo en cualquier componente </summary>
+    /// <summary> List of conditions ready to use as a field in any component </summary>
     /// <example> [SerializeField] private ConditionList conditions; ... if (conditions.Check(LogicContext.From(this))) { } </example>
     [Serializable]
     public class ConditionList {
         public enum EvaluationMode {
-            [Tooltip("Se cumplen todas (AND)")] All,
-            [Tooltip("Se cumple al menos una (OR)")] Any
+            [Tooltip("Every condition passes (AND)")] All,
+            [Tooltip("At least one condition passes (OR)")] Any
         }
 
         // ==================== VARIABLES ===================

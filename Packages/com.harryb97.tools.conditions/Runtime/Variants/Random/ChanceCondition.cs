@@ -10,7 +10,7 @@ namespace HarryTools.Conditions.Variants {
     public class ChanceCondition : Condition {
         // ==================== VARIABLES ===================
         #region Private Variables
-        [Tooltip("Probabilidad de que se cumpla (0 = nunca, 1 = siempre)"), SerializeField, Range(0, 1)] private float probability = 0.5f;
+        [Tooltip("Chance that it passes (0 = never, 1 = always)"), SerializeField, Range(0, 1)] private float probability = 0.5f;
         #endregion
 
         // ==================== METHODS ====================
