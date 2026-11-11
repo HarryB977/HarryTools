@@ -183,7 +183,7 @@ namespace HarryTools.SceneRefs.Editor
             return _result;
         }
 
-        /// <summary>Every script of the scene, inactive objects included.</summary>
+        /// <summary>Every script of the scene that can hold a SceneRef, inactive objects included.</summary>
         internal static List<MonoBehaviour> Behaviours(Scene _scene)
         {
             List<MonoBehaviour> _result = new List<MonoBehaviour>();
@@ -193,12 +193,18 @@ namespace HarryTools.SceneRefs.Editor
             return _result;
         }
 
-        /// <summary>Every script under the object, inactive ones included. SceneId and missing scripts are skipped.</summary>
+        /// <summary>
+        /// Every script under the object that can hold a SceneRef, inactive ones included. Scripts whose type can never hold one,
+        /// SceneId and missing scripts are skipped, so no SerializedObject is built for them.
+        /// </summary>
         internal static void AddBehaviours(GameObject _root, List<MonoBehaviour> _result)
         {
             _root.GetComponentsInChildren(true, behaviourBuffer);
             for (int _i = 0; _i < behaviourBuffer.Count; _i++)
-                if (behaviourBuffer[_i] != null && !(behaviourBuffer[_i] is SceneId)) _result.Add(behaviourBuffer[_i]);
+            {
+                MonoBehaviour _behaviour = behaviourBuffer[_i];
+                if (_behaviour != null && !(_behaviour is SceneId) && SceneRefTypeCache.CanHold(_behaviour.GetType())) _result.Add(_behaviour);
+            }
             behaviourBuffer.Clear();
         }
 

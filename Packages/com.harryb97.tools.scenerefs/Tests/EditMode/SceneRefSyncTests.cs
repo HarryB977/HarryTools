@@ -159,6 +159,46 @@ namespace HarryTools.SceneRefs.Tests
             Assert.AreEqual(_door, _holder.target.direct);
         }
 
+        // ==================== TYPE CACHE ====================
+
+        [Test]
+        public void TypeCache_OnlyTypesThatCanHoldARef()
+        {
+            Assert.IsTrue(SceneRefTypeCache.CanHold(typeof(SceneRefHolder)));
+            Assert.IsTrue(SceneRefTypeCache.CanHold(typeof(SceneRefNestedHolder)));
+            Assert.IsTrue(SceneRefTypeCache.CanHold(typeof(SceneRefListHolder)), "[SerializeReference] fields count as maybe.");
+            Assert.IsTrue(SceneRefTypeCache.CanHold(typeof(SceneRefAssetHolder)));
+            Assert.IsFalse(SceneRefTypeCache.CanHold(typeof(PlainTestBehaviour)));
+            Assert.IsFalse(SceneRefTypeCache.CanHold(typeof(BaseTestBehaviour)));
+            Assert.IsFalse(SceneRefTypeCache.CanHold(typeof(SceneRefPlainData)));
+        }
+
+        [Test]
+        public void Walker_FindsRefsNestedInClassesAndLists_SkipsPlainData()
+        {
+            Scene _scene = util.NewScene("WalkNested");
+            GameObject _target = SceneIndexTestUtil.NewObject(_scene, "Door");
+            SceneRefNestedHolder _holder = SceneIndexTestUtil.NewObject(_scene, "Holder").AddComponent<SceneRefNestedHolder>();
+            for (int _i = 0; _i < 100; _i++)
+            {
+                _holder.points.Add(Vector3.one * _i);
+                _holder.data.Add(new SceneRefPlainData { value = _i });
+            }
+
+            SceneRefWrapper _wrapper = new SceneRefWrapper { targets = new[] { new SceneRef<GameObject>(), new SceneRef<GameObject>() } };
+            _wrapper.targets[1].SetForTests(_target, null, null, 0, null);
+            _holder.wrappers.Add(_wrapper);
+            _holder.Single.targets = new[] { new SceneRef<GameObject>() };
+
+            List<string> _paths = new List<string>();
+            foreach (SerializedProperty _property in SceneRefPropertyWalker.FindAll(new SerializedObject(_holder))) _paths.Add(_property.propertyPath);
+
+            CollectionAssert.AreEquivalent(new[] { "wrappers.Array.data[0].targets.Array.data[0]", "wrappers.Array.data[0].targets.Array.data[1]", "single.targets.Array.data[0]" }, _paths);
+
+            SceneRefSync.SyncScene(_scene);
+            Assert.AreEqual(_target.GetComponent<SceneId>().Guid, _holder.wrappers[0].targets[1].guid);
+        }
+
         // ==================== ENSURE ID ====================
 
         [Test]

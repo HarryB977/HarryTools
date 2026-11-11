@@ -1,10 +1,13 @@
+using System;
 using System.Collections.Generic;
+using System.Reflection;
 using UnityEditor;
 
 namespace HarryTools.SceneRefs.Editor
 {
     /// <summary>
     /// Finds every serialized <see cref="SceneRefBase"/> of an object, including those inside [SerializeReference] fields and lists.
+    /// Only fields whose type can hold one are visited (<see cref="SceneRefTypeCache"/>), so plain data costs nothing.
     /// </summary>
     internal static class SceneRefPropertyWalker
     {
@@ -19,32 +22,59 @@ namespace HarryTools.SceneRefs.Editor
         // Unity reports generic serializable classes by their open generic name.
         private const string SceneRefTypeName = "SceneRef`1";
 
+        // Managed references can form long chains; deeper data is not searched.
+        private const int MaxDepth = 64;
+
         // ==================== PUBLIC API ====================
 
         /// <summary>Copies of every SceneRef property of the object, in serialization order.</summary>
         public static IEnumerable<SerializedProperty> FindAll(SerializedObject _so)
         {
             List<SerializedProperty> _result = new List<SerializedProperty>();
-            if (_so == null || _so.targetObject == null) return _result;
+            if (_so == null || _so.targetObject == null || _so.isEditingMultipleObjects) return _result;
 
-            SerializedProperty _iterator = _so.GetIterator();
-            bool _enterChildren = true;
-            while (_iterator.Next(_enterChildren))
-            {
-                if (IsSceneRef(_iterator))
-                {
-                    _result.Add(_iterator.Copy());
-                    _enterChildren = false;
-                    continue;
-                }
-
-                _enterChildren = ShouldEnter(_iterator);
-            }
-
+            FieldInfo[] _fields = SceneRefTypeCache.HoldingFields(_so.targetObject.GetType());
+            for (int _i = 0; _i < _fields.Length; _i++) Visit(_so.FindProperty(_fields[_i].Name), _fields[_i].FieldType, _result, 0);
             return _result;
         }
 
         // ==================== PRIVATE ====================
+
+        private static void Visit(SerializedProperty _property, Type _fieldType, List<SerializedProperty> _result, int _depth)
+        {
+            if (_property == null || _depth > MaxDepth) return;
+
+            if (_property.propertyType == SerializedPropertyType.ManagedReference)
+            {
+                // The declared type says nothing here: the value can be any type.
+                object _value = _property.managedReferenceValue;
+                if (_value != null) VisitChildren(_property, _value.GetType(), _result, _depth + 1);
+                return;
+            }
+
+            if (_property.propertyType != SerializedPropertyType.Generic) return;
+
+            if (_property.isArray)
+            {
+                Type _element = SceneRefTypeCache.ElementType(_fieldType);
+                for (int _i = 0; _i < _property.arraySize; _i++) Visit(_property.GetArrayElementAtIndex(_i), _element, _result, _depth + 1);
+                return;
+            }
+
+            if (IsSceneRef(_property))
+            {
+                _result.Add(_property.Copy());
+                return;
+            }
+
+            VisitChildren(_property, _fieldType, _result, _depth + 1);
+        }
+
+        private static void VisitChildren(SerializedProperty _parent, Type _type, List<SerializedProperty> _result, int _depth)
+        {
+            FieldInfo[] _fields = SceneRefTypeCache.HoldingFields(_type);
+            for (int _i = 0; _i < _fields.Length; _i++) Visit(_parent.FindPropertyRelative(_fields[_i].Name), _fields[_i].FieldType, _result, _depth);
+        }
 
         private static bool IsSceneRef(SerializedProperty _property)
         {
@@ -61,18 +91,6 @@ namespace HarryTools.SceneRefs.Editor
         {
             SerializedProperty _child = _parent.FindPropertyRelative(_name);
             return _child != null && _child.propertyType == _type;
-        }
-
-        /// <summary>Only plain classes, managed references and arrays of them can hold a SceneRef.</summary>
-        private static bool ShouldEnter(SerializedProperty _property)
-        {
-            if (_property.propertyType == SerializedPropertyType.ManagedReference) return true;
-            if (_property.propertyType != SerializedPropertyType.Generic) return false;
-            if (!_property.isArray) return true;
-            if (_property.arraySize == 0) return false;
-
-            SerializedPropertyType _element = _property.GetArrayElementAtIndex(0).propertyType;
-            return _element == SerializedPropertyType.Generic || _element == SerializedPropertyType.ManagedReference;
         }
     }
 }
