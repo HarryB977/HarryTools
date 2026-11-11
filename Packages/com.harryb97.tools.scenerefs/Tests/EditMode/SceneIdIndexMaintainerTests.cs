@@ -99,6 +99,27 @@ namespace HarryTools.SceneRefs.Tests
         }
 
         [Test]
+        public void PendingImports_SurviveDomainReload()
+        {
+            Scene _scene = util.NewScene("Survive");
+            SceneIndexTestUtil.AddId(SceneIndexTestUtil.NewObject(_scene, "Kept"), GuidA, "Kept");
+            SceneIndexTestUtil.Save(_scene);
+            string _sceneGuid = AssetDatabase.AssetPathToGUID(SceneIndexTestUtil.ScenePath("Survive"));
+            util.Close(_scene);
+            SceneIdIndexMaintainer.FlushPending();
+            util.Index.RemoveScene(_sceneGuid);
+
+            AssetDatabase.ImportAsset(SceneIndexTestUtil.ScenePath("Survive"), ImportAssetOptions.ForceUpdate);
+            // What a domain reload (entering or leaving Play) does to the queue in memory.
+            SceneIdIndexMaintainer.ForgetInMemoryForTests();
+            SceneIdIndexMaintainer.FlushPending();
+
+            List<SceneIdIndexEntry> _entries = util.EntriesOf(_sceneGuid);
+            Assert.AreEqual(1, _entries.Count, "The queued import must survive the reload.");
+            Assert.AreEqual("Kept", _entries[0].Id);
+        }
+
+        [Test]
         public void Rebuild_IndexesClosedScenes_AndPrefabsWithIds()
         {
             Scene _scene = util.NewScene("Rebuild");

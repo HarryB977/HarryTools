@@ -12,19 +12,37 @@ namespace HarryTools.SceneRefs.Editor
     /// <summary>
     /// Keeps prefab assets free of SceneIds. When a prefab under Assets is imported with SceneIds of its own, they are removed
     /// from the asset and the scene instances that had them get them back as added components with the same guid and id.
-    /// SceneIds that belong to a nested prefab or a variant base are left to that prefab's own import. Does nothing during Play.
+    /// SceneIds that belong to a nested prefab or a variant base are left to that prefab's own import.
+    /// Pending prefabs and restores are kept in SessionState, so they survive Play and domain reloads, and run in Edit Mode.
+    /// A restore that cannot be done is logged with its guid and id.
     /// </summary>
     internal sealed class PrefabIdStripper : AssetPostprocessor
     {
         // ==================== VARIABLES ====================
 
         private const string Category = "SceneRefs";
+        private const string RestoresKey = "HarryTools.SceneRefs.PrefabIdStripper.Restores";
 
-        [ClearOnReload(AssignNewInstance = true)] private static HashSet<string> pending = new HashSet<string>(StringComparer.Ordinal);
+        // Not ClearOnReload: the queues must survive entering Play without a domain reload too.
+        private static readonly SessionStringSet pending = new SessionStringSet("HarryTools.SceneRefs.PrefabIdStripper.Pending");
+        // Restores waiting for their tick; null until loaded from SessionState after a domain reload.
+        private static List<Restore> restores;
+
         // Paths this class is saving right now; their import is its own and is ignored.
         [ClearOnReload(AssignNewInstance = true)] private static HashSet<string> saving = new HashSet<string>(StringComparer.Ordinal);
         [ClearOnReload] private static int suspendDepth;
         [ClearOnReload] private static bool scheduled;
+
+        // ==================== SETUP ====================
+
+        [InitializeOnLoadMethod]
+        private static void Subscribe()
+        {
+            EditorApplication.playModeStateChanged -= OnPlayModeStateChanged;
+            EditorApplication.playModeStateChanged += OnPlayModeStateChanged;
+            // Work queued before a domain reload (or during Play) is picked up again.
+            if (HasPending) Schedule();
+        }
 
         // ==================== PUBLIC API ====================
 
@@ -48,7 +66,12 @@ namespace HarryTools.SceneRefs.Editor
             if (!RemoveFromAsset(_prefabPath)) return false;
 
             ForgetPrefab(_prefabPath);
-            if (_restores.Count > 0) OnNextTick(() => RestoreInstances(_restores));
+            if (_restores.Count > 0)
+            {
+                Restores.AddRange(_restores);
+                SaveRestores();
+                Schedule();
+            }
             return true;
         }
 
@@ -57,6 +80,13 @@ namespace HarryTools.SceneRefs.Editor
         {
             suspendDepth++;
             return new SuspendScope();
+        }
+
+        /// <summary>Drops the in-memory queues and live object references, as a domain reload does. Tests only.</summary>
+        internal static void ForgetInMemoryForTests()
+        {
+            pending.ForgetInMemory();
+            restores = null;
         }
 
         // ==================== POSTPROCESSOR ====================
@@ -73,25 +103,31 @@ namespace HarryTools.SceneRefs.Editor
                 _any |= pending.Add(_path);
             }
 
-            if (!_any || scheduled) return;
-            scheduled = true;
             // Prefab contents cannot be loaded and saved while the import is still running.
-            OnNextTick(RunPending);
+            if (_any) Schedule();
+        }
+
+        // ==================== SCHEDULING ====================
+
+        private static bool HasPending => pending.Count > 0 || Restores.Count > 0;
+
+        private static void Schedule()
+        {
+            if (scheduled) return;
+            scheduled = true;
+            EditorTick.Next(RunPending);
         }
 
         private static void RunPending()
         {
             scheduled = false;
-            if (EditorApplication.isPlayingOrWillChangePlaymode)
-            {
-                // Kept for when the editor is back in Edit Mode.
-                EditorApplication.playModeStateChanged -= OnPlayModeStateChanged;
-                EditorApplication.playModeStateChanged += OnPlayModeStateChanged;
-                return;
-            }
+            // Left queued: OnPlayModeStateChanged schedules it again once the editor is back in Edit Mode.
+            if (EditorApplication.isPlayingOrWillChangePlaymode) return;
 
-            List<string> _paths = new List<string>(pending);
-            pending.Clear();
+            // Restores first: they belong to strips that already happened.
+            RestoreInstances();
+
+            List<string> _paths = pending.TakeAll();
             for (int _i = 0; _i < _paths.Count; _i++)
             {
                 try
@@ -107,11 +143,7 @@ namespace HarryTools.SceneRefs.Editor
 
         private static void OnPlayModeStateChanged(PlayModeStateChange _change)
         {
-            if (_change != PlayModeStateChange.EnteredEditMode) return;
-            EditorApplication.playModeStateChanged -= OnPlayModeStateChanged;
-            if (pending.Count == 0 || scheduled) return;
-            scheduled = true;
-            OnNextTick(RunPending);
+            if (_change == PlayModeStateChange.EnteredEditMode && HasPending) Schedule();
         }
 
         // ==================== STRIP ====================
@@ -144,7 +176,14 @@ namespace HarryTools.SceneRefs.Editor
                     continue;
                 }
 
-                _restores.Add(new Restore { Target = _instanceId.gameObject, Guid = _instanceId.Guid, Id = _instanceId.Id });
+                GameObject _target = _instanceId.gameObject;
+                _restores.Add(new Restore
+                {
+                    Target = GlobalObjectId.GetGlobalObjectIdSlow(_target).ToString(),
+                    Guid = _instanceId.Guid,
+                    Id = _instanceId.Id,
+                    Live = _target,
+                });
             }
 
             if (_dropped > 0)
@@ -178,23 +217,6 @@ namespace HarryTools.SceneRefs.Editor
             }
         }
 
-        private static void RestoreInstances(List<Restore> _restores)
-        {
-            if (EditorApplication.isPlaying) return;
-
-            for (int _i = 0; _i < _restores.Count; _i++)
-            {
-                Restore _restore = _restores[_i];
-                // The object may have been deleted, or still have a SceneId from somewhere else.
-                if (_restore.Target == null || _restore.Target.TryGetComponent(out SceneId _)) continue;
-
-                SceneId _id = Undo.AddComponent<SceneId>(_restore.Target);
-                _id.Set(_restore.Guid, _restore.Id);
-                EditorUtility.SetDirty(_id);
-                EditorSceneManager.MarkSceneDirty(_restore.Target.scene);
-            }
-        }
-
         /// <summary>Removes the prefab from the index list of prefabs with ids, without creating the index.</summary>
         private static void ForgetPrefab(string _prefabPath)
         {
@@ -206,22 +228,74 @@ namespace HarryTools.SceneRefs.Editor
             _index.SetPrefabsWithIds(_paths);
         }
 
-        // ==================== HELPERS ====================
+        // ==================== RESTORE ====================
 
-        /// <summary>
-        /// Runs the action once on the next editor update. EditorApplication.delayCall is not used because it does not run
-        /// while the editor is in the background, which left prefabs unstripped during test runs.
-        /// </summary>
-        private static void OnNextTick(Action _action)
+        private static List<Restore> Restores
         {
-            EditorApplication.CallbackFunction _tick = null;
-            _tick = () =>
+            get
             {
-                EditorApplication.update -= _tick;
-                _action();
-            };
-            EditorApplication.update += _tick;
+                if (restores != null) return restores;
+                restores = new List<Restore>();
+                string _json = SessionState.GetString(RestoresKey, string.Empty);
+                if (_json.Length > 0)
+                {
+                    RestoreList _stored = JsonUtility.FromJson<RestoreList>(_json);
+                    if (_stored?.Items != null) restores.AddRange(_stored.Items);
+                }
+                return restores;
+            }
         }
+
+        private static void SaveRestores()
+        {
+            if (Restores.Count == 0) SessionState.EraseString(RestoresKey);
+            else SessionState.SetString(RestoresKey, JsonUtility.ToJson(new RestoreList { Items = restores }));
+        }
+
+        /// <summary>Gives every queued instance its SceneId back. Each one that cannot get it is logged.</summary>
+        private static void RestoreInstances()
+        {
+            if (Restores.Count == 0) return;
+
+            List<Restore> _queued = new List<Restore>(restores);
+            restores.Clear();
+            SaveRestores();
+
+            for (int _i = 0; _i < _queued.Count; _i++)
+            {
+                Restore _restore = _queued[_i];
+                GameObject _target = Resolve(_restore);
+                if (_target == null)
+                {
+                    Drop(_restore, "its scene object is gone or its scene is not loaded");
+                    continue;
+                }
+
+                if (_target.TryGetComponent(out SceneId _existing))
+                {
+                    // Already back (an undo or another restore): nothing was lost.
+                    if (_existing.Guid != _restore.Guid) Drop(_restore, $"'{_target.name}' already has SceneId '{_existing.Id}' ({_existing.Guid})");
+                    continue;
+                }
+
+                SceneId _id = Undo.AddComponent<SceneId>(_target);
+                _id.Set(_restore.Guid, _restore.Id);
+                EditorUtility.SetDirty(_id);
+                EditorSceneManager.MarkSceneDirty(_target.scene);
+            }
+        }
+
+        private static GameObject Resolve(Restore _restore)
+        {
+            if (_restore.Live != null) return _restore.Live;
+            if (string.IsNullOrEmpty(_restore.Target) || !GlobalObjectId.TryParse(_restore.Target, out GlobalObjectId _globalId)) return null;
+            return GlobalObjectId.GlobalObjectIdentifierToObjectSlow(_globalId) as GameObject;
+        }
+
+        private static void Drop(Restore _restore, string _reason) =>
+            Logger.LogWarning(Category, $"SceneId '{_restore.Id}' (guid {_restore.Guid}) was removed from its prefab asset but could not be given back to its scene instance: {_reason}. References to that guid will not resolve.");
+
+        // ==================== HELPERS ====================
 
         private static bool Contains(IReadOnlyList<string> _list, string _value)
         {
@@ -237,11 +311,20 @@ namespace HarryTools.SceneRefs.Editor
 
         #region Types
 
+        [Serializable]
         private struct Restore
         {
-            public GameObject Target;
+            // GlobalObjectId of the instance GameObject, to find it again after a domain reload.
+            public string Target;
             public string Guid;
             public string Id;
+            [NonSerialized] public GameObject Live;
+        }
+
+        [Serializable]
+        private sealed class RestoreList
+        {
+            public List<Restore> Items = new List<Restore>();
         }
 
         private sealed class SuspendScope : IDisposable

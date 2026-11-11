@@ -16,7 +16,7 @@ namespace HarryTools.SceneRefs.Tests
         private const string GuidA = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
         private const string GuidB = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 
-        // Postprocessor delayCall, strip, re-add delayCall and some margin.
+        // Postprocessor tick, strip, restore tick and some margin.
         private const int FramesToSettle = 10;
 
         private SceneIndexTestUtil util;
@@ -187,6 +187,50 @@ namespace HarryTools.SceneRefs.Tests
             yield return Settle();
 
             CollectionAssert.AreEqual(new[] { "Assets/Other.prefab" }, util.Index.PrefabsWithIds);
+        }
+
+        [UnityTest]
+        public IEnumerator Restores_SurviveDomainReload()
+        {
+            Scene _scene = util.NewScene("RestoreReload");
+            string _path = PrefabPath("Reload");
+            GameObject _go = SceneIndexTestUtil.NewObject(_scene, "Reload");
+            using (PrefabIdStripper.Suspend())
+            {
+                SceneIndexTestUtil.AddId(_go, GuidA, "Reload");
+                PrefabUtility.SaveAsPrefabAssetAndConnect(_go, _path, InteractionMode.AutomatedAction);
+                SceneIndexTestUtil.Save(_scene);
+            }
+
+            Assert.IsTrue(PrefabIdStripper.Strip(_path));
+            // A domain reload drops the live object references; the restore must find the instance again.
+            PrefabIdStripper.ForgetInMemoryForTests();
+            yield return Settle();
+
+            Assert.AreEqual(0, AssetIdCount(_path));
+            SceneId _id = _go.GetComponent<SceneId>();
+            Assert.IsNotNull(_id, "The instance must get its SceneId back after the reload.");
+            Assert.AreEqual(GuidA, _id.Guid);
+            Assert.AreEqual("Reload", _id.Id);
+        }
+
+        [UnityTest]
+        public IEnumerator DroppedRestore_LogsGuidAndId()
+        {
+            Scene _scene = util.NewScene("RestoreDropped");
+            string _path = PrefabPath("Dropped");
+            GameObject _go = SceneIndexTestUtil.NewObject(_scene, "Dropped");
+            using (PrefabIdStripper.Suspend())
+            {
+                SceneIndexTestUtil.AddId(_go, GuidB, "DroppedId");
+                PrefabUtility.SaveAsPrefabAssetAndConnect(_go, _path, InteractionMode.AutomatedAction);
+            }
+
+            Assert.IsTrue(PrefabIdStripper.Strip(_path));
+            Object.DestroyImmediate(_go);
+
+            LogAssert.Expect(LogType.Warning, new Regex(GuidB + ".*DroppedId|DroppedId.*" + GuidB));
+            yield return Settle();
         }
 
         [Test]

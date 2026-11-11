@@ -13,7 +13,8 @@ namespace HarryTools.SceneRefs.Editor
     /// <summary>
     /// Keeps <see cref="SceneIdIndex.Active"/> in sync with the scenes of the project.
     /// Saved scenes are read from memory (exact path). Scenes changed outside the editor are marked stale and read
-    /// from their file on the next editor tick (light path, without component types). Does nothing during Play.
+    /// from their file on the next editor tick (light path, without component types). Imports are queued at any time; the
+    /// queue is kept in SessionState, so it survives Play and domain reloads, and is processed once the editor is in Edit Mode.
     /// </summary>
     [InitializeOnLoad]
     internal sealed class SceneIdIndexMaintainer : AssetPostprocessor
@@ -22,11 +23,24 @@ namespace HarryTools.SceneRefs.Editor
 
         private const string Category = "SceneRefs";
         private const string ProgressTitle = "Rebuilding scene id index";
+        private const string SweepKey = "HarryTools.SceneRefs.IndexMaintainer.Sweep";
 
-        [ClearOnReload(AssignNewInstance = true)] private static HashSet<string> pendingImported = new HashSet<string>(StringComparer.Ordinal);
-        [ClearOnReload(AssignNewInstance = true)] private static HashSet<string> pendingDeleted = new HashSet<string>(StringComparer.Ordinal);
-        [ClearOnReload] private static bool pendingMissingSweep;
+        // Not ClearOnReload: the queue must survive entering Play without a domain reload too.
+        private static readonly SessionStringSet pendingImported = new SessionStringSet("HarryTools.SceneRefs.IndexMaintainer.Imported");
+        private static readonly SessionStringSet pendingDeleted = new SessionStringSet("HarryTools.SceneRefs.IndexMaintainer.Deleted");
         [ClearOnReload] private static bool scheduled;
+
+        private static bool PendingMissingSweep
+        {
+            get => SessionState.GetBool(SweepKey, false);
+            set
+            {
+                if (value) SessionState.SetBool(SweepKey, true);
+                else SessionState.EraseBool(SweepKey);
+            }
+        }
+
+        private static bool HasPending => pendingImported.Count > 0 || pendingDeleted.Count > 0 || PendingMissingSweep;
 
         // ==================== EVENTS ====================
 
@@ -39,8 +53,12 @@ namespace HarryTools.SceneRefs.Editor
         {
             EditorSceneManager.sceneSaved -= OnSceneSaved;
             EditorSceneManager.sceneSaved += OnSceneSaved;
+            EditorApplication.playModeStateChanged -= OnPlayModeStateChanged;
+            EditorApplication.playModeStateChanged += OnPlayModeStateChanged;
             // Stale marks survive domain reloads inside the loaded index; finish them once the editor is idle.
             EditorApplication.delayCall += RefreshStaleAfterReload;
+            // Imports queued before a domain reload (or during Play) are picked up again.
+            if (HasPending) Schedule();
         }
 
         // ==================== PUBLIC API ====================
@@ -151,11 +169,19 @@ namespace HarryTools.SceneRefs.Editor
         /// <summary>Runs the queued postprocessor work now instead of on the next editor tick.</summary>
         internal static void FlushPending() => ProcessPending();
 
+        /// <summary>Drops the in-memory copy of the queue, as a domain reload does. Tests only.</summary>
+        internal static void ForgetInMemoryForTests()
+        {
+            pendingImported.ForgetInMemory();
+            pendingDeleted.ForgetInMemory();
+        }
+
         // ==================== SCENE SAVED ====================
 
         private static void OnSceneSaved(Scene _scene)
         {
-            if (EditorApplication.isPlayingOrWillChangePlaymode || !IsProjectScene(_scene.path)) return;
+            // Scenes cannot be saved in Play; a save while Play is about to start ("save on Play" scripts) is still indexed.
+            if (EditorApplication.isPlaying || !IsProjectScene(_scene.path)) return;
 
             List<SceneIdIndexEntry> _entries = SceneIndexer.FromLoadedScene(_scene);
             SceneIdIndex _index = SceneIdIndex.Existing;
@@ -173,8 +199,7 @@ namespace HarryTools.SceneRefs.Editor
 
         private static void OnPostprocessAllAssets(string[] _imported, string[] _deleted, string[] _moved, string[] _movedFrom)
         {
-            if (EditorApplication.isPlayingOrWillChangePlaymode) return;
-
+            // Queued even during Play; the work itself waits for Edit Mode.
             bool _any = false;
             for (int _i = 0; _i < _imported.Length; _i++)
                 if (IsProjectScene(_imported[_i])) _any |= QueueImported(_imported[_i]);
@@ -190,9 +215,7 @@ namespace HarryTools.SceneRefs.Editor
                 else if (!_isNow && _was) _any |= QueueDeleted(_moved[_i]);
             }
 
-            if (!_any || scheduled) return;
-            scheduled = true;
-            EditorApplication.delayCall += RunPending;
+            if (_any) Schedule();
         }
 
         private static bool QueueImported(string _path)
@@ -210,7 +233,7 @@ namespace HarryTools.SceneRefs.Editor
         private static bool QueueDeleted(string _path)
         {
             string _guid = AssetDatabase.AssetPathToGUID(_path, AssetPathToGUIDOptions.IncludeRecentlyDeletedAssets);
-            if (string.IsNullOrEmpty(_guid)) pendingMissingSweep = true;
+            if (string.IsNullOrEmpty(_guid)) PendingMissingSweep = true;
             else
             {
                 pendingDeleted.Add(_guid);
@@ -220,23 +243,34 @@ namespace HarryTools.SceneRefs.Editor
             return true;
         }
 
+        private static void Schedule()
+        {
+            if (scheduled) return;
+            scheduled = true;
+            EditorTick.Next(RunPending);
+        }
+
         private static void RunPending()
         {
             scheduled = false;
+            // Left queued: OnPlayModeStateChanged schedules it again once the editor is back in Edit Mode.
             if (EditorApplication.isPlayingOrWillChangePlaymode) return;
             ProcessPending();
         }
 
+        private static void OnPlayModeStateChanged(PlayModeStateChange _change)
+        {
+            if (_change == PlayModeStateChange.EnteredEditMode && HasPending) Schedule();
+        }
+
         private static void ProcessPending()
         {
-            if (pendingImported.Count == 0 && pendingDeleted.Count == 0 && !pendingMissingSweep) return;
+            if (!HasPending) return;
 
-            List<string> _imported = new List<string>(pendingImported);
-            List<string> _deleted = new List<string>(pendingDeleted);
-            bool _sweep = pendingMissingSweep;
-            pendingImported.Clear();
-            pendingDeleted.Clear();
-            pendingMissingSweep = false;
+            List<string> _imported = pendingImported.TakeAll();
+            List<string> _deleted = pendingDeleted.TakeAll();
+            bool _sweep = PendingMissingSweep;
+            PendingMissingSweep = false;
 
             SceneIdIndex _index = SceneIdIndex.Existing;
             if (_index == null && SceneIdIndex.IsOverridden) return;

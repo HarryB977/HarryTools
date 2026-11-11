@@ -241,7 +241,8 @@ namespace HarryTools.SceneRefs.Editor
 
         private static void OnSceneSaving(Scene _scene, string _path)
         {
-            if (EditorApplication.isPlayingOrWillChangePlaymode) return;
+            // Scenes cannot be saved in Play; a save while Play is about to start ("save on Play" scripts) is still synced.
+            if (EditorApplication.isPlaying) return;
             SyncScene(_scene);
         }
 
