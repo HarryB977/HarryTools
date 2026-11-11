@@ -250,15 +250,34 @@ namespace HarryTools.Flags
 
             changed = _next;
             foreach (FlagChange _change in _changes) Notify(_change);
-            restoredHandlers?.Invoke();
+            InvokeSafely(restoredHandlers);
         }
 
         private static void Notify(FlagChange _change)
         {
-            changedHandlers?.Invoke(_change);
+            if (changedHandlers != null)
+            {
+                foreach (Action<FlagChange> _handler in changedHandlers.GetInvocationList()) InvokeSafely(_handler, _change);
+            }
             if (!subscribers.TryGetValue(_change.Guid, out List<Action<FlagChange>> _list)) return;
 
-            foreach (Action<FlagChange> _callback in _list.ToArray()) _callback(_change);
+            foreach (Action<FlagChange> _callback in _list.ToArray()) InvokeSafely(_callback, _change);
+        }
+
+        private static void InvokeSafely(Action<FlagChange> _callback, FlagChange _change)
+        {
+            try { _callback(_change); }
+            catch (Exception _exception) { Logger.LogError(LogCategory, $"A flag change handler threw: {_exception}"); }
+        }
+
+        private static void InvokeSafely(Action _callback)
+        {
+            if (_callback == null) return;
+            foreach (Action _handler in _callback.GetInvocationList())
+            {
+                try { _handler(); }
+                catch (Exception _exception) { Logger.LogError(LogCategory, $"A Restored handler threw: {_exception}"); }
+            }
         }
     }
 }

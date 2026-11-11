@@ -142,17 +142,42 @@ namespace HarryTools.Flags.Tests
         }
 
         [Test]
+        public void ThrowingSubscriber_DoesNotStopOthers_AndRestoredStillFires()
+        {
+            FlagRef _flag = Make("A");
+            int _secondCount = 0;
+            int _restoredCount = 0;
+            _flag.Subscribe(_ => throw new System.InvalidOperationException("boom"));
+            _flag.Subscribe(_ => _secondCount++);
+            Flags.Restored += () => _restoredCount++;
+
+            LogAssert.Expect(LogType.Error, new System.Text.RegularExpressions.Regex("Flags"));
+            _flag.Set();
+            Assert.AreEqual(1, _secondCount);
+
+            FlagSnapshot _snapshot = new FlagSnapshot();
+            LogAssert.Expect(LogType.Error, new System.Text.RegularExpressions.Regex("Flags"));
+            Flags.Restore(_snapshot);
+
+            Assert.AreEqual(2, _secondCount);
+            Assert.AreEqual(1, _restoredCount);
+            LogAssert.NoUnexpectedReceived();
+        }
+
+        [Test]
         public void EmptyRef_IsSetFalse_WriteNoopWarnsOnce()
         {
             FlagRef _empty = new FlagRef();
 
             Assert.IsFalse(_empty.IsSet);
+            LogAssert.NoUnexpectedReceived();
 
             LogAssert.Expect(LogType.Warning, new System.Text.RegularExpressions.Regex("Flags"));
             _empty.Set();
             _empty.Set();
 
             Assert.IsFalse(_empty.IsSet);
+            LogAssert.NoUnexpectedReceived();
         }
 
         [Test]
@@ -166,6 +191,7 @@ namespace HarryTools.Flags.Tests
             _gone.Set();
 
             Assert.IsFalse(_gone.IsSet);
+            LogAssert.NoUnexpectedReceived();
         }
 
         [Test]
