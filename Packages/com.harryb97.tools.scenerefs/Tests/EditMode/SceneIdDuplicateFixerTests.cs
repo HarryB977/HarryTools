@@ -83,5 +83,40 @@ namespace HarryTools.SceneRefs.Tests
             Assert.AreEqual(_target, _holder.target.direct);
             Assert.AreEqual(GuidB, _holder.target.guid);
         }
+
+        [Test]
+        public void TreeWithoutSceneId_ReturnsEarlyWithoutGathering()
+        {
+            Scene _scene = util.NewScene("DupNoIds");
+            SceneIndexTestUtil.AddId(SceneIndexTestUtil.NewObject(_scene, "Other"), GuidA, "Other");
+            GameObject _plain = SceneIndexTestUtil.NewObject(_scene, "Plain");
+            SceneIdDuplicateFixer.GatherCount = 0;
+
+            SceneIdDuplicateFixer.FixNewHierarchy(_plain);
+
+            Assert.AreEqual(0, SceneIdDuplicateFixer.GatherCount);
+            Assert.IsNull(_plain.GetComponent<SceneId>());
+        }
+
+        [Test]
+        public void TwoDuplicatedRootsInOneBatch_GetDistinctGuidsAndIds()
+        {
+            Scene _scene = util.NewScene("DupBatch");
+            GameObject _original = SceneIndexTestUtil.NewObject(_scene, "Manzana01");
+            SceneIndexTestUtil.AddId(_original, GuidA, "Manzana01");
+
+            GameObject _copy1 = Copy(_scene, _original);
+            GameObject _copy2 = Copy(_scene, _original);
+            SceneIdDuplicateFixer.GatherCount = 0;
+            SceneIdDuplicateFixer.FixNewHierarchies(new[] { _copy1, _copy2 });
+
+            SceneId _id1 = _copy1.GetComponent<SceneId>();
+            SceneId _id2 = _copy2.GetComponent<SceneId>();
+            Assert.AreEqual(1, SceneIdDuplicateFixer.GatherCount);
+            Assert.AreNotEqual(GuidA, _id1.Guid);
+            Assert.AreNotEqual(GuidA, _id2.Guid);
+            Assert.AreNotEqual(_id1.Guid, _id2.Guid);
+            Assert.AreNotEqual(_id1.Id, _id2.Id);
+        }
     }
 }

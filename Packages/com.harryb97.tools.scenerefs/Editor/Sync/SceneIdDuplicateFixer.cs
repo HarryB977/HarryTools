@@ -13,6 +13,11 @@ namespace HarryTools.SceneRefs.Editor
     [InitializeOnLoad]
     internal static class SceneIdDuplicateFixer
     {
+        // ==================== VARIABLES ====================
+
+        /// <summary>Times the existing guids were gathered; tests use it to check the early return.</summary>
+        internal static int GatherCount;
+
         // ==================== SETUP ====================
 
         static SceneIdDuplicateFixer()
@@ -24,34 +29,55 @@ namespace HarryTools.SceneRefs.Editor
         // ==================== PUBLIC API ====================
 
         /// <summary>Only the new hierarchy changes; the objects it was copied from keep their guid and id.</summary>
-        public static void FixNewHierarchy(GameObject _root)
+        public static void FixNewHierarchy(GameObject _root) => FixNewHierarchies(new[] { _root });
+
+        /// <summary>Fixes several new roots of one change stream, gathering the existing guids once for all of them.</summary>
+        public static void FixNewHierarchies(IReadOnlyList<GameObject> _roots)
         {
-            if (_root == null || !SceneRefSync.IsSceneObject(_root)) return;
-
-            SceneId[] _newIds = _root.GetComponentsInChildren<SceneId>(true);
-            HashSet<SceneId> _inTree = new HashSet<SceneId>(_newIds);
-            HashSet<string> _existing = ExistingGuids(_inTree);
-            HashSet<string> _taken = null;
-
-            for (int _i = 0; _i < _newIds.Length; _i++)
+            List<GameObject> _fixRoots = new List<GameObject>();
+            List<SceneId[]> _rootIds = new List<SceneId[]>();
+            HashSet<SceneId> _inTrees = new HashSet<SceneId>();
+            for (int _i = 0; _i < _roots.Count; _i++)
             {
-                SceneId _id = _newIds[_i];
-                // Adding the guid also catches two objects of the new tree that share one.
-                if (!string.IsNullOrEmpty(_id.Guid) && _existing.Add(_id.Guid)) continue;
+                GameObject _root = _roots[_i];
+                if (_root == null || !SceneRefSync.IsSceneObject(_root)) continue;
 
-                _taken ??= SceneRefSync.TakenIds();
-                string _newId = SceneIdNaming.MakeUnique(SceneIdNaming.Increment(_id.Id), _taken.Contains);
-                SceneRefSync.WriteId(_id, SceneIdNaming.NewGuid(), _newId);
-                _taken.Add(_newId);
-                _existing.Add(_id.Guid);
+                SceneId[] _ids = _root.GetComponentsInChildren<SceneId>(true);
+                if (_ids.Length == 0) continue;
+
+                _fixRoots.Add(_root);
+                _rootIds.Add(_ids);
+                _inTrees.UnionWith(_ids);
             }
 
-            List<MonoBehaviour> _behaviours = new List<MonoBehaviour>();
-            SceneRefSync.AddBehaviours(_root, _behaviours);
-            for (int _i = 0; _i < _behaviours.Count; _i++)
+            if (_fixRoots.Count == 0) return;
+
+            HashSet<string> _existing = ExistingGuids(_inTrees);
+            HashSet<string> _taken = null;
+
+            for (int _r = 0; _r < _fixRoots.Count; _r++)
             {
-                SerializedObject _so = new SerializedObject(_behaviours[_i]);
-                foreach (SerializedProperty _ref in SceneRefPropertyWalker.FindAll(_so)) SceneRefSync.SyncProperty(_ref, _taken);
+                SceneId[] _newIds = _rootIds[_r];
+                for (int _i = 0; _i < _newIds.Length; _i++)
+                {
+                    SceneId _id = _newIds[_i];
+                    // Adding the guid also catches two objects of the new trees that share one.
+                    if (!string.IsNullOrEmpty(_id.Guid) && _existing.Add(_id.Guid)) continue;
+
+                    _taken ??= SceneRefSync.TakenIds();
+                    string _newId = SceneIdNaming.MakeUnique(SceneIdNaming.Increment(_id.Id), _taken.Contains);
+                    SceneRefSync.WriteId(_id, SceneIdNaming.NewGuid(), _newId);
+                    _taken.Add(_newId);
+                    _existing.Add(_id.Guid);
+                }
+
+                List<MonoBehaviour> _behaviours = new List<MonoBehaviour>();
+                SceneRefSync.AddBehaviours(_fixRoots[_r], _behaviours);
+                for (int _i = 0; _i < _behaviours.Count; _i++)
+                {
+                    SerializedObject _so = new SerializedObject(_behaviours[_i]);
+                    foreach (SerializedProperty _ref in SceneRefPropertyWalker.FindAll(_so)) SceneRefSync.SyncProperty(_ref, _taken);
+                }
             }
         }
 
@@ -61,6 +87,7 @@ namespace HarryTools.SceneRefs.Editor
         {
             if (EditorApplication.isPlayingOrWillChangePlaymode) return;
 
+            List<GameObject> _roots = null;
             for (int _i = 0; _i < _stream.length; _i++)
             {
                 if (_stream.GetEventType(_i) != ObjectChangeKind.CreateGameObjectHierarchy) continue;
@@ -68,14 +95,17 @@ namespace HarryTools.SceneRefs.Editor
                 _stream.GetCreateGameObjectHierarchyEvent(_i, out CreateGameObjectHierarchyEventArgs _args);
                 // The event only exposes an instance id; EntityIdToObject does not exist in 6000.0, the minimum version.
 #pragma warning disable CS0618
-                if (EditorUtility.InstanceIDToObject(_args.instanceId) is GameObject _root) FixNewHierarchy(_root);
+                if (EditorUtility.InstanceIDToObject(_args.instanceId) is GameObject _root) (_roots ??= new List<GameObject>()).Add(_root);
 #pragma warning restore CS0618
             }
+
+            if (_roots != null) FixNewHierarchies(_roots);
         }
 
         /// <summary>Guids of every other SceneId: live ones of the loaded scenes and the index entries of closed scenes.</summary>
         private static HashSet<string> ExistingGuids(HashSet<SceneId> _exclude)
         {
+            GatherCount++;
             HashSet<string> _guids = new HashSet<string>(StringComparer.Ordinal);
             HashSet<string> _loadedScenes = new HashSet<string>(StringComparer.Ordinal);
             for (int _i = 0; _i < SceneManager.sceneCount; _i++)
