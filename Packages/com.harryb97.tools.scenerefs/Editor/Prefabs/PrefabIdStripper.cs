@@ -35,6 +35,8 @@ namespace HarryTools.SceneRefs.Editor
         internal static bool Strip(string _prefabPath)
         {
             if (suspendDepth > 0 || EditorApplication.isPlayingOrWillChangePlaymode || !IsProjectPrefab(_prefabPath)) return false;
+            // Most prefabs never mention SceneId; they are not loaded at all.
+            if (!SceneYamlReader.MayContainSceneId(_prefabPath)) return false;
 
             GameObject _asset = AssetDatabase.LoadAssetAtPath<GameObject>(_prefabPath);
             if (_asset == null) return false;

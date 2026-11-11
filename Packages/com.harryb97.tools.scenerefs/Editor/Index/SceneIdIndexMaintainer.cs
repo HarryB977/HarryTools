@@ -329,6 +329,9 @@ namespace HarryTools.SceneRefs.Editor
             Scene _scene = SceneManager.GetSceneByPath(_path);
             if (_scene.IsValid() && _scene.isLoaded) return SceneIndexer.FromLoadedScene(_scene);
 
+            // A scene file that never mentions SceneId is not opened.
+            if (!SceneYamlReader.MayContainSceneId(_path)) return new List<SceneIdIndexEntry>();
+
             // A scene shown unloaded in the hierarchy is unloaded again afterwards instead of removed.
             bool _wasInHierarchy = _scene.IsValid();
             Scene _opened = default;
@@ -353,6 +356,8 @@ namespace HarryTools.SceneRefs.Editor
 
         private static bool PrefabHasIds(string _path)
         {
+            if (!SceneYamlReader.MayContainSceneId(_path)) return false;
+
             GameObject _root = null;
             try
             {

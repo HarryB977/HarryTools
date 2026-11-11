@@ -31,6 +31,25 @@ namespace HarryTools.SceneRefs.Tests
         // ==================== TESTS ====================
 
         [Test]
+        public void MayContainSceneId_TextPreCheck()
+        {
+            Scene _with = util.NewScene("PreCheckWith");
+            SceneIndexTestUtil.AddId(SceneIndexTestUtil.NewObject(_with, "Lamp"), ChildGuid, "Lamp");
+            SceneIndexTestUtil.Save(_with);
+            Scene _without = util.NewScene("PreCheckWithout");
+            SceneIndexTestUtil.NewObject(_without, "Plain").AddComponent<Light>();
+            SceneIndexTestUtil.Save(_without);
+            string _binary = SceneIndexTestUtil.Folder + "/Binary.bytes";
+            System.IO.File.WriteAllBytes(_binary, new byte[] { 0, 1, 2, 3 });
+
+            Assert.IsTrue(SceneYamlReader.MayContainSceneId(SceneIndexTestUtil.ScenePath("PreCheckWith")));
+            Assert.IsFalse(SceneYamlReader.MayContainSceneId(SceneIndexTestUtil.ScenePath("PreCheckWithout")));
+            Assert.IsTrue(SceneYamlReader.MayContainSceneId(_binary), "Files not saved as text fall back to the full path.");
+            Assert.IsFalse(SceneYamlReader.MayContainSceneId(SceneIndexTestUtil.Folder + "/Missing.unity"));
+            Assert.AreEqual(0, SceneYamlReader.FromFile(SceneIndexTestUtil.ScenePath("PreCheckWithout")).Count);
+        }
+
+        [Test]
         public void FromFile_ReadsGuidIdNameAndPath_TypesNull()
         {
             Scene _scene = util.NewScene("Yaml");

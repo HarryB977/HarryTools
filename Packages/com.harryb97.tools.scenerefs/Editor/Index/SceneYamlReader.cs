@@ -36,8 +36,11 @@ namespace HarryTools.SceneRefs.Editor
             public long FileId;
             public bool Stripped;
             public readonly Dictionary<string, string> Fields = new Dictionary<string, string>(StringComparer.Ordinal);
-            public readonly List<string> Lines = new List<string>();
+            // Raw lines, kept only for PrefabInstance blocks; null for every other block.
+            public List<string> Lines;
         }
+
+        private static readonly string[] LineBreaks = { "\r\n", "\n" };
 
         // ==================== PUBLIC API ====================
 
@@ -48,19 +51,36 @@ namespace HarryTools.SceneRefs.Editor
             return _entries;
         }
 
+        /// <summary>
+        /// Cheap check before loading a prefab or parsing a scene: false only when the file is missing, or saved as text without
+        /// any mention of the SceneId script. Binary files, and an unknown script guid, answer true so callers take the full path.
+        /// </summary>
+        internal static bool MayContainSceneId(string _path)
+        {
+            if (string.IsNullOrEmpty(_path) || !File.Exists(_path)) return false;
+
+            string _text = File.ReadAllText(_path);
+            if (!IsText(_text)) return true;
+
+            string _scriptGuid = SceneIdScriptGuid();
+            return string.IsNullOrEmpty(_scriptGuid) || Mentions(_text, _scriptGuid);
+        }
+
         /// <summary>False when the file is missing or not serialized as text.</summary>
         internal static bool TryFromFile(string _scenePath, out List<SceneIdIndexEntry> _entries)
         {
             _entries = new List<SceneIdIndexEntry>();
             if (string.IsNullOrEmpty(_scenePath) || !File.Exists(_scenePath)) return false;
 
-            string[] _lines = File.ReadAllLines(_scenePath);
-            if (_lines.Length == 0 || !_lines[0].StartsWith("%YAML", StringComparison.Ordinal)) return false;
+            string _text = File.ReadAllText(_scenePath);
+            if (!IsText(_text)) return false;
 
             string _scriptGuid = SceneIdScriptGuid();
             if (string.IsNullOrEmpty(_scriptGuid)) return false;
+            // Most scenes have no SceneId: nothing to parse.
+            if (!Mentions(_text, _scriptGuid)) return true;
 
-            Dictionary<long, Block> _blocks = Parse(_lines);
+            Dictionary<long, Block> _blocks = Parse(_text.Split(LineBreaks, StringSplitOptions.None));
             Dictionary<long, Block> _transformByGameObject = new Dictionary<long, Block>();
             foreach (Block _block in _blocks.Values)
             {
@@ -97,6 +117,10 @@ namespace HarryTools.SceneRefs.Editor
 
         // ==================== PARSING ====================
 
+        private static bool IsText(string _text) => _text.StartsWith("%YAML", StringComparison.Ordinal);
+
+        private static bool Mentions(string _text, string _scriptGuid) => _text.IndexOf(_scriptGuid, StringComparison.OrdinalIgnoreCase) >= 0;
+
         private static Dictionary<long, Block> Parse(string[] _lines)
         {
             Dictionary<long, Block> _blocks = new Dictionary<long, Block>();
@@ -116,12 +140,14 @@ namespace HarryTools.SceneRefs.Editor
                         FileId = long.Parse(_header.Groups[2].Value),
                         Stripped = _header.Groups[3].Success,
                     };
+                    // Only prefab instances need their raw lines (modifications and transform parent).
+                    if (_current.ClassId == PrefabInstanceClass) _current.Lines = new List<string>();
                     _blocks[_current.FileId] = _current;
                     continue;
                 }
 
                 if (_current == null) continue;
-                _current.Lines.Add(_line);
+                _current.Lines?.Add(_line);
 
                 // Top level fields of the object are indented by two spaces.
                 if (_line.Length < 3 || _line[0] != ' ' || _line[1] != ' ' || _line[2] == ' ' || _line[2] == '-') continue;
@@ -226,7 +252,7 @@ namespace HarryTools.SceneRefs.Editor
 
         private static long InstanceParentGameObject(Block _instance, Dictionary<long, Block> _blocks)
         {
-            if (_instance == null || _instance.ClassId != PrefabInstanceClass) return 0;
+            if (_instance == null || _instance.ClassId != PrefabInstanceClass || _instance.Lines == null) return 0;
             for (int _i = 0; _i < _instance.Lines.Count; _i++)
             {
                 string _line = _instance.Lines[_i].Trim();
@@ -243,7 +269,7 @@ namespace HarryTools.SceneRefs.Editor
 
         private static string StrippedName(Block _go, Block _instance)
         {
-            if (_instance == null || !_go.Fields.TryGetValue("m_CorrespondingSourceObject", out string _source)) return "?";
+            if (_instance?.Lines == null || !_go.Fields.TryGetValue("m_CorrespondingSourceObject", out string _source)) return "?";
             Match _sourceId = fileIdRegex.Match(_source);
             if (!_sourceId.Success) return "?";
 

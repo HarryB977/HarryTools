@@ -189,6 +189,22 @@ namespace HarryTools.SceneRefs.Tests
             CollectionAssert.AreEqual(new[] { "Assets/Other.prefab" }, util.Index.PrefabsWithIds);
         }
 
+        [Test]
+        public void Strip_PrefabWithoutIds_IsNotLoaded()
+        {
+            Scene _scene = util.NewScene("NotLoaded");
+            string _path = PrefabPath("Plain");
+            GameObject _source = SceneIndexTestUtil.NewObject(_scene, "Plain");
+            PrefabUtility.SaveAsPrefabAsset(_source, _path);
+            Object.DestroyImmediate(_source);
+            EditorUtility.UnloadUnusedAssetsImmediate();
+            Assume.That(AssetDatabase.IsMainAssetAtPathLoaded(_path), Is.False, "The prefab must start unloaded.");
+
+            Assert.IsFalse(PrefabIdStripper.Strip(_path));
+
+            Assert.IsFalse(AssetDatabase.IsMainAssetAtPathLoaded(_path), "A prefab whose file never mentions SceneId must not be loaded.");
+        }
+
         // ==================== HELPERS ====================
 
         private static string PrefabPath(string _name) => $"{SceneIndexTestUtil.Folder}/{_name}.prefab";
