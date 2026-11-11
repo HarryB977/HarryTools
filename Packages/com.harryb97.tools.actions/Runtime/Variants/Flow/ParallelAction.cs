@@ -9,12 +9,12 @@ using HarryTools.SerializeReferences;
 using Cysharp.Threading.Tasks;
 
 namespace HarryTools.Actions.Variants {
-    /// <summary> Ejecuta todas las acciones a la vez. Para que una rama tenga varios pasos, usa 'Sequence' </summary>
+    /// <summary> Runs all actions at once. For a branch with several steps, use 'Sequence' </summary>
     [Serializable, TypeMenu("Flow/Parallel", -95)]
     public class ParallelAction : IAction {
         public enum WaitMode {
-            [Tooltip("Espera a que terminen todas")] All,
-            [Tooltip("Espera a la primera y cancela el resto")] Any
+            [Tooltip("Waits for all of them to finish")] All,
+            [Tooltip("Waits for the first one and cancels the rest")] Any
         }
 
         // ==================== VARIABLES ===================
@@ -40,7 +40,7 @@ namespace HarryTools.Actions.Variants {
                 if (waitFor == WaitMode.All) await UniTask.WhenAll(_tasks);
                 else await UniTask.WhenAny(_tasks.ToArray());
             } finally {
-                // Con 'Any', las ramas que siguen vivas se cancelan. Con 'All', solo si se canceló desde fuera
+                // With 'Any', branches still running are cancelled. With 'All', only if it was cancelled from outside
                 _source.Cancel();
             }
 

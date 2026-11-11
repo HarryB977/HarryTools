@@ -14,7 +14,7 @@ namespace HarryTools.Actions.Variants {
         [SerializeField] private TransformSpace space = TransformSpace.Local;
         [Space]
         [SerializeField] private Vector3 value;
-        [Tooltip("Suma el valor al actual en lugar de sustituirlo"), SerializeField] private bool relative;
+        [Tooltip("Adds the value to the current one instead of replacing it"), SerializeField] private bool relative;
         #endregion
 
         // ==================== METHODS ====================

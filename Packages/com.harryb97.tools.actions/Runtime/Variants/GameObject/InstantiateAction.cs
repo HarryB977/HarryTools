@@ -12,8 +12,8 @@ namespace HarryTools.Actions.Variants {
         // ==================== VARIABLES ===================
         #region Private Variables
         [SerializeField] private GameObject prefab;
-        [Tooltip("Posición y rotación de origen (vacío = las del prefab)"), SerializeField] private TargetGameObject spawnPoint = new(TargetSource.Self);
-        [Tooltip("Padre del objeto creado (vacío = raíz de la escena)"), SerializeField] private Transform parent;
+        [Tooltip("Origin position and rotation (empty = the prefab's)"), SerializeField] private TargetGameObject spawnPoint = new(TargetSource.Self);
+        [Tooltip("Parent of the created object (empty = scene root)"), SerializeField] private TargetComponent<Transform> parent = new();
         #endregion
 
         // ==================== METHODS ====================
@@ -21,9 +21,10 @@ namespace HarryTools.Actions.Variants {
             if (prefab == null) return;
 
             GameObject _spawnPoint = spawnPoint.Resolve(_context);
+            Transform _parent = parent?.Resolve(_context);
 
-            if (_spawnPoint == null) Object.Instantiate(prefab, parent);
-            else Object.Instantiate(prefab, _spawnPoint.transform.position, _spawnPoint.transform.rotation, parent);
+            if (_spawnPoint == null) Object.Instantiate(prefab, _parent);
+            else Object.Instantiate(prefab, _spawnPoint.transform.position, _spawnPoint.transform.rotation, _parent);
         }
     }
 }

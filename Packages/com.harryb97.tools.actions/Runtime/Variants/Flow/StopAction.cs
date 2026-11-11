@@ -8,12 +8,12 @@ using HarryTools.SerializeReferences;
 using Cysharp.Threading.Tasks;
 
 namespace HarryTools.Actions.Variants {
-    /// <summary> Detiene la ejecución: no se ejecuta ninguna acción más de la lista (ni de las listas que la contienen) </summary>
+    /// <summary> Stops the execution: no further action of the list runs (nor of the lists containing it) </summary>
     [Serializable, TypeMenu("Flow/Stop", -90)]
     public class StopAction : IAction {
         // ==================== VARIABLES ===================
         #region Private Variables
-        [Tooltip("Solo se detiene si se cumplen (vacío = siempre)"), SerializeField] private ConditionList conditions = new();
+        [Tooltip("Only stops if they are met (empty = always)"), SerializeField] private ConditionList conditions = new();
         #endregion
 
         // ==================== INTERFACES ====================

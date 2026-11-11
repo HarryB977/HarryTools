@@ -8,12 +8,12 @@ using HarryTools.SerializeReferences;
 using Cysharp.Threading.Tasks;
 
 namespace HarryTools.Actions.Variants {
-    /// <summary> Agrupa varias acciones en una sola. Útil como rama de 'Parallel' o para organizar listas largas </summary>
+    /// <summary> Groups several actions into one. Useful as a 'Parallel' branch or to organise long lists </summary>
     [Serializable, TypeMenu("Flow/Sequence", -96)]
     public class SequenceAction : IAction {
         // ==================== VARIABLES ===================
         #region Private Variables
-        [Tooltip("Solo para organizar el inspector"), SerializeField] private string label;
+        [Tooltip("Only to organise the inspector"), SerializeField] private string label;
         [SerializeReference, TypeSelector] private IAction[] actions = Array.Empty<IAction>();
         #endregion
 

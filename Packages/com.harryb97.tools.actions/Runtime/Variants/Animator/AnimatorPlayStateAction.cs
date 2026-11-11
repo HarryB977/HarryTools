@@ -12,7 +12,7 @@ namespace HarryTools.Actions.Variants {
         [SerializeField] private TargetComponent<Animator> animator = new();
         [SerializeField] private string stateName;
         [SerializeField] private int layer = -1;
-        [Tooltip("Duración de la transición en segundos (0 = cambio instantáneo)"), SerializeField, Min(0)] private float crossFade;
+        [Tooltip("Transition duration in seconds (0 = instant change)"), SerializeField, Min(0)] private float crossFade;
         #endregion
 
         // ==================== METHODS ====================

@@ -21,8 +21,8 @@ namespace HarryTools.Actions.Variants {
         [SerializeField] private string parameter;
         [SerializeField] private ParameterType type = ParameterType.Trigger;
         [Space]
-        [Tooltip("Solo para 'Bool'"), SerializeField] private bool boolValue;
-        [Tooltip("Solo para 'Float' e 'Integer'"), SerializeField] private float numberValue;
+        [Tooltip("Only for 'Bool'"), SerializeField] private bool boolValue;
+        [Tooltip("Only for 'Float' and 'Integer'"), SerializeField] private float numberValue;
         #endregion
 
         // ==================== METHODS ====================

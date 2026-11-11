@@ -8,7 +8,7 @@ using HarryTools.SerializeReferences;
 using Cysharp.Threading.Tasks;
 
 namespace HarryTools.Actions.Variants {
-    /// <summary> Interpola posición, rotación o escala. No depende de ninguna librería de tweens </summary>
+    /// <summary> Interpolates position, rotation or scale. Does not depend on any tween library </summary>
     [Serializable, TypeMenu("Transform/Tween Transform")]
     public class TweenTransformAction : IAction {
         // ==================== VARIABLES ===================
@@ -18,12 +18,12 @@ namespace HarryTools.Actions.Variants {
         [SerializeField] private TransformSpace space = TransformSpace.Local;
         [Space]
         [SerializeField] private Vector3 to;
-        [Tooltip("'To' se suma al valor inicial en lugar de ser el destino absoluto"), SerializeField] private bool relative;
+        [Tooltip("'To' is added to the start value instead of being the absolute destination"), SerializeField] private bool relative;
         [Space]
         [SerializeField, Min(0)] private float duration = 1f;
         [SerializeField] private AnimationCurve ease = AnimationCurve.EaseInOut(0, 0, 1, 1);
         [SerializeField] private bool ignoreTimeScale;
-        [Tooltip("Espera a que termine antes de continuar con la siguiente acción"), SerializeField] private bool wait = true;
+        [Tooltip("Waits for it to finish before continuing with the next action"), SerializeField] private bool wait = true;
         #endregion
 
         // ==================== INTERFACES ====================
@@ -31,7 +31,7 @@ namespace HarryTools.Actions.Variants {
             GameObject _gameObject = target.Resolve(_context);
             if (_gameObject == null) return UniTask.CompletedTask;
 
-            // El tween se cancela si se cancela la lista o si se destruye el objeto
+            // The tween is cancelled if the list is cancelled or the object is destroyed
             CancellationTokenSource _source = CancellationTokenSource.CreateLinkedTokenSource(_token, _gameObject.GetCancellationTokenOnDestroy());
             UniTask _tween = Tween(_gameObject.transform, _source);
 

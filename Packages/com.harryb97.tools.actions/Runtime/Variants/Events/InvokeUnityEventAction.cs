@@ -7,8 +7,8 @@ using HarryTools.SerializeReferences;
 
 namespace HarryTools.Actions.Variants {
     /// <summary>
-    /// Invoca un UnityEvent como un paso más de la lista, respetando el orden, las condiciones y la cancelación.
-    /// Sustituye al 'UnityEvent' suelto que tenía cada grupo de procesos.
+    /// Invokes a UnityEvent as one more step of the list, respecting order, conditions and cancellation.
+    /// Replaces the standalone 'UnityEvent' that each process group used to have.
     /// </summary>
     [Serializable, TypeMenu("Events/Invoke Unity Event", -80)]
     public class InvokeUnityEventAction : InstantAction {

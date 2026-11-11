@@ -1,5 +1,20 @@
 # Change Log:
 
+## [2.0.0-beta.1] - 2026-11-11
+
+    Cambiado (incompatible):
+    - `SetBehaviourEnabledAction.behaviours` pasa de `Behaviour[]` a `TargetComponent<Behaviour>[]`. Los elementos vacíos o que no se resuelven se saltan. Hay que volver a asignar las referencias
+    - `RunActionRunnerAction.runner` y `CancelActionRunnerAction.runner` pasan de `ActionRunner` a `TargetComponent<ActionRunner>`. Hay que volver a asignar las referencias
+    - `InstantiateAction.parent` pasa de `Transform` a `TargetComponent<Transform>`. Por defecto es `Custom` vacío, que equivale a la raíz de la escena
+    - Dependencias: `com.harryb97.tools.conditions` 2.0.0-beta.1, nueva `com.harryb97.tools.scenerefs` 1.0.0-beta.1 y `serializereferences` 1.0.3
+
+    Añadido:
+    - Las acciones pueden apuntar por ID a objetos de escena desde assets y otras escenas
+    - Pruebas de PlayMode en `Tests/`
+
+    Otros:
+    - Todos los comentarios, tooltips y mensajes del código pasan a inglés
+
 ## 1.0.4
 
     - `displayName` de `Actions` a `HarryTools Actions`, para distinguirlo en la carpeta Packages y en el Package Manager. Los samples nuevos se importan en `Assets/Samples/HarryTools Actions/`

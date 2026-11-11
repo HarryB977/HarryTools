@@ -9,12 +9,13 @@ namespace HarryTools.Actions.Variants {
     public class CancelActionRunnerAction : InstantAction {
         // ==================== VARIABLES ===================
         #region Private Variables
-        [SerializeField] private ActionRunner runner;
+        [SerializeField] private TargetComponent<ActionRunner> runner = new();
         #endregion
 
         // ==================== METHODS ====================
         protected override void Execute(LogicContext _context) {
-            if (runner != null) runner.Cancel();
+            ActionRunner _runner = runner?.Resolve(_context);
+            if (_runner != null) _runner.Cancel();
         }
     }
 }

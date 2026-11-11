@@ -5,7 +5,7 @@ using HarryTools.Conditions;
 using HarryTools.SerializeReferences;
 
 namespace HarryTools.Actions.Variants {
-    /// <summary> Cierra la aplicación (en el editor, sale del modo Play) </summary>
+    /// <summary> Quits the application (in the editor, exits Play mode) </summary>
     [Serializable, TypeMenu("Application/Quit")]
     public class QuitAction : InstantAction {
         // ==================== METHODS ====================

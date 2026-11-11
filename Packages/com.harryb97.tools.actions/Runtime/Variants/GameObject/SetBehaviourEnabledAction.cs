@@ -9,13 +9,16 @@ namespace HarryTools.Actions.Variants {
     public class SetBehaviourEnabledAction : InstantAction {
         // ==================== VARIABLES ===================
         #region Private Variables
-        [SerializeField] private Behaviour[] behaviours = Array.Empty<Behaviour>();
+        [SerializeField] private TargetComponent<Behaviour>[] behaviours = Array.Empty<TargetComponent<Behaviour>>();
         [SerializeField] private ToggleMode mode = ToggleMode.Enable;
         #endregion
 
         // ==================== METHODS ====================
         protected override void Execute(LogicContext _context) {
-            foreach (Behaviour _behaviour in behaviours) {
+            if (behaviours == null) return;
+
+            foreach (TargetComponent<Behaviour> _target in behaviours) {
+                Behaviour _behaviour = _target?.Resolve(_context);
                 if (_behaviour == null) continue;
 
                 _behaviour.enabled = mode switch {

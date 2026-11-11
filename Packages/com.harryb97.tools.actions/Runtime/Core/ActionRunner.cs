@@ -4,20 +4,20 @@ using UnityEngine;
 using HarryTools.Conditions;
 
 namespace HarryTools.Actions {
-    /// <summary> Componente que ejecuta una 'ActionList'. Se puede lanzar automáticamente, por código o desde un UnityEvent </summary>
+    /// <summary> Component that runs an 'ActionList'. It can start automatically, from code or from a UnityEvent </summary>
     [AddComponentMenu("HarryTools/Action Runner")]
     public class ActionRunner : MonoBehaviour {
         public enum RunMoment {
-            [Tooltip("Solo por código o eventos")] Manual,
+            [Tooltip("Only from code or events")] Manual,
             Awake,
             Start,
             OnEnable
         }
 
         public enum RestartMode {
-            [Tooltip("Cancela la ejecución en curso y empieza de nuevo")] Restart,
-            [Tooltip("No hace nada si ya se está ejecutando")] Ignore,
-            [Tooltip("Permite varias ejecuciones a la vez")] Parallel
+            [Tooltip("Cancels the running execution and starts again")] Restart,
+            [Tooltip("Does nothing if it is already running")] Ignore,
+            [Tooltip("Allows several executions at once")] Parallel
         }
 
         // ==================== VARIABLES ===================
@@ -29,7 +29,7 @@ namespace HarryTools.Actions {
         #region Private Variables
         [SerializeField] private RunMoment runOn = RunMoment.Manual;
         [SerializeField] private RestartMode whenAlreadyRunning = RestartMode.Restart;
-        [Tooltip("Cancela la ejecución al desactivar el componente"), SerializeField] private bool cancelOnDisable = true;
+        [Tooltip("Cancels the execution when the component is disabled"), SerializeField] private bool cancelOnDisable = true;
         [Space]
         [SerializeField] private ActionList actions = new();
 
@@ -54,13 +54,13 @@ namespace HarryTools.Actions {
         }
 
         // ==================== METHODS ====================
-        /// <summary> Ejecuta las acciones con este objeto como 'Self' </summary>
+        /// <summary> Runs the actions with this object as 'Self' </summary>
         public void Run() => RunWithTarget(null);
 
-        /// <summary> Ejecuta las acciones con este objeto como 'Self' y el indicado como 'Target' </summary>
+        /// <summary> Runs the actions with this object as 'Self' and the given one as 'Target' </summary>
         public void RunWithTarget(GameObject _target) => RunAndGetHandle(_target);
 
-        /// <summary> Igual que 'RunWithTarget', pero devuelve el handle (null si se ignoró) </summary>
+        /// <summary> Same as 'RunWithTarget', but returns the handle (null if ignored) </summary>
         public ActionHandle RunAndGetHandle(GameObject _target = null) {
             if (IsRunning) {
                 if (whenAlreadyRunning == RestartMode.Ignore) return null;
@@ -77,7 +77,7 @@ namespace HarryTools.Actions {
         }
 
         public void Cancel() {
-            // Copia: al cancelar, 'Finished' modifica la lista
+            // Copy: when cancelling, 'Finished' modifies the list
             foreach (ActionHandle _handle in handles.ToArray()) _handle.Cancel();
         }
 

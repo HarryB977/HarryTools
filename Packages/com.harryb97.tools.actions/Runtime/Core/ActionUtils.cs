@@ -11,10 +11,10 @@ namespace HarryTools.Actions {
     public static class ActionUtils {
         // ==================== METHODS ====================
         /// <summary>
-        /// Ejecuta las acciones en orden, esperando a que termine cada una.
-        /// Las vacías (null) se ignoran. Si una acción lanza una excepción, se muestra en consola y se continúa con la siguiente.
+        /// Runs the actions in order, waiting for each one to finish.
+        /// Empty (null) entries are ignored. If an action throws, the exception is logged to the console and the next one runs.
         /// </summary>
-        /// <exception cref="OperationCanceledException"> Si se cancela el token </exception>
+        /// <exception cref="OperationCanceledException"> If the token is cancelled </exception>
         public static async UniTask RunSequence(this IReadOnlyList<IAction> _actions, LogicContext _context, CancellationToken _token) {
             if (_actions == null) return;
 
@@ -26,7 +26,7 @@ namespace HarryTools.Actions {
             }
         }
 
-        /// <summary> Ejecuta una acción mostrando en consola cualquier excepción que no sea de cancelación </summary>
+        /// <summary> Runs an action, logging to the console any exception that is not a cancellation </summary>
         public static async UniTask RunSafe(this IAction _action, LogicContext _context, CancellationToken _token) {
             if (_action == null) return;
 
@@ -39,7 +39,7 @@ namespace HarryTools.Actions {
             }
         }
 
-        /// <summary> Inicia la ejecución sin esperar y devuelve un 'ActionHandle' para controlarla </summary>
+        /// <summary> Starts the execution without waiting and returns an 'ActionHandle' to control it </summary>
         public static ActionHandle Start(this IReadOnlyList<IAction> _actions, LogicContext _context, CancellationToken _token = default) {
             return new ActionHandle(_linkedToken => _actions.RunSequence(_context, _linkedToken), _token);
         }

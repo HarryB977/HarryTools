@@ -6,7 +6,7 @@ using HarryTools.Conditions;
 using Cysharp.Threading.Tasks;
 
 namespace HarryTools.Actions {
-    /// <summary> Base para acciones que terminan en el mismo frame. Solo hay que implementar 'Execute' </summary>
+    /// <summary> Base for actions that finish in the same frame. Only 'Execute' needs to be implemented </summary>
     [Serializable]
     public abstract class InstantAction : IAction {
         // ==================== INTERFACES ====================

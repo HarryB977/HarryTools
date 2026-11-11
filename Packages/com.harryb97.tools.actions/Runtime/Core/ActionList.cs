@@ -9,13 +9,13 @@ using Cysharp.Threading.Tasks;
 
 namespace HarryTools.Actions {
     /// <summary>
-    /// Lista de acciones con condiciones previas, lista para usar como campo en cualquier componente.
-    /// Si las condiciones no se cumplen, no se ejecuta ninguna acción.
+    /// List of actions with preconditions, ready to use as a field in any component.
+    /// If the conditions are not met, no action runs.
     /// </summary>
     /// <example>
     /// [SerializeField] private ActionList onOpen;
     /// ...
-    /// onOpen.Run(this);                                   // Sin esperar, se cancela al destruir el componente
+    /// onOpen.Run(this);                                   // Fire and forget, cancelled when the component is destroyed
     /// await onOpen.RunAsync(LogicContext.From(this), destroyCancellationToken);
     /// </example>
     [Serializable]
@@ -45,9 +45,9 @@ namespace HarryTools.Actions {
         }
 
         // ==================== METHODS ====================
-        /// <summary> Ejecuta la lista y espera a que termine </summary>
-        /// <returns> Falso si las condiciones no se cumplieron </returns>
-        /// <exception cref="OperationCanceledException"> Si se cancela el token </exception>
+        /// <summary> Runs the list and waits for it to finish </summary>
+        /// <returns> False if the conditions were not met </returns>
+        /// <exception cref="OperationCanceledException"> If the token is cancelled </exception>
         public async UniTask<bool> RunAsync(LogicContext _context, CancellationToken _token = default) {
             if (conditions != null && !conditions.Check(_context)) return false;
 
@@ -55,12 +55,12 @@ namespace HarryTools.Actions {
             return true;
         }
 
-        /// <summary> Ejecuta la lista sin esperar y devuelve un 'ActionHandle' para controlarla </summary>
+        /// <summary> Runs the list without waiting and returns an 'ActionHandle' to control it </summary>
         public ActionHandle Run(LogicContext _context, CancellationToken _token = default) {
             return new ActionHandle(_linkedToken => RunAsync(_context, _linkedToken), _token);
         }
 
-        /// <summary> Ejecuta la lista sin esperar, con el componente como 'Self'. Se cancela al destruir el componente </summary>
+        /// <summary> Runs the list without waiting, with the component as 'Self'. Cancelled when the component is destroyed </summary>
         public ActionHandle Run(MonoBehaviour _owner, GameObject _target = null) {
             return Run(LogicContext.From(_owner, _target), _owner != null ? _owner.destroyCancellationToken : default);
         }

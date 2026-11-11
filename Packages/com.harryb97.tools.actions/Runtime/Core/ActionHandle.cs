@@ -6,8 +6,8 @@ using Cysharp.Threading.Tasks;
 
 namespace HarryTools.Actions {
     /// <summary>
-    /// Representa una ejecución en curso. Permite cancelarla, esperarla o saber cómo terminó.
-    /// Sustituye al diccionario estático de ejecuciones activas: cada ejecución tiene su propio control.
+    /// Represents a running execution. It can be cancelled, awaited, or inspected to see how it ended.
+    /// Replaces the static dictionary of active executions: each execution has its own control.
     /// </summary>
     public sealed class ActionHandle {
         public enum HandleStatus {
@@ -22,10 +22,10 @@ namespace HarryTools.Actions {
         public HandleStatus Status { get; private set; } = HandleStatus.Running;
         public bool IsRunning => Status == HandleStatus.Running;
 
-        /// <summary> Se puede esperar tantas veces como se quiera. Nunca lanza excepción </summary>
+        /// <summary> Can be awaited any number of times. Never throws </summary>
         public UniTask Task { get; }
 
-        /// <summary> Se invoca al terminar, sea cual sea el motivo </summary>
+        /// <summary> Invoked when it finishes, whatever the reason </summary>
         public event Action<ActionHandle> Finished;
         #endregion
 
@@ -34,8 +34,8 @@ namespace HarryTools.Actions {
         #endregion
 
         // ==================== START ====================
-        /// <param name="_work"> Trabajo a ejecutar, recibe el token enlazado </param>
-        /// <param name="_token"> Token externo: cancelarlo también cancela esta ejecución </param>
+        /// <param name="_work"> Work to run, receives the linked token </param>
+        /// <param name="_token"> External token: cancelling it also cancels this execution </param>
         public ActionHandle(Func<CancellationToken, UniTask> _work, CancellationToken _token = default) {
             source = CancellationTokenSource.CreateLinkedTokenSource(_token);
             Task = Execute(_work, source.Token).Preserve();

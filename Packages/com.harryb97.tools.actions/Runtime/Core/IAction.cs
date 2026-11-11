@@ -6,9 +6,9 @@ using Cysharp.Threading.Tasks;
 
 namespace HarryTools.Actions {
     /// <summary>
-    /// Pieza de lógica ejecutable desde el inspector. Puede ser instantánea o durar varios frames.
-    /// Las implementaciones deben ser [Serializable] para mostrarse en el desplegable de [TypeSelector].
-    /// Si la acción espera, debe respetar el 'CancellationToken' (pasándolo a UniTask o comprobándolo en cada frame).
+    /// Piece of logic that can be run from the inspector. It can be instant or last several frames.
+    /// Implementations must be [Serializable] to show up in the [TypeSelector] dropdown.
+    /// If the action waits, it must honour the 'CancellationToken' (pass it to UniTask or check it every frame).
     /// </summary>
     public interface IAction {
         UniTask Run(LogicContext _context, CancellationToken _token);

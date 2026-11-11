@@ -8,19 +8,19 @@ using HarryTools.SerializeReferences;
 using Cysharp.Threading.Tasks;
 
 namespace HarryTools.Actions.Variants {
-    /// <summary> Espera hasta que se cumplan las condiciones. Sustituye a los 'Requisites' que esperaban </summary>
+    /// <summary> Waits until the conditions are met. Replaces the 'Requisites' that used to wait </summary>
     [Serializable, TypeMenu("Flow/Wait Until", -98)]
     public class WaitUntilAction : IAction {
         public enum TimeoutBehaviour {
-            [Tooltip("Continúa con las siguientes acciones")] Continue,
-            [Tooltip("Cancela el resto de la lista")] Cancel
+            [Tooltip("Continues with the next actions")] Continue,
+            [Tooltip("Cancels the rest of the list")] Cancel
         }
 
         // ==================== VARIABLES ===================
         #region Private Variables
         [SerializeField] private ConditionList conditions = new();
         [Space]
-        [Tooltip("Segundos máximos de espera (0 = sin límite)"), SerializeField, Min(0)] private float timeout;
+        [Tooltip("Maximum wait in seconds (0 = no limit)"), SerializeField, Min(0)] private float timeout;
         [SerializeField] private TimeoutBehaviour onTimeout = TimeoutBehaviour.Continue;
         [SerializeField] private bool ignoreTimeScale;
         #endregion
@@ -31,7 +31,7 @@ namespace HarryTools.Actions.Variants {
 
             while (!conditions.Check(_context)) {
                 if (timeout > 0 && _elapsed >= timeout) {
-                    if (onTimeout == TimeoutBehaviour.Cancel) throw new OperationCanceledException("'Wait Until' ha superado el tiempo máximo");
+                    if (onTimeout == TimeoutBehaviour.Cancel) throw new OperationCanceledException("'Wait Until' exceeded the maximum time");
                     return;
                 }
 

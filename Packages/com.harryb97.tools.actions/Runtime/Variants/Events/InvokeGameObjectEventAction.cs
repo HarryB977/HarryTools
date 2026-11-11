@@ -6,7 +6,7 @@ using HarryTools.Conditions;
 using HarryTools.SerializeReferences;
 
 namespace HarryTools.Actions.Variants {
-    /// <summary> Invoca un UnityEvent que recibe el GameObject indicado (por ejemplo, el 'Target' del contexto) </summary>
+    /// <summary> Invokes a UnityEvent that receives the given GameObject (for example, the context 'Target') </summary>
     [Serializable, TypeMenu("Events/Invoke GameObject Event", -79)]
     public class InvokeGameObjectEventAction : InstantAction {
         // ==================== VARIABLES ===================

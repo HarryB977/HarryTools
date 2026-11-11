@@ -13,7 +13,7 @@ namespace HarryTools.Actions.Variants {
         // ==================== VARIABLES ===================
         #region Private Variables
         [SerializeField, Min(0)] private float seconds = 1f;
-        [Tooltip("Ignora 'Time.timeScale' (sigue contando con el juego pausado)"), SerializeField] private bool ignoreTimeScale;
+        [Tooltip("Ignores 'Time.timeScale' (keeps counting while the game is paused)"), SerializeField] private bool ignoreTimeScale;
         #endregion
 
         // ==================== INTERFACES ====================

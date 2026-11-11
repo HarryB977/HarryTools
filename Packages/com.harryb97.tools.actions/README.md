@@ -2,6 +2,10 @@
 
 Acciones modulares asíncronas configurables desde el inspector. Depende de `com.harryb97.tools.serializereferences`, `com.harryb97.tools.conditions` y **UniTask** (debe estar instalado en el proyecto).
 
+## Referencias por ID
+
+Los campos de objeto de las acciones (`Set Behaviour Enabled`, `Run/Cancel Action Runner`, `Instantiate > Parent`) usan el origen `Self` / `Target` / `Custom`. En `Custom` se puede arrastrar cualquier objeto de escena o recuperarlo por su ID, incluso desde un asset o desde otra escena. Para ello el proyecto necesita en el manifest `com.harryb97.tools.conditions` 2.0.0-beta.1 y `com.harryb97.tools.scenerefs` 1.0.0-beta.1 (más `serializereferences` 1.0.3 y UniTask), que se resuelven desde OpenUPM.
+
 ## Uso
 
 ```csharp

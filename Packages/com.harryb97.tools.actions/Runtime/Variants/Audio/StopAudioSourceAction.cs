@@ -10,7 +10,7 @@ namespace HarryTools.Actions.Variants {
         // ==================== VARIABLES ===================
         #region Private Variables
         [SerializeField] private TargetComponent<AudioSource> audioSource = new();
-        [Tooltip("Pausa en lugar de detener"), SerializeField] private bool pause;
+        [Tooltip("Pauses instead of stopping"), SerializeField] private bool pause;
         #endregion
 
         // ==================== METHODS ====================

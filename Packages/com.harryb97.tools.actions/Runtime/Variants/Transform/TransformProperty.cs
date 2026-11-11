@@ -3,7 +3,7 @@ using UnityEngine;
 namespace HarryTools.Actions.Variants {
     public enum TransformProperty {
         Position,
-        [Tooltip("Ángulos Euler")] Rotation,
+        [Tooltip("Euler angles")] Rotation,
         Scale
     }
 
@@ -24,7 +24,7 @@ namespace HarryTools.Actions.Variants {
             };
         }
 
-        /// <summary> La escala en 'World' no se puede asignar directamente, se asigna siempre en local </summary>
+        /// <summary> Scale in 'World' space cannot be assigned directly, it is always assigned in local space </summary>
         public static void Set(this Transform _transform, TransformProperty _property, TransformSpace _space, Vector3 _value) {
             bool _local = _space == TransformSpace.Local;
 

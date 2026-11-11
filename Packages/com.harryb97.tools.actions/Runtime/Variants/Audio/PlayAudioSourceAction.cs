@@ -13,9 +13,9 @@ namespace HarryTools.Actions.Variants {
         // ==================== VARIABLES ===================
         #region Private Variables
         [SerializeField] private TargetComponent<AudioSource> audioSource = new();
-        [Tooltip("Clip a reproducir (vacío = el que ya tenga asignado)"), SerializeField] private AudioClip clip;
-        [Tooltip("Reproduce con 'PlayOneShot', permitiendo solapar sonidos"), SerializeField] private bool oneShot;
-        [Tooltip("Espera a que termine el sonido. Si se cancela la lista, se detiene"), SerializeField] private bool waitUntilFinished;
+        [Tooltip("Clip to play (empty = the one already assigned)"), SerializeField] private AudioClip clip;
+        [Tooltip("Plays with 'PlayOneShot', allowing sounds to overlap"), SerializeField] private bool oneShot;
+        [Tooltip("Waits for the sound to finish. If the list is cancelled, it stops"), SerializeField] private bool waitUntilFinished;
         #endregion
 
         // ==================== INTERFACES ====================
@@ -39,7 +39,7 @@ namespace HarryTools.Actions.Variants {
             if (!waitUntilFinished) return;
 
             try {
-                // 'isPlaying' es falso durante un frame tras llamar a 'Play' en algunas plataformas
+                // 'isPlaying' is false for one frame after calling 'Play' on some platforms
                 await UniTask.Yield(PlayerLoopTiming.Update, _token);
                 while (_source != null && (_source.isPlaying || AudioListener.pause)) await UniTask.Yield(PlayerLoopTiming.Update, _token);
             } catch (OperationCanceledException) {
