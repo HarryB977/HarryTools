@@ -22,7 +22,7 @@ namespace HarryTools.SceneRefs.Editor
 
         /// <summary>
         /// Assigns a dropped GameObject or component. A GameObject gives its T, a component gives its GameObject when T is GameObject.
-        /// Inside one prefab (asset or Prefab Mode) only the direct reference is stored. Scene objects get a SceneId if needed and
+        /// Inside one prefab (asset, Prefab Mode or one prefab instance of a scene) only the direct reference is stored. Scene objects get a SceneId if needed and
         /// their guid; the direct reference is kept only when owner and target share a scene. Assets and objects without T are rejected.
         /// </summary>
         public static bool TryAssign(SerializedProperty _ref, Object _dropped, Type _targetType)
@@ -135,7 +135,8 @@ namespace HarryTools.SceneRefs.Editor
             if (_target == null) return false;
 
             GameObject _go = GameObjectOf(_target);
-            _directOnly = InSamePrefab(_ref.serializedObject.targetObject, _go);
+            Object _owner = _ref.serializedObject.targetObject;
+            _directOnly = InSamePrefab(_owner, _go) || (SceneRefSync.IsSceneObject(_go) && SceneRefSync.InSamePrefabInstance(_owner, _go));
             return _directOnly || SceneRefSync.IsSceneObject(_go);
         }
 

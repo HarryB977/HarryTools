@@ -120,6 +120,45 @@ namespace HarryTools.SceneRefs.Tests
             Assert.AreEqual(_target.GetComponent<SceneId>().Guid, _holder.audioSource.guid);
         }
 
+        [Test]
+        public void Sync_InsideSamePrefabInstance_DirectOnly_NoSceneId()
+        {
+            Scene _scene = util.NewScene("SyncInstance");
+            GameObject _root = SceneIndexTestUtil.NewObject(_scene, "Enemy");
+            GameObject _muzzle = SceneIndexTestUtil.NewObject(_scene, "Muzzle", _root);
+            SceneRefHolder _holder = _root.AddComponent<SceneRefHolder>();
+            PrefabUtility.SaveAsPrefabAssetAndConnect(_root, SceneIndexTestUtil.Folder + "/Enemy.prefab", InteractionMode.AutomatedAction);
+            // Id fields an older sync may have left behind are cleared too.
+            _holder.target.SetForTests(_muzzle, GuidA, "x", 1, "Muzzle in SyncInstance");
+
+            SceneRefSync.SyncScene(_scene);
+
+            Assert.IsNull(_muzzle.GetComponent<SceneId>(), "An internal reference of a prefab instance must not add a SceneId.");
+            Assert.AreEqual(_muzzle, _holder.target.direct);
+            Assert.AreEqual(string.Empty, _holder.target.guid);
+            Assert.AreEqual(string.Empty, _holder.target.componentType);
+            Assert.AreEqual(0, _holder.target.componentIndex);
+            Assert.AreEqual(string.Empty, _holder.target.label);
+        }
+
+        [Test]
+        public void Sync_FromPrefabInstanceToOtherObject_KeepsGuid()
+        {
+            Scene _scene = util.NewScene("SyncInstanceOut");
+            GameObject _root = SceneIndexTestUtil.NewObject(_scene, "Enemy");
+            SceneRefHolder _holder = _root.AddComponent<SceneRefHolder>();
+            PrefabUtility.SaveAsPrefabAssetAndConnect(_root, SceneIndexTestUtil.Folder + "/EnemyOut.prefab", InteractionMode.AutomatedAction);
+            GameObject _door = SceneIndexTestUtil.NewObject(_scene, "Door");
+            _holder.target.SetForTests(_door, null, null, 0, null);
+
+            SceneRefSync.SyncScene(_scene);
+
+            SceneId _id = _door.GetComponent<SceneId>();
+            Assert.IsNotNull(_id);
+            Assert.AreEqual(_id.Guid, _holder.target.guid);
+            Assert.AreEqual(_door, _holder.target.direct);
+        }
+
         // ==================== ENSURE ID ====================
 
         [Test]

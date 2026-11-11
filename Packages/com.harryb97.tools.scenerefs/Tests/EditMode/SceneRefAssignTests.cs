@@ -246,6 +246,23 @@ namespace HarryTools.SceneRefs.Tests
         }
 
         [Test]
+        public void TryAssign_InsideSamePrefabInstance_DirectOnly_NoSceneId()
+        {
+            Scene _scene = util.NewScene("AssignInsideInstance");
+            GameObject _root = SceneIndexTestUtil.NewObject(_scene, "Enemy");
+            GameObject _muzzle = SceneIndexTestUtil.NewObject(_scene, "Muzzle", _root);
+            SceneRefHolder _holder = _root.AddComponent<SceneRefHolder>();
+            PrefabUtility.SaveAsPrefabAssetAndConnect(_root, SceneIndexTestUtil.Folder + "/AssignEnemy.prefab", InteractionMode.AutomatedAction);
+
+            Assert.IsTrue(SceneRefAssign.TryAssign(Property(_holder, "target"), _muzzle, typeof(GameObject)));
+
+            Assert.AreEqual(_muzzle, _holder.target.direct);
+            Assert.IsTrue(string.IsNullOrEmpty(_holder.target.guid));
+            Assert.IsTrue(string.IsNullOrEmpty(_holder.target.label));
+            Assert.IsNull(_muzzle.GetComponent<SceneId>());
+        }
+
+        [Test]
         public void TryAssign_AddsSceneIdIfMissing()
         {
             Scene _scene = util.NewScene("AssignNewId");

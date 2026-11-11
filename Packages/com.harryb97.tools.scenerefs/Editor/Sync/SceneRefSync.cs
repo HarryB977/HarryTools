@@ -38,7 +38,7 @@ namespace HarryTools.SceneRefs.Editor
         /// <summary>
         /// With a live direct reference: makes sure the target has a SceneId and writes guid, component type, component index and label.
         /// A direct reference to another scene than the owner's is cleared afterwards and the guid is kept.
-        /// References to prefab objects (assets or Prefab Mode) stay direct only.
+        /// References to prefab objects (assets or Prefab Mode) and between objects of one prefab instance stay direct only.
         /// </summary>
         public static void SyncProperty(SerializedProperty _ref) => SyncProperty(_ref, (HashSet<string>)null);
 
@@ -91,6 +91,23 @@ namespace HarryTools.SceneRefs.Editor
             if (_go == null || !IsSceneObject(_go)) return;
 
             bool _changed = false;
+            if (InSamePrefabInstance(_ref.serializedObject.targetObject, _go))
+            {
+                // Internal reference of a prefab instance: direct only, like inside the prefab asset, so instances get no SceneId or overrides.
+                if (_direct.objectReferenceValue != _target)
+                {
+                    _direct.objectReferenceValue = _target;
+                    _changed = true;
+                }
+
+                _changed |= SetString(_ref, SceneRefPropertyWalker.GuidField, string.Empty);
+                _changed |= SetString(_ref, SceneRefPropertyWalker.ComponentTypeField, string.Empty);
+                _changed |= SetInt(_ref, SceneRefPropertyWalker.ComponentIndexField, 0);
+                _changed |= SetString(_ref, SceneRefPropertyWalker.LabelField, string.Empty);
+                if (_changed) _ref.serializedObject.ApplyModifiedProperties();
+                return;
+            }
+
             SceneId _id = EnsureId(_go, _taken);
             if (_id != null && !string.IsNullOrEmpty(_id.Guid))
             {
@@ -204,6 +221,16 @@ namespace HarryTools.SceneRefs.Editor
             && !EditorSceneManager.IsPreviewScene(_go.scene)
             && PrefabStageUtility.GetPrefabStage(_go) == null;
 
+        /// <summary>Owner and target inside the same outermost prefab instance of a scene.</summary>
+        internal static bool InSamePrefabInstance(Object _owner, GameObject _target)
+        {
+            GameObject _ownerGo = GameObjectOf(_owner);
+            if (_ownerGo == null || _target == null) return false;
+
+            GameObject _root = PrefabUtility.GetOutermostPrefabInstanceRoot(_ownerGo);
+            return _root != null && _root == PrefabUtility.GetOutermostPrefabInstanceRoot(_target);
+        }
+
         // ==================== PRIVATE ====================
 
         private static void OnSceneSaving(Scene _scene, string _path)
@@ -215,7 +242,8 @@ namespace HarryTools.SceneRefs.Editor
         private static bool NeedsId(SerializedProperty _ref)
         {
             GameObject _go = GameObjectOf(_ref.FindPropertyRelative(SceneRefPropertyWalker.DirectField).objectReferenceValue);
-            return _go != null && IsSceneObject(_go) && !_go.TryGetComponent(out SceneId _);
+            return _go != null && IsSceneObject(_go) && !_go.TryGetComponent(out SceneId _)
+                && !InSamePrefabInstance(_ref.serializedObject.targetObject, _go);
         }
 
         private static GameObject GameObjectOf(Object _target)
