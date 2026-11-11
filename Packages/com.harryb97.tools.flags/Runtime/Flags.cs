@@ -16,8 +16,8 @@ namespace HarryTools.Flags
         private const string LogCategory = "Flags";
         private const string BoolType = "bool";
 
-        [ClearOnReload] private static Dictionary<string, bool> changed = new Dictionary<string, bool>();
-        [ClearOnReload] private static Dictionary<string, List<Action<FlagChange>>> subscribers = new Dictionary<string, List<Action<FlagChange>>>();
+        [ClearOnReload(AssignNewInstance = true)] private static Dictionary<string, bool> changed = new Dictionary<string, bool>();
+        [ClearOnReload(AssignNewInstance = true)] private static Dictionary<string, List<Action<FlagChange>>> subscribers = new Dictionary<string, List<Action<FlagChange>>>();
         [ClearOnReload] private static FlagDatabase database;
         [ClearOnReload] private static bool databaseIsFallback;
         [ClearOnReload] private static Action<FlagChange> changedHandlers;
