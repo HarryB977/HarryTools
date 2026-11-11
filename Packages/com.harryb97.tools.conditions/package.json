@@ -2,7 +2,7 @@
   "name": "com.harryb97.tools.conditions",
   "version": "2.0.0-beta.1",
   "displayName": "HarryTools Conditions",
-  "description": "Modular conditions configurable from the inspector with [SerializeReference]. They combine with lists (All / Any) and logic operators",
+  "description": "Condiciones modulares configurables desde el inspector con [SerializeReference]. Se combinan con listas (Todas / Alguna) y operadores lógicos",
   "unity": "6000.0",
   "keywords": [
     "design",
