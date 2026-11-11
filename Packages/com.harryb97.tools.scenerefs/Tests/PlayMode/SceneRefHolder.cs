@@ -12,5 +12,6 @@ namespace HarryTools.SceneRefs.Tests
 
         public SceneRef<GameObject> target = new SceneRef<GameObject>();
         public SceneRef<AudioSource> audioSource = new SceneRef<AudioSource>();
+        public SceneRef<Light> light = new SceneRef<Light>();
     }
 }
