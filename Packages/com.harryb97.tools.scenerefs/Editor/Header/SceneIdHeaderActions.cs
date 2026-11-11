@@ -48,6 +48,8 @@ namespace HarryTools.SceneRefs.Editor
         public static bool TrySetId(GameObject _target, string _id, out string _conflictWith)
         {
             _conflictWith = null;
+            if (string.IsNullOrWhiteSpace(_id)) return false;
+
             SceneId _sceneId = SceneRefSync.EnsureId(_target);
             if (_sceneId == null) return true;
 

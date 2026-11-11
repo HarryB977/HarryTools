@@ -70,7 +70,7 @@ namespace HarryTools.SceneRefs.Editor
             GUILayout.Label(label, GUILayout.Width(18f));
             if (_conflict != null) GUI.contentColor = new Color(1f, 0.4f, 0.4f);
             EditorGUI.BeginChangeCheck();
-            string _text = EditorGUILayout.TextField(_id.Id);
+            string _text = EditorGUILayout.DelayedTextField(_id.Id);
             GUI.contentColor = _previous;
             bool _edited = EditorGUI.EndChangeCheck();
 

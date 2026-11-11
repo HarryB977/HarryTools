@@ -74,6 +74,20 @@ namespace HarryTools.SceneRefs.Tests
         }
 
         [Test]
+        public void TrySetId_EmptyOrWhitespace_KeepsPreviousId()
+        {
+            Scene _scene = util.NewScene("HeaderEmpty");
+            GameObject _target = SceneIndexTestUtil.NewObject(_scene, "Target");
+            SceneIndexTestUtil.AddId(_target, GuidB, "Keep");
+
+            Assert.IsFalse(SceneIdHeaderActions.TrySetId(_target, "", out string _conflict));
+            Assert.IsNull(_conflict);
+            Assert.IsFalse(SceneIdHeaderActions.TrySetId(_target, "   ", out _conflict));
+            Assert.IsNull(_conflict);
+            Assert.AreEqual("Keep", _target.GetComponent<SceneId>().Id);
+        }
+
+        [Test]
         public void RegenerateGuid_KeepsVisibleId()
         {
             Scene _scene = util.NewScene("HeaderRegen");
