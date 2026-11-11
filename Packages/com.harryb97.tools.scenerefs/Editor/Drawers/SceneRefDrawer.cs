@@ -269,8 +269,7 @@ namespace HarryTools.SceneRefs.Editor
 
         private static void OpenPicker(Rect _button, SerializedProperty _property, Type _targetType)
         {
-            SceneIdIndex _index = SceneIdIndex.Existing;
-            IReadOnlyList<SceneIdIndexEntry> _entries = _index != null ? _index.Entries : null;
+            IReadOnlyList<SceneIdIndexEntry> _entries = SceneRefPickerDropdown.PickerEntries();
             Object[] _targets = _property.serializedObject.targetObjects;
             string _path = _property.propertyPath;
 

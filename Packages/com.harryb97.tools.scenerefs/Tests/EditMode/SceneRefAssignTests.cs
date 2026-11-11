@@ -328,6 +328,28 @@ namespace HarryTools.SceneRefs.Tests
             Assert.AreEqual(0, _holder.target.componentIndex);
         }
 
+        // ==================== PICKER ====================
+
+        [Test]
+        public void PickerEntries_ListLiveIdsOfLoadedScenes_AndIndexOfClosedOnes()
+        {
+            const string ClosedGuid = "cccccccccccccccccccccccccccccccc";
+            Scene _scene = util.NewScene("PickerLive");
+            string _sceneGuid = AssetDatabase.AssetPathToGUID(_scene.path);
+            // An outdated entry of the loaded scene, and a closed scene known only through the index.
+            util.Index.ReplaceScene(_sceneGuid, new List<SceneIdIndexEntry> { new SceneIdIndexEntry { Guid = GuidB, Id = "Old", SceneName = "PickerLive" } });
+            util.Index.ReplaceScene("closedscene", new List<SceneIdIndexEntry> { new SceneIdIndexEntry { Guid = ClosedGuid, Id = "Closed", SceneName = "Kitchen" } });
+            // Not saved yet, so not in the index.
+            SceneIndexTestUtil.AddId(SceneIndexTestUtil.NewObject(_scene, "Fresh"), GuidA, "Fresh");
+
+            List<string> _guids = new List<string>();
+            foreach (SceneIdIndexEntry _entry in SceneRefPickerDropdown.PickerEntries()) _guids.Add(_entry.Guid);
+
+            CollectionAssert.Contains(_guids, GuidA);
+            CollectionAssert.Contains(_guids, ClosedGuid);
+            CollectionAssert.DoesNotContain(_guids, GuidB);
+        }
+
         // ==================== DRAWER ====================
 
         [Test]

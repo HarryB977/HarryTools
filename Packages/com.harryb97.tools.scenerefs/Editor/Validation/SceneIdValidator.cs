@@ -1,7 +1,5 @@
 using System;
 using System.Collections.Generic;
-using UnityEditor.SceneManagement;
-using UnityEngine.SceneManagement;
 
 namespace HarryTools.SceneRefs.Editor
 {
@@ -48,28 +46,9 @@ namespace HarryTools.SceneRefs.Editor
         {
             SceneIdIndexMaintainer.RefreshStale(true);
 
-            HashSet<string> _loaded = new HashSet<string>(StringComparer.Ordinal);
-            List<SceneIdIndexEntry> _entries = new List<SceneIdIndexEntry>();
-            for (int _i = 0; _i < SceneManager.sceneCount; _i++)
-            {
-                Scene _scene = SceneManager.GetSceneAt(_i);
-                if (!_scene.isLoaded || EditorSceneManager.IsPreviewScene(_scene)) continue;
-
-                _loaded.Add(SceneIndexer.SceneKey(_scene));
-                _entries.AddRange(SceneIndexer.FromLoadedScene(_scene));
-            }
-
             // Never creates the project index just to validate.
             SceneIdIndex _index = SceneIdIndex.Existing;
-            IReadOnlyList<string> _prefabs = null;
-            if (_index != null)
-            {
-                foreach (SceneIdIndexEntry _entry in _index.Entries)
-                    if (!_loaded.Contains(_entry.SceneGuid)) _entries.Add(_entry);
-                _prefabs = _index.PrefabsWithIds;
-            }
-
-            return Validate(_entries, _prefabs);
+            return Validate(SceneIndexer.ProjectEntries(_index), _index != null ? _index.PrefabsWithIds : null);
         }
 
         // ==================== PRIVATE ====================

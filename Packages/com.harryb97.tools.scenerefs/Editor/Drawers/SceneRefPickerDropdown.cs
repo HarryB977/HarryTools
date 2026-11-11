@@ -55,6 +55,12 @@ namespace HarryTools.SceneRefs.Editor
 
         // ==================== INTERNAL ====================
 
+        /// <summary>
+        /// Entries the picker lists: the live SceneIds of the loaded scenes, so objects not saved yet can be picked,
+        /// plus the index entries of the scenes that are not loaded. Never creates the index.
+        /// </summary>
+        internal static List<SceneIdIndexEntry> PickerEntries() => SceneIndexer.ProjectEntries(SceneIdIndex.Existing);
+
         /// <summary>None plus one group per scene, each with its matching entries sorted by id.</summary>
         internal static AdvancedDropdownItem BuildTree(Type _targetType, IReadOnlyList<SceneIdIndexEntry> _entries)
         {

@@ -55,6 +55,29 @@ namespace HarryTools.SceneRefs.Editor
             return _result;
         }
 
+        /// <summary>
+        /// Every SceneId of the project as it is now: loaded scenes (saved or not) read from memory, plus the index entries
+        /// of the scenes that are not loaded. The index may be null.
+        /// </summary>
+        internal static List<SceneIdIndexEntry> ProjectEntries(SceneIdIndex _index)
+        {
+            HashSet<string> _loaded = new HashSet<string>(System.StringComparer.Ordinal);
+            List<SceneIdIndexEntry> _entries = new List<SceneIdIndexEntry>();
+            for (int _i = 0; _i < SceneManager.sceneCount; _i++)
+            {
+                Scene _scene = SceneManager.GetSceneAt(_i);
+                if (!_scene.isLoaded || EditorSceneManager.IsPreviewScene(_scene)) continue;
+
+                _loaded.Add(SceneKey(_scene));
+                _entries.AddRange(FromLoadedScene(_scene));
+            }
+
+            if (_index != null)
+                foreach (SceneIdIndexEntry _entry in _index.Entries)
+                    if (!_loaded.Contains(_entry.SceneGuid)) _entries.Add(_entry);
+            return _entries;
+        }
+
         /// <summary>Asset guid of the scene, or "unsaved:" + handle when it was never saved.</summary>
         internal static string SceneKey(Scene _scene) =>
             string.IsNullOrEmpty(_scene.path) ? UnsavedPrefix + _scene.handle : AssetDatabase.AssetPathToGUID(_scene.path);
