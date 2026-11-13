@@ -31,6 +31,8 @@ namespace HarryTools.Flags.Editor
         private const string DeletedAssetsKey = "HarryTools.Flags.UsageMaintainer.DeletedAssets";
         private const string SweepScenesKey = "HarryTools.Flags.UsageMaintainer.SweepScenes";
         private const string SceneNamesKey = "HarryTools.Flags.UsageMaintainer.SceneNames";
+        // Scene guid and file write time of each exact read made on save, so the import that the save triggers is not read again.
+        private const string SavedScenesKey = "HarryTools.Flags.UsageMaintainer.SavedScenes";
 
         [ClearOnReload] private static bool scheduled;
 
@@ -190,8 +192,30 @@ namespace HarryTools.Flags.Editor
             FlagUsageIndex _index = IndexFor(_entries.Count > 0);
             if (_index == null) return;
 
-            _index.ReplaceScene(AssetDatabase.AssetPathToGUID(_scene.path), _entries);
+            string _sceneGuid = AssetDatabase.AssetPathToGUID(_scene.path);
+            _index.ReplaceScene(_sceneGuid, _entries);
+            RememberSaved(_sceneGuid, _scene.path);
             Changed?.Invoke();
+        }
+
+        /// <summary>
+        /// Records the file write time of a scene just read exactly on save. The import the save triggers may be processed after
+        /// the scene is closed ("Save changes?" then another scene opens); it is skipped while the file is unchanged.
+        /// </summary>
+        private static void RememberSaved(string _sceneGuid, string _path)
+        {
+            if (string.IsNullOrEmpty(_sceneGuid) || !File.Exists(_path)) return;
+            Dictionary<string, long> _saved = LoadSaved();
+            _saved[_sceneGuid] = File.GetLastWriteTimeUtc(_path).Ticks;
+            StoreSaved(_saved);
+        }
+
+        /// <summary>True when the scene file is the one the last save read exactly. Forgets the record either way.</summary>
+        private static bool TakeUnchangedSinceSave(Dictionary<string, long> _saved, string _sceneGuid, string _path)
+        {
+            if (!_saved.TryGetValue(_sceneGuid, out long _ticks)) return false;
+            _saved.Remove(_sceneGuid);
+            return File.GetLastWriteTimeUtc(_path).Ticks == _ticks;
         }
 
         // ==================== POSTPROCESSOR ====================
@@ -302,10 +326,13 @@ namespace HarryTools.Flags.Editor
 
             List<string> _known = _database.Flags.Where(_flag => _flag != null).Select(_flag => _flag.Guid).ToList();
             List<KeyValuePair<string, List<FlagUsageEntry>>> _sceneReads = new List<KeyValuePair<string, List<FlagUsageEntry>>>();
+            Dictionary<string, long> _saved = LoadSaved();
             foreach (string _sceneGuid in _scenes)
             {
                 string _path = AssetDatabase.GUIDToAssetPath(_sceneGuid);
                 if (IsMissingScene(_path)) continue; // Removed by the sweep below.
+                // The save already read it exactly; a closed scene would only be read approximately here.
+                if (TakeUnchangedSinceSave(_saved, _sceneGuid, _path)) continue;
                 try
                 {
                     _sceneReads.Add(new KeyValuePair<string, List<FlagUsageEntry>>(_sceneGuid, ReadImportedScene(_path, _known)));
@@ -315,6 +342,7 @@ namespace HarryTools.Flags.Editor
                     Logger.LogWarning(Category, $"Could not index the flag usages of scene '{_path}': {_exception.Message}");
                 }
             }
+            StoreSaved(_saved);
 
             // The index asset is only created once there is something to store.
             bool _hasEntries = _sceneReads.Any(_pair => _pair.Value.Count > 0) || _assetsIn.Any(FlagUsageIndexer.MayContainFlagRef);
@@ -415,6 +443,20 @@ namespace HarryTools.Flags.Editor
             if (_values.Count == 0) SessionState.EraseString(_key);
             else SessionState.SetString(_key, string.Join("\n", _values));
         }
+
+        private static Dictionary<string, long> LoadSaved()
+        {
+            Dictionary<string, long> _result = new Dictionary<string, long>(StringComparer.Ordinal);
+            foreach (string _line in Load(SavedScenesKey))
+            {
+                int _split = _line.IndexOf('|');
+                if (_split > 0 && long.TryParse(_line.Substring(_split + 1), out long _ticks)) _result[_line.Substring(0, _split)] = _ticks;
+            }
+            return _result;
+        }
+
+        private static void StoreSaved(Dictionary<string, long> _saved) =>
+            Save(SavedScenesKey, new HashSet<string>(_saved.Select(_pair => _pair.Key + "|" + _pair.Value), StringComparer.Ordinal));
 
         private static HashSet<string> Take(string _key)
         {

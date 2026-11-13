@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using HarryTools.Actions;
 using HarryTools.Flags.Editor;
@@ -162,6 +163,7 @@ namespace HarryTools.Flags.Tests
             index.RemoveScene(AssetDatabase.AssetPathToGUID(_path));
 
             // As after a git pull: the file changes while the scene is closed.
+            File.SetLastWriteTimeUtc(_path, File.GetLastWriteTimeUtc(_path).AddSeconds(5));
             AssetDatabase.ImportAsset(_path, ImportAssetOptions.ForceUpdate);
             FlagUsageMaintainer.FlushPending();
 
@@ -169,6 +171,50 @@ namespace HarryTools.Flags.Tests
             Assert.IsTrue(_entry.approximate);
             Assert.AreEqual(FlagUsageKind.Other, _entry.kind);
         }
+
+        [Test]
+        public void SavedThenClosedBeforeTick_KeepsExactEntries()
+        {
+            FlagDefinition _flag = Create(FlagScope.Global, null, "A");
+            // "Save changes?" → Save → another scene opens: the save's import is processed after the scene is closed.
+            Scene _scene = SavedScene("SavedClosed", new ActionList(new SetFlagAction(Ref(_flag))));
+            Close(_scene);
+            FlagUsageMaintainer.FlushPending();
+
+            FlagUsageEntry _entry = index.For(_flag.Guid).Single();
+            Assert.IsFalse(_entry.approximate);
+            Assert.AreEqual(FlagUsageKind.Write, _entry.kind);
+            Assert.AreEqual("Host", _entry.hierarchyPath);
+        }
+
+        [Test]
+        public void PrefabInstanceInScene_RebuildMatchesSave()
+        {
+            FlagDefinition _flag = Create(FlagScope.Global, null, "A");
+            string _prefabPath = FlagUsageTestScenes.Folder + "/Switch.prefab";
+            GameObject _source = new GameObject("Switch");
+            FlagUsageTestScenes.AddRunner(_source, new ActionList(new SetFlagAction(Ref(_flag))));
+            GameObject _prefab = PrefabUtility.SaveAsPrefabAsset(_source, _prefabPath);
+            Object.DestroyImmediate(_source);
+
+            Scene _scene = FlagUsageTestScenes.Open(FlagUsageTestScenes.Write("WithInstance"), scenes);
+            string _sceneGuid = AssetDatabase.AssetPathToGUID(_scene.path);
+            PrefabUtility.InstantiatePrefab(_prefab, _scene);
+            Assert.IsTrue(EditorSceneManager.SaveScene(_scene));
+            FlagUsageMaintainer.FlushPending();
+            List<FlagUsageEntry> _fromSave = SceneEntries(_sceneGuid);
+            Assert.AreEqual(1, _fromSave.Count);
+
+            Close(_scene);
+            index.RemoveScene(_sceneGuid);
+            FlagUsageMaintainer.Rebuild(new[] { FlagUsageTestScenes.Folder });
+
+            List<FlagUsageEntry> _fromRebuild = SceneEntries(_sceneGuid);
+            Assert.AreEqual(_fromSave.Count, _fromRebuild.Count);
+            for (int _i = 0; _i < _fromSave.Count; _i++) Assert.IsTrue(_fromSave[_i].SameAs(_fromRebuild[_i]), "Rebuild must read the prefab instance like the save did.");
+        }
+
+        private List<FlagUsageEntry> SceneEntries(string _sceneGuid) => index.Entries.Where(_e => _e.sceneGuid == _sceneGuid).ToList();
 
         [Test]
         public void ImportedAsset_IndexedAndRemovedOnDelete()

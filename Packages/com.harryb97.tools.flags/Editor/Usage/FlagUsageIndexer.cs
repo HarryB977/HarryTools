@@ -21,6 +21,9 @@ namespace HarryTools.Flags.Editor
         // ==================== VARIABLES ====================
 
         // How a FlagRef with a guid looks in a text-serialized file.
+        // YAML document header of a PrefabInstance (class id 1001).
+        private const string PrefabInstanceHeader = "--- !u!1001 ";
+
         private static readonly Regex FlagRefText = new Regex(@"\bguid: [0-9a-fA-F]{32}\r?\n\s*label:", RegexOptions.Compiled);
 
         // ==================== PUBLIC API ====================
@@ -103,8 +106,9 @@ namespace HarryTools.Flags.Editor
         }
 
         /// <summary>
-        /// False only when the file is text-serialized and holds no assigned FlagRef, so it does not need to be loaded.
-        /// Binary files always may.
+        /// False only when the file is text-serialized, holds no assigned FlagRef and has no prefab instance, so it does not need
+        /// to be loaded. Binary files always may; so does a file with a prefab instance or variant base, whose FlagRefs live in
+        /// the prefab and are not written to this file unless overridden.
         /// </summary>
         public static bool MayContainFlagRef(string _path)
         {
@@ -112,7 +116,7 @@ namespace HarryTools.Flags.Editor
 
             string _text = File.ReadAllText(_path);
             if (!_text.StartsWith("%YAML", StringComparison.Ordinal)) return true;
-            return FlagRefText.IsMatch(_text);
+            return _text.IndexOf(PrefabInstanceHeader, StringComparison.Ordinal) >= 0 || FlagRefText.IsMatch(_text);
         }
 
         // ==================== PRIVATE ====================
