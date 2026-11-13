@@ -28,6 +28,7 @@ namespace HarryTools.Flags.Editor
 
             FlagDatabase _database = FlagDatabaseLocator.Find();
             if (_database == null) return;
+            WarnIfNotLoadable(_database);
 
             List<FlagIssue> _issues;
             try
@@ -52,6 +53,17 @@ namespace HarryTools.Flags.Editor
             if (_blocking == 0) return;
             EditorApplication.isPlaying = false;
             Debug.LogError($"Play blocked: {_blocking} flag database conflict(s).");
+        }
+
+        /// <summary>The runtime only loads the database from Resources; one saved anywhere else is never found in Play or builds.</summary>
+        private static void WarnIfNotLoadable(FlagDatabase _database)
+        {
+            string _path = AssetDatabase.GetAssetPath(_database);
+            // In-memory databases (tests) have no path.
+            if (string.IsNullOrEmpty(_path) || FlagDatabaseLocator.IsLoadableAtRuntime(_path)) return;
+
+            Debug.LogWarning($"The flag database at '{_path}' is not in a Resources folder named {FlagDatabase.ResourcesName}.asset, so the runtime " +
+                $"will not find it and every flag will read as false. Move it to a Resources folder and name it {FlagDatabase.ResourcesName}.", _database);
         }
     }
 }

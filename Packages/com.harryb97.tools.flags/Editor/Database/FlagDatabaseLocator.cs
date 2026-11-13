@@ -35,6 +35,14 @@ namespace HarryTools.Flags.Editor
             return null;
         }
 
+        /// <summary>
+        /// True when the runtime can load a database saved at this path: directly in a Resources folder and named after
+        /// <see cref="FlagDatabase.ResourcesName"/>.
+        /// </summary>
+        public static bool IsLoadableAtRuntime(string _assetPath) =>
+            !string.IsNullOrEmpty(_assetPath)
+            && _assetPath.EndsWith("/Resources/" + FlagDatabase.ResourcesName + ".asset", System.StringComparison.Ordinal);
+
         /// <summary>The project's database, creating it at the default path when missing.</summary>
         public static FlagDatabase GetOrCreate()
         {

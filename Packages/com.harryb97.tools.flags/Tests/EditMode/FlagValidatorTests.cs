@@ -126,6 +126,17 @@ namespace HarryTools.Flags.Tests
         }
 
         [Test]
+        public void IsLoadableAtRuntime_OnlyResourcesFlagDatabase()
+        {
+            Assert.That(FlagDatabaseLocator.IsLoadableAtRuntime("Assets/HarryTools/Flags/Resources/FlagDatabase.asset"), Is.True);
+            Assert.That(FlagDatabaseLocator.IsLoadableAtRuntime("Packages/com.game/Resources/FlagDatabase.asset"), Is.True);
+            Assert.That(FlagDatabaseLocator.IsLoadableAtRuntime("Assets/Data/FlagDatabase.asset"), Is.False, "Not in Resources.");
+            Assert.That(FlagDatabaseLocator.IsLoadableAtRuntime("Assets/Resources/Flags.asset"), Is.False, "Wrong name.");
+            Assert.That(FlagDatabaseLocator.IsLoadableAtRuntime("Assets/Resources/Sub/FlagDatabase.asset"), Is.False, "In a subfolder of Resources.");
+            Assert.That(FlagDatabaseLocator.IsLoadableAtRuntime(string.Empty), Is.False);
+        }
+
+        [Test]
         public void ContextOf_SceneUse_ObjectWhenLoaded_SceneAssetWhenClosed()
         {
             // The usage maintainer reacts to the temporary scene; it must only see these instances.
