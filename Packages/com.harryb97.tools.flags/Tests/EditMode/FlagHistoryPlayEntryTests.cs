@@ -1,6 +1,7 @@
 using System.Collections;
 using HarryTools.Flags.Editor;
 using NUnit.Framework;
+using UnityEditor;
 using UnityEngine;
 using UnityEngine.TestTools;
 
@@ -17,27 +18,39 @@ namespace HarryTools.Flags.Tests
         [UnityTest]
         public IEnumerator FirstFrameWrite_DuringPlayEntry_IsRecorded()
         {
+            // The hook's armed state and database live in statics that only survive entering Play without a domain reload.
+            bool _noDomainReload = EditorSettings.enterPlayModeOptionsEnabled
+                && (EditorSettings.enterPlayModeOptions & EnterPlayModeOptions.DisableDomainReload) != 0;
+            Assume.That(_noDomainReload, "Needs Enter Play Mode Options with domain reload disabled.");
+
             FlagDatabase _database = ScriptableObject.CreateInstance<FlagDatabase>();
             _database.hideFlags = HideFlags.HideAndDontSave;
             Assert.IsTrue(FlagDatabaseEditing.TryCreate(_database, FlagScope.Global, null, FlagName, out FlagDefinition _created, out string _error), _error);
 
+            bool _recorded = false;
+            bool _ran = false;
             PlayEntryHook.Database = _database;
             PlayEntryHook.FlagGuid = _created.Guid;
             PlayEntryHook.Armed = true;
-            FlagHistory.Clear();
+            try
+            {
+                FlagHistory.Clear();
 
-            yield return new EnterPlayMode();
-            PlayEntryHook.Armed = false;
-            bool _recorded = false;
-            foreach (FlagHistoryEntry _entry in FlagHistory.For(_created.Guid)) _recorded |= !_entry.IsRead && _entry.NewValue;
-            bool _ran = PlayEntryHook.Ran;
-            yield return new ExitPlayMode();
-
-            Flags.ClearForTests();
-            FlagHistory.Clear();
-            Object.DestroyImmediate(_database);
-            PlayEntryHook.Database = null;
-            PlayEntryHook.Ran = false;
+                yield return new EnterPlayMode();
+                PlayEntryHook.Armed = false;
+                foreach (FlagHistoryEntry _entry in FlagHistory.For(_created.Guid)) _recorded |= !_entry.IsRead && _entry.NewValue;
+                _ran = PlayEntryHook.Ran;
+                yield return new ExitPlayMode();
+            }
+            finally
+            {
+                PlayEntryHook.Armed = false;
+                Flags.ClearForTests();
+                FlagHistory.Clear();
+                Object.DestroyImmediate(_database);
+                PlayEntryHook.Database = null;
+                PlayEntryHook.Ran = false;
+            }
 
             Assert.That(_ran, Is.True, "The play entry hook did not run.");
             Assert.That(_recorded, Is.True, "A write made before EnteredPlayMode was not recorded.");
