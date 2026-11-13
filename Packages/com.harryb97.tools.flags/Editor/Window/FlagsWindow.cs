@@ -30,6 +30,7 @@ namespace HarryTools.Flags.Editor
         private const float UsesWidth = 60f;
         private const float InfoWidth = 150f;
         private const int DeleteDialogMaxUses = 15;
+        private const string PlayLockedTooltip = "Edit outside Play mode.";
 
         private static readonly Color SelectedColor = new Color(0.17f, 0.36f, 0.53f, 1f);
         private static readonly Color FlashColor = new Color(0.55f, 0.5f, 0.15f, 1f);
@@ -515,7 +516,8 @@ namespace HarryTools.Flags.Editor
         {
             GenericMenu _menu = new GenericMenu();
             _menu.AddItem(new GUIContent("Rename"), false, () => BeginRename(_flag));
-            _menu.AddItem(new GUIContent("Delete"), false, () => Delete(_database, _flag));
+            if (EditorApplication.isPlaying) _menu.AddDisabledItem(new GUIContent("Delete (edit outside Play mode)"));
+            else _menu.AddItem(new GUIContent("Delete"), false, () => Delete(_database, _flag));
             _menu.ShowAsContext();
         }
 
@@ -635,9 +637,13 @@ namespace HarryTools.Flags.Editor
             DrawDetailField(_flag, DetailNameControl, new GUIContent("Name"), detailEdit.Name, _value => detailEdit.Name = _value);
             if (!string.IsNullOrEmpty(detailError)) EditorGUILayout.HelpBox(detailError, MessageType.Error);
 
-            EditorGUI.BeginChangeCheck();
-            bool _initial = EditorGUILayout.Toggle("Initial Value", _flag.InitialValue);
-            if (EditorGUI.EndChangeCheck()) FlagDatabaseEditing.SetInitialValue(_database, _flag.Guid, _initial);
+            // In Play an unwritten flag reads its initial value, so editing it would change the live value without a Changed event.
+            using (new EditorGUI.DisabledScope(_playing))
+            {
+                EditorGUI.BeginChangeCheck();
+                bool _initial = EditorGUILayout.Toggle(new GUIContent("Initial Value", _playing ? PlayLockedTooltip : string.Empty), _flag.InitialValue);
+                if (EditorGUI.EndChangeCheck()) FlagDatabaseEditing.SetInitialValue(_database, _flag.Guid, _initial);
+            }
 
             DrawDetailField(_flag, DetailDescriptionControl, new GUIContent("Description", "One line to remember what the flag is for."),
                 detailEdit.Description, _value => detailEdit.Description = _value);
@@ -668,7 +674,8 @@ namespace HarryTools.Flags.Editor
             using (new EditorGUILayout.HorizontalScope())
             {
                 if (GUILayout.Button("Rename")) BeginRename(_flag);
-                if (GUILayout.Button("Delete")) Delete(_database, _flag);
+                using (new EditorGUI.DisabledScope(_playing))
+                    if (GUILayout.Button(new GUIContent("Delete", _playing ? PlayLockedTooltip : string.Empty))) Delete(_database, _flag);
             }
 
             EditorGUILayout.EndScrollView();
@@ -888,7 +895,7 @@ namespace HarryTools.Flags.Editor
                 BeginRename(_flag);
                 _event.Use();
             }
-            else if (_event.keyCode == KeyCode.Delete)
+            else if (_event.keyCode == KeyCode.Delete && !EditorApplication.isPlaying)
             {
                 Delete(_database, _flag);
                 _event.Use();
