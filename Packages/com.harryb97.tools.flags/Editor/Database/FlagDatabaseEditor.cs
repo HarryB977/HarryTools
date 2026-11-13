@@ -15,11 +15,7 @@ namespace HarryTools.Flags.Editor
 
             EditorGUILayout.HelpBox("Flags are edited from the Flags window.", MessageType.Info);
 
-            // The window arrives in a later task; the button stays disabled until it exists.
-            using (new EditorGUI.DisabledScope(true))
-            {
-                GUILayout.Button("Open Flags Window");
-            }
+            if (GUILayout.Button("Open Flags Window")) FlagsWindow.Open();
 
             EditorGUILayout.Space();
             EditorGUILayout.LabelField($"Flags ({_database.Flags.Count})", EditorStyles.boldLabel);

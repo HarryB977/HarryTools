@@ -146,10 +146,22 @@ namespace HarryTools.Flags.Editor
         }
 
         /// <summary>
-        /// Task 10 hook: return the action that opens the Flags window ready to create a flag for this host (and assigns it through
-        /// <see cref="Edit"/> and <see cref="Assign"/> when created). While it returns null, "Create new…" stays hidden.
+        /// Opens the Flags window ready to create a flag the host may use: a local of its scene when it lives in one, otherwise a global.
+        /// The created flag is assigned to the field.
         /// </summary>
-        private static Action CreateNewHandler(UnityEngine.Object[] _targets, string _path, string _hostScene) => null;
+        private static Action CreateNewHandler(UnityEngine.Object[] _targets, string _path, string _hostScene)
+        {
+            FlagScope _scope = string.IsNullOrEmpty(_hostScene) ? FlagScope.Global : FlagScope.Local;
+            return () => FlagsWindow.OpenForCreate(_scope, _hostScene, _flag => AssignCreated(_targets, _path, _flag));
+        }
+
+        // The hosts may have been destroyed (scene closed) while the window was open.
+        private static void AssignCreated(UnityEngine.Object[] _targets, string _path, FlagDefinition _flag)
+        {
+            UnityEngine.Object[] _alive = Array.FindAll(_targets, _target => _target != null);
+            if (_alive.Length == 0) return;
+            Edit(_alive, _path, _ref => Assign(_ref, _flag));
+        }
 
         private static void ShowContextMenu(UnityEngine.Object[] _targets, string _path)
         {
