@@ -507,7 +507,7 @@ namespace HarryTools.Flags.Editor
 
         private void SetValue(FlagDatabase _database, FlagDefinition _flag, bool _value, bool _playing)
         {
-            if (_playing) Flags.SetValue(new FlagRef(_flag.Guid, _flag.DisplayPath), _value, null);
+            if (_playing) Flags.SetValue(new FlagRef(_flag.Guid, _flag.DisplayPath), _value, FlagHistory.WindowSource);
             else FlagDatabaseEditing.SetInitialValue(_database, _flag.Guid, _value);
             Repaint();
         }

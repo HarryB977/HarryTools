@@ -117,11 +117,20 @@ namespace HarryTools.Flags.Tests
         }
 
         [Test]
-        public void NullSourceLive_NamedFlagsWindow()
+        public void NullSourceLive_NamedCode()
         {
             FlagHistory.Record(new FlagChange(Guid, null, false, true, FlagChangeReason.Live, null));
 
+            Assert.That(FlagHistory.All[0].SourceName, Is.EqualTo("Code"));
+        }
+
+        [Test]
+        public void WindowSourceLive_NamedFlagsWindow()
+        {
+            FlagHistory.Record(new FlagChange(Guid, null, false, true, FlagChangeReason.Live, FlagHistory.WindowSource));
+
             Assert.That(FlagHistory.All[0].SourceName, Is.EqualTo("Flags window"));
+            Assert.That(FlagHistory.WindowSource, Is.SameAs(FlagHistory.WindowSource), "The marker is created once.");
         }
 
         [Test]

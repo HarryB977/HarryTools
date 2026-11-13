@@ -16,10 +16,11 @@ namespace HarryTools.Flags.Editor
 
         public const int Capacity = 500;
 
-        private const string WindowSource = "Flags window";
+        private const string WindowSourceName = "Flags window";
         private const string CodeSource = "Code";
 
         private static readonly List<FlagHistoryEntry> entries = new List<FlagHistoryEntry>(Capacity + 1);
+        private static FlagsWindowSource windowSource;
 
         // ==================== EVENTS ====================
 
@@ -31,12 +32,29 @@ namespace HarryTools.Flags.Editor
         /// <summary>Every entry, most recent first.</summary>
         public static IReadOnlyList<FlagHistoryEntry> All => entries;
 
+        /// <summary>Source the Flags window passes for its writes, so they are told apart from code writes without a source.</summary>
+        public static UnityEngine.Object WindowSource
+        {
+            get
+            {
+                if (windowSource == null)
+                {
+                    windowSource = ScriptableObject.CreateInstance<FlagsWindowSource>();
+                    windowSource.name = WindowSourceName;
+                    windowSource.hideFlags = HideFlags.HideAndDontSave;
+                }
+                return windowSource;
+            }
+        }
+
         // ==================== SETUP ====================
 
         static FlagHistory()
         {
             EditorApplication.playModeStateChanged -= OnPlayModeStateChanged;
             EditorApplication.playModeStateChanged += OnPlayModeStateChanged;
+            AssemblyReloadEvents.beforeAssemblyReload -= DestroyWindowSource;
+            AssemblyReloadEvents.beforeAssemblyReload += DestroyWindowSource;
             Resubscribe();
         }
 
@@ -67,7 +85,7 @@ namespace HarryTools.Flags.Editor
         internal static void Record(FlagChange _change)
         {
             string _sourceName = _change.Source != null ? _change.Source.name
-                : _change.Reason == FlagChangeReason.Live ? WindowSource : _change.Reason.ToString();
+                : _change.Reason == FlagChangeReason.Live ? CodeSource : _change.Reason.ToString();
 
             Add(new FlagHistoryEntry
             {
@@ -136,6 +154,13 @@ namespace HarryTools.Flags.Editor
             entries.Insert(0, _entry);
             if (entries.Count > Capacity) entries.RemoveAt(entries.Count - 1);
             Updated?.Invoke();
+        }
+
+        // The marker would outlive the static that holds it across a domain reload.
+        private static void DestroyWindowSource()
+        {
+            if (windowSource != null) UnityEngine.Object.DestroyImmediate(windowSource);
+            windowSource = null;
         }
 
         private static void OnPlayModeStateChanged(PlayModeStateChange _state)
