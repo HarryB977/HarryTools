@@ -18,8 +18,10 @@ namespace HarryTools.Flags
 
         [ClearOnReload(AssignNewInstance = true)] private static Dictionary<string, bool> changed = new Dictionary<string, bool>();
         [ClearOnReload(AssignNewInstance = true)] private static Dictionary<string, List<Action<FlagChange>>> subscribers = new Dictionary<string, List<Action<FlagChange>>>();
-        [ClearOnReload] private static FlagDatabase database;
-        [ClearOnReload] private static bool databaseIsFallback;
+        // Reset by ReleaseDatabaseOnReload instead of [ClearOnReload]: fields are cleared before reload methods run, which would
+        // lose the fallback instance before it could be destroyed.
+        private static FlagDatabase database;
+        private static bool databaseIsFallback;
         [ClearOnReload] private static Action<FlagChange> changedHandlers;
         [ClearOnReload] private static Action restoredHandlers;
 #if UNITY_EDITOR
@@ -191,12 +193,19 @@ namespace HarryTools.Flags
 #if UNITY_EDITOR
             readHandlers = null;
 #endif
+            ReleaseDatabaseOnReload();
+        }
+
+        // ==================== PRIVATE ====================
+
+        /// <summary>Entering Play without a domain reload: destroys the fallback database and forgets the loaded one.</summary>
+        [ExecuteOnReload]
+        private static void ReleaseDatabaseOnReload()
+        {
             if (databaseIsFallback && database != null) UnityEngine.Object.DestroyImmediate(database);
             database = null;
             databaseIsFallback = false;
         }
-
-        // ==================== PRIVATE ====================
 
         private static bool TryResolve(FlagRef _flag, bool _isWrite, out FlagDefinition _definition)
         {
