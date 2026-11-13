@@ -120,6 +120,63 @@ namespace HarryTools.Flags.Tests
             Assert.That(FlagsWindowModel.UsageCount(null, "g1"), Is.EqualTo(0));
         }
 
+        [Test]
+        public void DetailEdit_CommitsToLoadedFlag_NotToNewSelection()
+        {
+            Add("a1", "Door", FlagScope.Global, string.Empty, string.Empty);
+            Add("b1", "Lamp", FlagScope.Global, string.Empty, string.Empty);
+            database.TryGet("a1", out FlagDefinition _door);
+            database.TryGet("b1", out FlagDefinition _lamp);
+
+            FlagDetailEdit _edit = new FlagDetailEdit();
+            _edit.Load(_door);
+            _edit.Name = "FrontDoor";
+            _edit.Description = "Opens the hall";
+
+            // What the window does when another flag is selected: commit the pending edit first, then load the new flag.
+            bool _committed = _edit.Commit(database, out string _error);
+            _edit.Load(_lamp);
+
+            Assert.That(_committed, Is.True, _error);
+            Assert.That(_door.Name, Is.EqualTo("FrontDoor"));
+            Assert.That(_door.Description, Is.EqualTo("Opens the hall"));
+            Assert.That(_lamp.Name, Is.EqualTo("Lamp"));
+            Assert.That(_lamp.Description, Is.Empty);
+            Assert.That(_edit.IsFor("b1"), Is.True);
+            Assert.That(_edit.Name, Is.EqualTo("Lamp"));
+        }
+
+        [Test]
+        public void DetailEdit_TakenName_FailsAndChangesNothing()
+        {
+            Add("a1", "Door", FlagScope.Global, string.Empty, string.Empty);
+            Add("b1", "Lamp", FlagScope.Global, string.Empty, string.Empty);
+            database.TryGet("a1", out FlagDefinition _door);
+
+            FlagDetailEdit _edit = new FlagDetailEdit();
+            _edit.Load(_door);
+            _edit.Name = "lamp";
+
+            Assert.That(_edit.Commit(database, out string _error), Is.False);
+            Assert.That(_error, Does.Contain("already exists"));
+            Assert.That(_door.Name, Is.EqualTo("Door"));
+        }
+
+        [Test]
+        public void DetailEdit_DeletedFlag_CommitsNothing()
+        {
+            Add("a1", "Door", FlagScope.Global, string.Empty, string.Empty);
+            database.TryGet("a1", out FlagDefinition _door);
+
+            FlagDetailEdit _edit = new FlagDetailEdit();
+            _edit.Load(_door);
+            _edit.Name = "Other";
+            FlagDatabaseEditing.Delete(database, "a1");
+
+            Assert.That(_edit.Commit(database, out _), Is.True);
+            Assert.That(database.Flags, Is.Empty);
+        }
+
         // ==================== HELPERS ====================
 
         private void Add(string _guid, string _name, FlagScope _scope, string _sceneGuid, string _sceneName)

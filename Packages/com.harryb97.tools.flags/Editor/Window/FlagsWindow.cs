@@ -22,6 +22,8 @@ namespace HarryTools.Flags.Editor
 
         private const string RenameControl = "FlagsWindowRename";
         private const string CreateControl = "FlagsWindowCreate";
+        private const string DetailNameControl = "FlagsWindowDetailName";
+        private const string DetailDescriptionControl = "FlagsWindowDetailDescription";
         private const float FlashSeconds = 1f;
         private const float RowHeight = 20f;
         private const float ToggleWidth = 18f;
@@ -68,6 +70,8 @@ namespace HarryTools.Flags.Editor
         private Action<FlagDefinition> onCreated;
 
         private string detailError;
+        [NonSerialized] private readonly FlagDetailEdit detailEdit = new FlagDetailEdit();
+        [NonSerialized] private bool detailWasFocused;
 
         // Not kept across domain reloads: the window would come back with empty styles.
         [NonSerialized] private GUIStyle mutedStyle;
@@ -128,6 +132,12 @@ namespace HarryTools.Flags.Editor
 
         private void OnFocus() => MarkDirty();
 
+        private void OnLostFocus()
+        {
+            if (detailWasFocused) CommitDetailEdit();
+            detailWasFocused = false;
+        }
+
         private void Update()
         {
             if (!EditorApplication.isPlaying) return;
@@ -186,6 +196,16 @@ namespace HarryTools.Flags.Editor
             EditorSceneManager.sceneOpened += OnSceneOpened;
             EditorSceneManager.sceneClosed += OnSceneClosed;
             EditorSceneManager.activeSceneChangedInEditMode += OnActiveSceneChanged;
+            SubscribeRuntimeSceneEvents();
+        }
+
+        // Scenes the game loads in Play only raise the runtime events. Subscribed again on entering Play, like the other runtime hooks.
+        private void SubscribeRuntimeSceneEvents()
+        {
+            SceneManager.sceneLoaded -= OnRuntimeSceneLoaded;
+            SceneManager.sceneUnloaded -= OnRuntimeSceneUnloaded;
+            SceneManager.sceneLoaded += OnRuntimeSceneLoaded;
+            SceneManager.sceneUnloaded += OnRuntimeSceneUnloaded;
         }
 
         private void Unsubscribe()
@@ -198,6 +218,8 @@ namespace HarryTools.Flags.Editor
             EditorSceneManager.sceneOpened -= OnSceneOpened;
             EditorSceneManager.sceneClosed -= OnSceneClosed;
             EditorSceneManager.activeSceneChangedInEditMode -= OnActiveSceneChanged;
+            SceneManager.sceneLoaded -= OnRuntimeSceneLoaded;
+            SceneManager.sceneUnloaded -= OnRuntimeSceneUnloaded;
         }
 
         private void MarkDirty()
@@ -206,7 +228,15 @@ namespace HarryTools.Flags.Editor
             Repaint();
         }
 
-        private void OnPlayModeStateChanged(PlayModeStateChange _state) => MarkDirty();
+        private void OnPlayModeStateChanged(PlayModeStateChange _state)
+        {
+            if (_state == PlayModeStateChange.EnteredPlayMode) SubscribeRuntimeSceneEvents();
+            MarkDirty();
+        }
+
+        private void OnRuntimeSceneLoaded(Scene _scene, LoadSceneMode _mode) => MarkDirty();
+
+        private void OnRuntimeSceneUnloaded(Scene _scene) => MarkDirty();
 
         private void OnProjectChanged()
         {
@@ -593,6 +623,8 @@ namespace HarryTools.Flags.Editor
                 return;
             }
 
+            SyncDetailEdit(_flag);
+
             detailScroll = EditorGUILayout.BeginScrollView(detailScroll);
             bool _playing = EditorApplication.isPlaying;
 
@@ -600,23 +632,15 @@ namespace HarryTools.Flags.Editor
             EditorGUILayout.LabelField(_flag.Name, EditorStyles.boldLabel);
             EditorGUILayout.LabelField("Scope", _scopeText);
 
-            string _currentName = _flag.Name ?? string.Empty;
-            string _name = EditorGUILayout.DelayedTextField("Name", _currentName);
-            if (_name != _currentName)
-            {
-                if (FlagDatabaseEditing.TryRename(_database, _flag.Guid, _name, out string _error)) detailError = null;
-                else detailError = _error;
-                MarkDirty();
-            }
+            DrawDetailField(_flag, DetailNameControl, new GUIContent("Name"), detailEdit.Name, _value => detailEdit.Name = _value);
             if (!string.IsNullOrEmpty(detailError)) EditorGUILayout.HelpBox(detailError, MessageType.Error);
 
             EditorGUI.BeginChangeCheck();
             bool _initial = EditorGUILayout.Toggle("Initial Value", _flag.InitialValue);
             if (EditorGUI.EndChangeCheck()) FlagDatabaseEditing.SetInitialValue(_database, _flag.Guid, _initial);
 
-            string _currentDescription = _flag.Description ?? string.Empty;
-            string _description = EditorGUILayout.DelayedTextField(new GUIContent("Description", "One line to remember what the flag is for."), _currentDescription);
-            if (_description != _currentDescription) FlagDatabaseEditing.SetDescription(_database, _flag.Guid, _description);
+            DrawDetailField(_flag, DetailDescriptionControl, new GUIContent("Description", "One line to remember what the flag is for."),
+                detailEdit.Description, _value => detailEdit.Description = _value);
 
             if (_playing)
             {
@@ -648,6 +672,55 @@ namespace HarryTools.Flags.Editor
             }
 
             EditorGUILayout.EndScrollView();
+        }
+
+        /// <summary>
+        /// Keeps the Name/Description buffer tied to the selected flag. Leaving a detail field commits it to the flag it was typed for;
+        /// while no field is being edited the buffer follows the database (undo, inline rename).
+        /// </summary>
+        private void SyncDetailEdit(FlagDefinition _flag)
+        {
+            string _focused = GUI.GetNameOfFocusedControl();
+            bool _editing = _focused == DetailNameControl || _focused == DetailDescriptionControl;
+
+            if (detailWasFocused && !_editing) CommitDetailEdit();
+            detailWasFocused = _editing;
+            if (!_editing || !detailEdit.IsFor(_flag.Guid)) detailEdit.Load(_flag);
+        }
+
+        /// <summary>Text field bound to the detail buffer. Enter commits it, Esc drops the pending text.</summary>
+        private void DrawDetailField(FlagDefinition _flag, string _control, GUIContent _label, string _value, Action<string> _set)
+        {
+            Event _event = Event.current;
+            if (_event.type == EventType.KeyDown && GUI.GetNameOfFocusedControl() == _control)
+            {
+                if (_event.keyCode == KeyCode.Return || _event.keyCode == KeyCode.KeypadEnter)
+                {
+                    CommitDetailEdit();
+                    _event.Use();
+                }
+                else if (_event.keyCode == KeyCode.Escape)
+                {
+                    detailEdit.Load(_flag);
+                    detailError = null;
+                    GUI.FocusControl(null);
+                    _event.Use();
+                }
+            }
+
+            GUI.SetNextControlName(_control);
+            _set(EditorGUILayout.TextField(_label, _value));
+        }
+
+        /// <summary>Writes the pending detail edits to the flag they were typed for, whichever flag is selected now.</summary>
+        private void CommitDetailEdit()
+        {
+            FlagDatabase _database = FlagDatabaseLocator.Find();
+            if (_database == null || string.IsNullOrEmpty(detailEdit.Guid)) return;
+
+            bool _renamed = detailEdit.Commit(_database, out string _error);
+            detailError = _renamed ? null : _error;
+            MarkDirty();
         }
 
         private void DrawMoveToScene(FlagDatabase _database, FlagDefinition _flag)
@@ -829,6 +902,12 @@ namespace HarryTools.Flags.Editor
             if (selectedGuid != _guid)
             {
                 if (renamingGuid != null && renamingGuid != _guid) CancelRename();
+
+                // A detail edit still being typed belongs to the flag that was selected; save it there before switching.
+                CommitDetailEdit();
+                if (!string.IsNullOrEmpty(detailError)) ShowNotification(new GUIContent(detailError));
+                detailEdit.Load(null);
+                detailWasFocused = false;
                 detailError = null;
                 GUI.FocusControl(null);
             }

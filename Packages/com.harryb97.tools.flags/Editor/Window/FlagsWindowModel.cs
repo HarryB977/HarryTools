@@ -29,6 +29,41 @@ namespace HarryTools.Flags.Editor
         public List<FlagDefinition> Flags = new List<FlagDefinition>();
     }
 
+    /// <summary>
+    /// Pending Name and Description edits of the detail panel, tied to the flag they were loaded from, so an edit can never land
+    /// on another flag after the selection changed.
+    /// </summary>
+    internal sealed class FlagDetailEdit
+    {
+        public string Guid { get; private set; }
+        public string Name = string.Empty;
+        public string Description = string.Empty;
+
+        public bool IsFor(string _guid) => !string.IsNullOrEmpty(Guid) && Guid == _guid;
+
+        /// <summary>Starts editing the flag's current values, dropping any pending edit. Null clears the buffer.</summary>
+        public void Load(FlagDefinition _flag)
+        {
+            Guid = _flag?.Guid;
+            Name = _flag?.Name ?? string.Empty;
+            Description = _flag?.Description ?? string.Empty;
+        }
+
+        /// <summary>
+        /// Writes the pending edits to the flag they were loaded from. False with an error when the rename fails; the description is
+        /// still saved. A flag that no longer exists receives nothing.
+        /// </summary>
+        public bool Commit(FlagDatabase _database, out string _error)
+        {
+            _error = null;
+            if (_database == null || string.IsNullOrEmpty(Guid) || !_database.TryGet(Guid, out FlagDefinition _flag)) return true;
+
+            if ((_flag.Description ?? string.Empty) != Description) FlagDatabaseEditing.SetDescription(_database, Guid, Description);
+            if ((_flag.Name ?? string.Empty) == Name) return true;
+            return FlagDatabaseEditing.TryRename(_database, Guid, Name, out _error);
+        }
+    }
+
     /// <summary>Data behind the Flags window list, kept apart from the IMGUI so it can be tested.</summary>
     internal static class FlagsWindowModel
     {
