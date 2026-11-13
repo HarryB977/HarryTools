@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 using HarryTools.Actions;
 using HarryTools.Flags.Editor;
 using NUnit.Framework;
@@ -8,6 +9,7 @@ using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using UnityEngine.TestTools;
 
 namespace HarryTools.Flags.Tests
 {
@@ -232,6 +234,43 @@ namespace HarryTools.Flags.Tests
             FlagUsageMaintainer.FlushPending();
 
             Assert.IsEmpty(index.For(_flag.Guid));
+        }
+
+        [Test]
+        public void UnreadableImportedAsset_OtherQueuedWorkStillDone()
+        {
+            FlagDefinition _flag = Create(FlagScope.Global, null, "A");
+            FlagDefinition _gone = Create(FlagScope.Global, null, "Gone");
+
+            // Queued as deleted: its entries must be removed even though another queued file cannot be read.
+            string _deletedPath = FlagUsageTestScenes.Folder + "/Deleted.asset";
+            FlagUsageTestAsset _deleted = ScriptableObject.CreateInstance<FlagUsageTestAsset>();
+            _deleted.flag = Ref(_gone);
+            AssetDatabase.CreateAsset(_deleted, _deletedPath);
+            FlagUsageMaintainer.FlushPending();
+            Assert.AreEqual(1, index.For(_gone.Guid).Count());
+
+            string _lockedPath = FlagUsageTestScenes.Folder + "/Locked.asset";
+            FlagUsageTestAsset _locked = ScriptableObject.CreateInstance<FlagUsageTestAsset>();
+            _locked.flag = Ref(_flag);
+            AssetDatabase.CreateAsset(_locked, _lockedPath);
+            string _readablePath = FlagUsageTestScenes.Folder + "/Readable.asset";
+            // Without a FlagRef, so the locked file is always checked before anything decides the index is needed.
+            FlagUsageTestAsset _readable = ScriptableObject.CreateInstance<FlagUsageTestAsset>();
+            AssetDatabase.CreateAsset(_readable, _readablePath);
+            Assert.IsTrue(AssetDatabase.DeleteAsset(_deletedPath));
+
+            LogAssert.Expect(LogType.Warning, new Regex("Locked\\.asset"));
+            using (new FileStream(_lockedPath, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+                Assert.DoesNotThrow(FlagUsageMaintainer.FlushPending);
+
+            Assert.IsEmpty(index.For(_gone.Guid), "The deleted asset is removed.");
+            Assert.IsEmpty(index.For(_flag.Guid), "The locked asset is skipped.");
+
+            // Once readable again, a later import indexes it.
+            AssetDatabase.ImportAsset(_lockedPath, ImportAssetOptions.ForceUpdate);
+            FlagUsageMaintainer.FlushPending();
+            Assert.AreEqual(_lockedPath, index.For(_flag.Guid).Single().assetPath);
         }
 
         [Test]

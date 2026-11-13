@@ -1,4 +1,6 @@
 using System.Collections.Generic;
+using System.IO;
+using System.Text;
 using HarryTools.Actions;
 using HarryTools.Conditions;
 using HarryTools.Flags.Editor;
@@ -206,6 +208,53 @@ namespace HarryTools.Flags.Tests
             Assert.AreEqual(FlagUsageKind.Other, _entry.kind);
             Assert.AreEqual(AssetDatabase.AssetPathToGUID(_path), _entry.sceneGuid);
             Assert.IsTrue(_entry.approximate);
+        }
+
+        // ==================== TEXT CHECK ====================
+
+        // Outside Assets: plain files that the AssetDatabase never imports.
+        private static string TempFile(string _name) => Path.Combine("Temp", "__FlagsTests__" + _name);
+
+        [Test]
+        public void MayContainFlagRef_BinaryFile_SkippedWithoutError()
+        {
+            string _path = TempFile("Binary.asset");
+            byte[] _bytes = new byte[64 * 1024];
+            for (int _i = 0; _i < _bytes.Length; _i++) _bytes[_i] = (byte)(_i * 31);
+            // Text that would look like a FlagRef if the binary file were searched.
+            byte[] _fake = Encoding.ASCII.GetBytes("\n  guid: " + FlagA + "\n  label: x\n--- !u!1001 &1\n");
+            System.Array.Copy(_fake, 0, _bytes, 128, _fake.Length);
+            try
+            {
+                File.WriteAllBytes(_path, _bytes);
+                Assert.IsFalse(FlagUsageIndexer.MayContainFlagRef(_path));
+            }
+            finally
+            {
+                File.Delete(_path);
+            }
+        }
+
+        [Test]
+        public void MayContainFlagRef_YamlFile_FindsFlagRefAndPrefabInstance()
+        {
+            string _path = TempFile("Text.asset");
+            const string Header = "%YAML 1.1\n%TAG !u! tag:unity3d.com,2011:\n--- !u!114 &11400000\nMonoBehaviour:\n";
+            try
+            {
+                File.WriteAllText(_path, Header + "  flag:\n    guid: " + FlagA + "\n    label: Global / A\n");
+                Assert.IsTrue(FlagUsageIndexer.MayContainFlagRef(_path), "Assigned FlagRef.");
+
+                File.WriteAllText(_path, Header + "  flag:\n    guid: \n    label: \n  texture: {fileID: 0, guid: " + FlagB + ", type: 3}\n");
+                Assert.IsFalse(FlagUsageIndexer.MayContainFlagRef(_path), "Empty FlagRef and an asset reference guid.");
+
+                File.WriteAllText(_path, Header + "--- !u!1001 &5\nPrefabInstance:\n");
+                Assert.IsTrue(FlagUsageIndexer.MayContainFlagRef(_path), "Prefab instance.");
+            }
+            finally
+            {
+                File.Delete(_path);
+            }
         }
 
         // ==================== KIND ====================

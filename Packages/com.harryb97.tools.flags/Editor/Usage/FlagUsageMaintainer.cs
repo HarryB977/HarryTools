@@ -344,8 +344,13 @@ namespace HarryTools.Flags.Editor
             }
             StoreSaved(_saved);
 
+            // Each imported file is checked once; one that cannot be read is skipped and keeps its old entries.
+            Dictionary<string, bool> _assetChecks = new Dictionary<string, bool>(StringComparer.Ordinal);
+            foreach (string _path in _assetsIn)
+                if (TryMayContainFlagRef(_path, out bool _may)) _assetChecks[_path] = _may;
+
             // The index asset is only created once there is something to store.
-            bool _hasEntries = _sceneReads.Any(_pair => _pair.Value.Count > 0) || _assetsIn.Any(FlagUsageIndexer.MayContainFlagRef);
+            bool _hasEntries = _sceneReads.Any(_pair => _pair.Value.Count > 0) || _assetChecks.ContainsValue(true);
             FlagUsageIndex _index = IndexFor(_hasEntries);
             if (_index == null) return;
 
@@ -357,8 +362,8 @@ namespace HarryTools.Flags.Editor
                 foreach (KeyValuePair<string, List<FlagUsageEntry>> _pair in _sceneReads) _index.ReplaceScene(_pair.Key, _pair.Value);
                 foreach (string _path in _assetsIn)
                 {
-                    if (File.Exists(_path)) SafeReindexAsset(_index, _path);
-                    else _index.RemoveAsset(_path);
+                    if (!File.Exists(_path)) _index.RemoveAsset(_path);
+                    else if (_assetChecks.TryGetValue(_path, out bool _may)) SafeReindexAsset(_index, _path, _may);
                 }
             }
             finally
@@ -405,14 +410,35 @@ namespace HarryTools.Flags.Editor
         /// <summary>Reindex that never stops the caller: an asset that throws keeps its old entries.</summary>
         private static void SafeReindexAsset(FlagUsageIndex _index, string _path)
         {
+            if (TryMayContainFlagRef(_path, out bool _may)) SafeReindexAsset(_index, _path, _may);
+        }
+
+        private static void SafeReindexAsset(FlagUsageIndex _index, string _path, bool _mayContainFlagRef)
+        {
             try
             {
-                List<FlagUsageEntry> _entries = FlagUsageIndexer.MayContainFlagRef(_path) ? FlagUsageIndexer.FromAsset(_path) : new List<FlagUsageEntry>();
+                List<FlagUsageEntry> _entries = _mayContainFlagRef ? FlagUsageIndexer.FromAsset(_path) : new List<FlagUsageEntry>();
                 _index.ReplaceAsset(_path, _entries);
             }
             catch (Exception _exception)
             {
                 Logger.LogWarning(Category, $"Could not index the flag usages of asset '{_path}': {_exception.Message}");
+            }
+        }
+
+        /// <summary>The text check of a file, never throwing: when the file cannot be read it logs a warning and returns false.</summary>
+        private static bool TryMayContainFlagRef(string _path, out bool _mayContainFlagRef)
+        {
+            try
+            {
+                _mayContainFlagRef = FlagUsageIndexer.MayContainFlagRef(_path);
+                return true;
+            }
+            catch (Exception _exception)
+            {
+                Logger.LogWarning(Category, $"Could not read asset '{_path}' to index its flag usages: {_exception.Message}");
+                _mayContainFlagRef = false;
+                return false;
             }
         }
 

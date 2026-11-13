@@ -20,11 +20,12 @@ namespace HarryTools.Flags.Editor
     {
         // ==================== VARIABLES ====================
 
-        // How a FlagRef with a guid looks in a text-serialized file.
         // YAML document header of a PrefabInstance (class id 1001).
         private const string PrefabInstanceHeader = "--- !u!1001 ";
 
-        private static readonly Regex FlagRefText = new Regex(@"\bguid: [0-9a-fA-F]{32}\r?\n\s*label:", RegexOptions.Compiled);
+        // How a FlagRef with a guid looks in a text-serialized file: a "guid: <32 hex>" line followed by a "label:" line.
+        private static readonly Regex FlagRefGuidLine = new Regex(@"\bguid: [0-9a-fA-F]{32}\s*$", RegexOptions.Compiled);
+        private static readonly byte[] YamlHeader = Encoding.ASCII.GetBytes("%YAML");
 
         // ==================== PUBLIC API ====================
 
@@ -106,20 +107,50 @@ namespace HarryTools.Flags.Editor
         }
 
         /// <summary>
-        /// False only when the file is text-serialized, holds no assigned FlagRef and has no prefab instance, so it does not need
-        /// to be loaded. Binary files always may; so does a file with a prefab instance or variant base, whose FlagRefs live in
-        /// the prefab and are not written to this file unless overridden.
+        /// True when a text-serialized file holds an assigned FlagRef or a prefab instance (or variant base), whose FlagRefs live in
+        /// the prefab and are not written to this file unless overridden. Binary files (baked lighting, terrain, navmesh data)
+        /// cannot hold text FlagRefs and are not read past their header. The text is streamed line by line. Throws on IO errors.
         /// </summary>
         public static bool MayContainFlagRef(string _path)
         {
             if (string.IsNullOrEmpty(_path) || !File.Exists(_path)) return false;
 
-            string _text = File.ReadAllText(_path);
-            if (!_text.StartsWith("%YAML", StringComparison.Ordinal)) return true;
-            return _text.IndexOf(PrefabInstanceHeader, StringComparison.Ordinal) >= 0 || FlagRefText.IsMatch(_text);
+            using (FileStream _stream = new FileStream(_path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+            {
+                if (!StartsWith(_stream, YamlHeader)) return false;
+                _stream.Position = 0;
+
+                using (StreamReader _reader = new StreamReader(_stream, Encoding.UTF8))
+                {
+                    bool _previousEndsWithGuid = false;
+                    string _line;
+                    while ((_line = _reader.ReadLine()) != null)
+                    {
+                        if (_line.StartsWith(PrefabInstanceHeader, StringComparison.Ordinal)) return true;
+                        if (_previousEndsWithGuid && _line.TrimStart().StartsWith("label:", StringComparison.Ordinal)) return true;
+                        _previousEndsWithGuid = FlagRefGuidLine.IsMatch(_line);
+                    }
+                }
+            }
+            return false;
         }
 
         // ==================== PRIVATE ====================
+
+        private static bool StartsWith(Stream _stream, byte[] _prefix)
+        {
+            byte[] _buffer = new byte[_prefix.Length];
+            int _read = 0;
+            while (_read < _buffer.Length)
+            {
+                int _count = _stream.Read(_buffer, _read, _buffer.Length - _read);
+                if (_count <= 0) return false;
+                _read += _count;
+            }
+            for (int _i = 0; _i < _prefix.Length; _i++)
+                if (_buffer[_i] != _prefix[_i]) return false;
+            return true;
+        }
 
         private static void FromHierarchy(GameObject _root, List<FlagUsageEntry> _result)
         {
