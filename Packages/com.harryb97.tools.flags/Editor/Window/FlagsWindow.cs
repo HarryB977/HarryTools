@@ -854,7 +854,7 @@ namespace HarryTools.Flags.Editor
                 _scene = EditorSceneManager.OpenScene(_scenePath, OpenSceneMode.Additive);
             }
 
-            GameObject _target = FindByPath(_scene, _use.hierarchyPath);
+            GameObject _target = FlagUsageIndexer.FindByHierarchyPath(_scene, _use.hierarchyPath);
             if (_target == null)
             {
                 ShowNotification(new GUIContent("Object not found. Rebuild the usage index."));
@@ -862,24 +862,6 @@ namespace HarryTools.Flags.Editor
             }
             Selection.activeGameObject = _target;
             EditorGUIUtility.PingObject(_target);
-        }
-
-        private static GameObject FindByPath(Scene _scene, string _hierarchyPath)
-        {
-            if (!_scene.IsValid() || !_scene.isLoaded) return null;
-
-            int _slash = _hierarchyPath.IndexOf('/');
-            string _rootName = _slash < 0 ? _hierarchyPath : _hierarchyPath.Substring(0, _slash);
-            string _rest = _slash < 0 ? null : _hierarchyPath.Substring(_slash + 1);
-
-            foreach (GameObject _root in _scene.GetRootGameObjects())
-            {
-                if (_root.name != _rootName) continue;
-                if (_rest == null) return _root;
-                Transform _child = _root.transform.Find(_rest);
-                if (_child != null) return _child.gameObject;
-            }
-            return null;
         }
 
         // ==================== KEYBOARD ====================

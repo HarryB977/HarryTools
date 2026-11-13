@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace HarryTools.Flags.Editor
 {
@@ -23,15 +24,32 @@ namespace HarryTools.Flags.Editor
             return _issues;
         }
 
-        /// <summary>Writes one console message for the issue, clickable when it points at an asset.</summary>
+        /// <summary>
+        /// Writes one console message for the issue, clickable when it points at a use: the asset, the object if its scene is
+        /// loaded, or else the scene asset.
+        /// </summary>
         public static void Log(FlagIssue _issue)
         {
-            UnityEngine.Object _context = null;
-            if (_issue.Usage != null && !string.IsNullOrEmpty(_issue.Usage.assetPath))
-                _context = AssetDatabase.LoadMainAssetAtPath(_issue.Usage.assetPath);
-
+            UnityEngine.Object _context = ContextOf(_issue.Usage);
             if (_issue.Blocking) Debug.LogError(_issue.Message, _context);
             else Debug.LogWarning(_issue.Message, _context);
+        }
+
+        /// <summary>The object a console message about the use should select, or null.</summary>
+        internal static UnityEngine.Object ContextOf(FlagUsageEntry _usage)
+        {
+            if (_usage == null) return null;
+            if (!string.IsNullOrEmpty(_usage.assetPath)) return AssetDatabase.LoadMainAssetAtPath(_usage.assetPath);
+
+            string _scenePath = AssetDatabase.GUIDToAssetPath(_usage.sceneGuid ?? string.Empty);
+            if (string.IsNullOrEmpty(_scenePath)) return null;
+
+            if (!string.IsNullOrEmpty(_usage.hierarchyPath))
+            {
+                GameObject _object = FlagUsageIndexer.FindByHierarchyPath(SceneManager.GetSceneByPath(_scenePath), _usage.hierarchyPath);
+                if (_object != null) return _object;
+            }
+            return AssetDatabase.LoadAssetAtPath<SceneAsset>(_scenePath);
         }
 
         // ==================== PRIVATE ====================
@@ -39,7 +57,8 @@ namespace HarryTools.Flags.Editor
         private static void CheckDefinitions(FlagDatabase _database, List<FlagIssue> _issues)
         {
             HashSet<string> _guids = new HashSet<string>(StringComparer.Ordinal);
-            HashSet<string> _names = new HashSet<string>(StringComparer.Ordinal);
+            // Names per scope ("global" or "local:<scene guid>"), compared like the database compares them.
+            Dictionary<string, HashSet<string>> _names = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
 
             foreach (FlagDefinition _flag in _database.Flags)
             {
@@ -50,8 +69,12 @@ namespace HarryTools.Flags.Editor
                         $"Two flags share the guid {_flag.Guid} ('{_flag.DisplayPath}' is one of them). Delete or regenerate one in the flag database.", _flag.Guid));
 
                 string _scopeKey = _flag.Scope == FlagScope.Global ? "global" : "local:" + _flag.SceneGuid;
-                string _nameKey = _scopeKey + "/" + (_flag.Name ?? string.Empty).ToLowerInvariant();
-                if (!_names.Add(_nameKey))
+                if (!_names.TryGetValue(_scopeKey, out HashSet<string> _scopeNames))
+                {
+                    _scopeNames = new HashSet<string>(FlagNaming.Comparer);
+                    _names[_scopeKey] = _scopeNames;
+                }
+                if (!_scopeNames.Add(_flag.Name ?? string.Empty))
                     _issues.Add(new FlagIssue(FlagIssueKind.DuplicateName, true,
                         $"Two flags are called '{_flag.DisplayPath}' in the same scope (names ignore case). Rename one in the flag database.", _flag.Guid));
 

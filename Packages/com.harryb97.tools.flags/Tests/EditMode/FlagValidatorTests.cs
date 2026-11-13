@@ -2,7 +2,9 @@ using System.Collections.Generic;
 using System.Linq;
 using HarryTools.Flags.Editor;
 using NUnit.Framework;
+using UnityEditor;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace HarryTools.Flags.Tests
 {
@@ -121,6 +123,36 @@ namespace HarryTools.Flags.Tests
             Assert.That(_issues[0].Kind, Is.EqualTo(FlagIssueKind.MissingScene));
             Assert.That(_issues[0].Blocking, Is.False);
             Assert.That(_issues[0].FlagGuid, Is.EqualTo("l1"));
+        }
+
+        [Test]
+        public void ContextOf_SceneUse_ObjectWhenLoaded_SceneAssetWhenClosed()
+        {
+            // The usage maintainer reacts to the temporary scene; it must only see these instances.
+            FlagDatabaseLocator.OverrideForTests = database;
+            FlagUsageIndexLocator.OverrideForTests = index;
+            List<Scene> _scenes = new List<Scene>();
+            try
+            {
+                FlagUsageTestScenes.EnsureFolder();
+                string _path = FlagUsageTestScenes.Write("Context");
+                FlagUsageEntry _use = new FlagUsageEntry { flagGuid = "g1", sceneGuid = AssetDatabase.AssetPathToGUID(_path), hierarchyPath = "Host" };
+
+                Scene _scene = FlagUsageTestScenes.Open(_path, _scenes);
+                Assert.That(FlagValidator.ContextOf(_use), Is.SameAs(FlagUsageTestScenes.Host(_scene)));
+
+                FlagUsageTestScenes.CloseAll(_scenes);
+                Assert.That(FlagValidator.ContextOf(_use), Is.SameAs(AssetDatabase.LoadAssetAtPath<SceneAsset>(_path)));
+                Assert.That(FlagValidator.ContextOf(_use), Is.Not.Null);
+            }
+            finally
+            {
+                FlagUsageTestScenes.CloseAll(_scenes);
+                AssetDatabase.DeleteAsset(FlagUsageTestScenes.Folder);
+                FlagUsageMaintainer.FlushPending();
+                FlagUsageIndexLocator.OverrideForTests = null;
+                FlagDatabaseLocator.OverrideForTests = null;
+            }
         }
 
         // ==================== HELPERS ====================

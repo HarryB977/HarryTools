@@ -135,6 +135,25 @@ namespace HarryTools.Flags.Editor
             return false;
         }
 
+        /// <summary>The object of a loaded scene at a path written by the indexer ("Root/Child"), or null.</summary>
+        public static GameObject FindByHierarchyPath(Scene _scene, string _hierarchyPath)
+        {
+            if (!_scene.IsValid() || !_scene.isLoaded || string.IsNullOrEmpty(_hierarchyPath)) return null;
+
+            int _slash = _hierarchyPath.IndexOf('/');
+            string _rootName = _slash < 0 ? _hierarchyPath : _hierarchyPath.Substring(0, _slash);
+            string _rest = _slash < 0 ? null : _hierarchyPath.Substring(_slash + 1);
+
+            foreach (GameObject _root in _scene.GetRootGameObjects())
+            {
+                if (_root.name != _rootName) continue;
+                if (_rest == null) return _root;
+                Transform _child = _root.transform.Find(_rest);
+                if (_child != null) return _child.gameObject;
+            }
+            return null;
+        }
+
         // ==================== PRIVATE ====================
 
         private static bool StartsWith(Stream _stream, byte[] _prefix)
