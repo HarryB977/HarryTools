@@ -29,6 +29,8 @@ namespace HarryTools.Flags
         [SerializeField] private ActionList onChangeCleared = new ActionList();
 
         private ActionHandle running;
+        // Counts RunList calls, so a run started while another list was starting (re-entrancy) wins over the older one.
+        private int runCount;
 
         // ==================== PROPERTIES ====================
 
@@ -70,7 +72,14 @@ namespace HarryTools.Flags
             CancelRunning();
             if (_list == null || _list.IsEmpty) return;
 
+            int _run = ++runCount;
             ActionHandle _handle = _list.Run(LogicContext.From(this), destroyCancellationToken);
+            // An action changed this listener's flag or re-enabled the object while starting: the newer run owns `running`.
+            if (_run != runCount)
+            {
+                _handle?.Cancel();
+                return;
+            }
             running = _handle;
             // An action may have disabled this object while starting, before the handle was stored.
             if (!isActiveAndEnabled) CancelRunning();

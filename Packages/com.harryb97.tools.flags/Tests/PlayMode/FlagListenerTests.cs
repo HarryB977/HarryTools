@@ -184,6 +184,24 @@ namespace HarryTools.Flags.Tests
         }
 
         [UnityTest]
+        public IEnumerator ActionChangesOwnFlag_DisableLeavesNoListRunning()
+        {
+            // The set list clears the listener's own flag synchronously, starting the cleared list inside the set list's start.
+            ActionList _changeSet = new ActionList(new ClearFlagAction(new FlagRef(flag.Guid, flag.Label)), new RecordingAction("changeSet", 5));
+            FlagListener _listener = Make(List("applySet"), List("applyCleared"), _changeSet, List("changeCleared", 5));
+            RecordingAction.Log.Clear();
+
+            flag.Set();
+            yield return null;
+            CollectionAssert.Contains(RecordingAction.Log, "changeCleared");
+            _listener.gameObject.SetActive(false);
+
+            for (int _i = 0; _i < 8; _i++) yield return null;
+            CollectionAssert.DoesNotContain(RecordingAction.Log, "changeCleared:done", "The newer list must be the one disable cancels.");
+            CollectionAssert.DoesNotContain(RecordingAction.Log, "changeSet:done");
+        }
+
+        [UnityTest]
         public IEnumerator ActionDisablesOwnObject_NoException()
         {
             FlagListener _listener = Make(List("applySet"), List("applyCleared"), List("changeSet", 3, true), List("changeCleared"));
