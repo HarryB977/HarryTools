@@ -40,6 +40,12 @@ namespace HarryTools.Flags.Editor
             Resubscribe();
         }
 
+        /// <summary>
+        /// Runs after the domain reload reset cleared the runtime handlers and before any Awake, so nothing of the first frame is missed.
+        /// </summary>
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        private static void ResubscribeOnPlayStart() => Resubscribe();
+
         // ==================== PUBLIC API ====================
 
         public static IEnumerable<FlagHistoryEntry> For(string _flagGuid)
