@@ -108,7 +108,8 @@ private void OnDoorChanged(FlagChange _change)
 La clase estática `Flags` ofrece lo mismo (`Flags.IsSet(ref)`, `Flags.Set(ref, source)`, …) y dos eventos globales: `Flags.Changed` (por cada flag cuyo valor cambia) y `Flags.Restored` (una vez al terminar un `Restore` o `ResetAll`).
 
 - Si el valor nuevo es igual al actual, no pasa nada y no se emite evento.
-- Un `FlagRef` vacío, o que apunta a un flag que ya no existe: leer devuelve `false`, escribir no hace nada, y sale un aviso en consola una vez por referencia.
+- Un `FlagRef` vacío (nunca asignado): leer devuelve `false` sin avisar; escribir no hace nada y avisa en consola una vez por referencia.
+- Un `FlagRef` que apunta a un flag que ya no existe: leer devuelve `false` y escribir no hace nada; avisa en consola una vez por referencia, tanto al leer como al escribir.
 - Un flag vale su valor inicial hasta que alguien lo cambia en esta partida.
 
 ## Flag Listener
@@ -193,7 +194,7 @@ Si el proyecto no tiene base de datos, la validación no hace nada.
 - **Un flag local solo se puede usar desde su propia escena.** El editor lo avisa; en ejecución no se valida.
 - **Los usos desde código C# sin un campo `FlagRef` no aparecen** en el índice ni en la ventana.
 - **Los usos de escenas cambiadas fuera del editor son aproximados** hasta que se guarda la escena o se pulsa Rebuild.
-- **`FromAsset` indexa el ScriptableObject o prefab principal del asset**: los sub-assets de otros tipos no se escanean.
+- **El índice de usos lee el prefab o los ScriptableObjects de cada asset**: los sub-assets que no son ScriptableObjects no se escanean.
 - **Las constantes para código** (`GlobalFlags.GiftLeft`) son trabajo futuro: en la v1 se usa un campo `FlagRef`.
 - Borrar una escena deja sus flags locales en el grupo "Missing scene" hasta que los borres o los reasignes.
 - Los avisos de ejecución pasan por el paquete `logger`, que los elimina en las builds sin `DEBUG`.
