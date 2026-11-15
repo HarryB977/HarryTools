@@ -1,0 +1,27 @@
+{
+  "name": "com.harryb97.tools.interactions",
+  "version": "1.0.0-beta.1",
+  "displayName": "HarryTools Interactions",
+  "description": "Base genérica de interacciones: interactuador, interactuado e interacciones por tipo, con foco, textos para la UI y respuestas configurables desde el inspector. La detección la pone cada controlador.",
+  "unity": "6000.0",
+  "author": {
+    "name": "HarryB97",
+    "url": "https://github.com/HarryB977"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/HarryB977/HarryTools.git",
+    "directory": "Packages/com.harryb97.tools.interactions"
+  },
+  "keywords": [
+    "interactions",
+    "interactable",
+    "interactor",
+    "focus"
+  ],
+  "hideInEditor": true,
+  "license": "MIT",
+  "dependencies": {
+    "com.harryb97.tools.serializereferences": "1.0.3"
+  }
+}

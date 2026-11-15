@@ -1,0 +1,16 @@
+{
+    "name": "HarryTools.Interactions",
+    "rootNamespace": "HarryTools.Interactions",
+    "references": [
+        "GUID:ce4097fb1cd381e499cd9508a42275ce"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

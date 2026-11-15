@@ -1,0 +1,23 @@
+{
+    "name": "HarryTools.Interactions.Tests.EditMode",
+    "rootNamespace": "HarryTools.Interactions.Tests",
+    "references": [
+        "GUID:a157377b8d7c4925ad698285e3d06be5",
+        "GUID:ce4097fb1cd381e499cd9508a42275ce",
+        "UnityEngine.TestRunner",
+        "UnityEditor.TestRunner"
+    ],
+    "includePlatforms": [ "Editor" ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "nunit.framework.dll"
+    ],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

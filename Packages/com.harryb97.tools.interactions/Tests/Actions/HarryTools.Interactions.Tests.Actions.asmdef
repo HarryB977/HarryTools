@@ -1,0 +1,34 @@
+{
+    "name": "HarryTools.Interactions.Tests.Actions",
+    "rootNamespace": "HarryTools.Interactions.Tests",
+    "references": [
+        "GUID:a157377b8d7c4925ad698285e3d06be5",
+        "GUID:f5f99159c79445a186a8a90b7b6b772c",
+        "GUID:29de7d2b7e640ec46a8c18880806d777",
+        "GUID:976ab130102fdc04c9bbc3159f83ad15",
+        "GUID:ce4097fb1cd381e499cd9508a42275ce",
+        "GUID:f51ebe6a0ceec4240a699833d6309b23",
+        "UnityEngine.TestRunner",
+        "UnityEditor.TestRunner"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "nunit.framework.dll"
+    ],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS",
+        "HARRYTOOLS_INTERACTIONS_ACTIONS"
+    ],
+    "versionDefines": [
+        {
+            "name": "com.harryb97.tools.actions",
+            "expression": "2.0.0-beta.1",
+            "define": "HARRYTOOLS_INTERACTIONS_ACTIONS"
+        }
+    ],
+    "noEngineReferences": false
+}

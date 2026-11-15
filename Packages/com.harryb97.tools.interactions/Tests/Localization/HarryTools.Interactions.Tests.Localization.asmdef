@@ -1,0 +1,31 @@
+{
+    "name": "HarryTools.Interactions.Tests.Localization",
+    "rootNamespace": "HarryTools.Interactions.Tests",
+    "references": [
+        "GUID:a157377b8d7c4925ad698285e3d06be5",
+        "GUID:8bb9fb3568cc4ae686e8f0ef6ef80984",
+        "GUID:eec0964c48f6f4e40bc3ec2257ccf8c5",
+        "UnityEngine.TestRunner",
+        "UnityEditor.TestRunner"
+    ],
+    "includePlatforms": [ "Editor" ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "nunit.framework.dll"
+    ],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS",
+        "HARRYTOOLS_INTERACTIONS_LOCALIZATION"
+    ],
+    "versionDefines": [
+        {
+            "name": "com.unity.localization",
+            "expression": "1.0.0",
+            "define": "HARRYTOOLS_INTERACTIONS_LOCALIZATION"
+        }
+    ],
+    "noEngineReferences": false
+}
