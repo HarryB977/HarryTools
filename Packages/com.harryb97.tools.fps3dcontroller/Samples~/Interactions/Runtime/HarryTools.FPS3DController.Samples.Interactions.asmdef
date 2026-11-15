@@ -1,0 +1,25 @@
+{
+    "name": "HarryTools.FPS3DController.Samples.Interactions",
+    "rootNamespace": "HarryTools.FPS3DController.Samples.Interactions",
+    "references": [
+        "GUID:c09ddd63cfd6afe479ccc0fca1fdc550",
+        "GUID:a157377b8d7c4925ad698285e3d06be5"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [
+        "HARRYTOOLS_FPS_INTERACTIONS_SAMPLE"
+    ],
+    "versionDefines": [
+        {
+            "name": "com.harryb97.tools.interactions",
+            "expression": "1.0.0-beta.1",
+            "define": "HARRYTOOLS_FPS_INTERACTIONS_SAMPLE"
+        }
+    ],
+    "noEngineReferences": false
+}

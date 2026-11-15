@@ -1,5 +1,9 @@
 # Change Log:
 
+## 2.1.0
+
+    - Nuevo sample **Interactions Sample**: el jugador detecta objetos con un raycast desde la cámara y los usa con clic izquierdo y derecho mediante `com.harryb97.tools.interactions`, con un texto en pantalla que muestra las interacciones disponibles. Solo compila si ese paquete está instalado
+
 ## 2.0.3
 
     - `displayName` de `FPS 3D Controller` a `HarryTools FPS 3D Controller`, para distinguirlo en la carpeta Packages y en el Package Manager. Los samples nuevos se importan en `Assets/Samples/HarryTools FPS 3D Controller/`

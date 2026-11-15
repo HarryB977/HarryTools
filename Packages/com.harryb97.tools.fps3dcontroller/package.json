@@ -1,6 +1,6 @@
 {
   "name": "com.harryb97.tools.fps3dcontroller",
-  "version": "2.0.3",
+  "version": "2.1.0",
   "displayName": "HarryTools FPS 3D Controller",
   "description": "Herramienta que añade un controlador de movimiento en 3D para juegos en primera persona",
   "unity": "6000.0",
@@ -20,6 +20,11 @@
       "displayName": "Player Movement Sample",
       "description": "Ejemplo de implementación",
       "path": "Samples~/Sample"
+    },
+    {
+      "displayName": "Interactions Sample",
+      "description": "Interacción por raycast desde la cámara con HarryTools Interactions: foco, clic izquierdo y derecho, y un texto en pantalla. Requiere com.harryb97.tools.interactions.",
+      "path": "Samples~/Interactions"
     }
   ]
 }

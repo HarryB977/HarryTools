@@ -151,3 +151,12 @@ cameraController.AddLookOffset(_pitchUp: 1.5f, _yaw: 0f);   // pitch positivo mi
 **Player Movement Sample**, importable desde Package Manager > Samples: escena, prefab `Player` y el script del ejemplo de arriba.
 
 Controles: WASD para moverse, ratón para mirar, Espacio para saltar, Shift izquierdo para el dash y Control izquierdo para agacharse. Usa el Input Manager clásico (`Input.GetAxisRaw`, `Input.GetKey`), así que necesita *Active Input Handling* en *Input Manager (Old)* o *Both*.
+
+**Interactions Sample**: ejemplo de interacción con [`com.harryb97.tools.interactions`](https://openupm.com/packages/com.harryb97.tools.interactions/). Requiere ese paquete; sin él, el sample no compila pero tampoco da errores.
+
+- `RaycastInteractor`: lanza un raycast desde el centro de la cámara (distancia máxima, capas y triggers configurables), pasa el `Interactable` golpeado (en el collider o en un padre) a `Interactor.SetFocus` y, con cada tecla de su lista, llama a `Interactor.Interact` con el tipo asociado. Por defecto: clic izquierdo → `Primary`, clic derecho → `Secondary`.
+- `InteractionPromptLabel`: muestra con `OnGUI` las interacciones disponibles del foco (`LMB: Open  ·  RMB: Lock`) y se actualiza con `FocusChanged` y `FocusUpdated`. Es solo para el ejemplo; cada juego pinta su propia UI.
+- `SampleDoor`: puerta con bisagra que se abre y se bloquea desde las respuestas *Unity Event* de su `Interactable`, y cambia el texto de bloquear a "Unlock" con `Interaction.SetText`.
+- `SamplePlayer`: copia del jugador del otro sample, para que este se pueda importar solo.
+
+Mismos controles que el otro sample, más clic izquierdo y derecho para interactuar.
