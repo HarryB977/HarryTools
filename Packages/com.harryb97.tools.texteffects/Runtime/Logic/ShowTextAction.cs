@@ -15,7 +15,7 @@ namespace HarryTools.TextEffects {
         // ==================== VARIABLES ===================
         #region Private Variables
         [SerializeField] private TargetComponent<EffectText> target = new TargetComponent<EffectText>();
-        [Tooltip("Waits until the text has finished typing"), SerializeField] private bool waitUntilComplete;
+        [Tooltip("Waits until the text has finished typing, including any wait for input until it is continued"), SerializeField] private bool waitUntilComplete;
         #endregion
 
         // ==================== CONSTRUCTORS ===================
@@ -31,16 +31,24 @@ namespace HarryTools.TextEffects {
             EffectText _text = target?.Resolve(_context);
             if (_text == null) return;
 
-            _text.Show();
-            if (!waitUntilComplete || _text.State == EffectTextState.Complete) return;
+            if (!waitUntilComplete) {
+                _text.Show();
+                return;
+            }
 
-            UniTaskCompletionSource _source = new UniTaskCompletionSource();
-            Action _finish = () => _source.TrySetResult();
+            TextActionWaiter _waiter = new TextActionWaiter();
+            Action _finish = _waiter.Finish;
             _text.TypingCompleted += _finish;
             _text.Hidden += _finish;
             try {
-                using (_token.Register(() => _source.TrySetCanceled(_token))) {
-                    await _source.Task;
+                _text.Show();
+                if (_waiter.Done) return;
+
+                // The state is read after a frame so a Show deferred by the text has been applied by then
+                while (true) {
+                    await UniTask.Yield(PlayerLoopTiming.Update, _token);
+                    if (_waiter.Done || _text == null || !_text.isActiveAndEnabled) return;
+                    if (_text.State == EffectTextState.Complete || _text.State == EffectTextState.Hidden) return;
                 }
             } finally {
                 if (_text != null) {

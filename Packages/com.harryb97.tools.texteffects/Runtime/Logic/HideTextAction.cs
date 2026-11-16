@@ -37,15 +37,13 @@ namespace HarryTools.TextEffects {
             }
             if (_text.State == EffectTextState.Hidden) return;
 
-            UniTaskCompletionSource _source = new UniTaskCompletionSource();
-            Action _finish = () => _source.TrySetResult();
+            TextActionWaiter _waiter = new TextActionWaiter();
+            Action _finish = _waiter.Finish;
             _text.Hidden += _finish;
             try {
                 _text.Hide();
-                if (_text.State == EffectTextState.Hidden) return;
-
-                using (_token.Register(() => _source.TrySetCanceled(_token))) {
-                    await _source.Task;
+                while (!_waiter.Done && _text != null && _text.isActiveAndEnabled && _text.State != EffectTextState.Hidden) {
+                    await UniTask.Yield(PlayerLoopTiming.Update, _token);
                 }
             } finally {
                 if (_text != null) _text.Hidden -= _finish;
