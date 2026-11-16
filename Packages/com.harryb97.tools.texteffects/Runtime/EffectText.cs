@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using HarryTools.Actions;
 using HarryTools.Conditions;
+using HarryTools.DomainReload;
 using TMPro;
 using UnityEngine;
 #if HARRYTOOLS_TEXTEFFECTS_LOCALIZATION
@@ -78,6 +79,9 @@ namespace HarryTools.TextEffects {
         /// <summary> Editor preview: events only fire EventReached, with no queued actions </summary>
         internal bool PreviewMode { get; set; }
 
+        /// <summary> Replaces the real playback when assigned, so tests do not need an audio catalog </summary>
+        [ClearOnReload] internal static Action<TypingVoice> PlayedForTests;
+
         internal bool ShowOnEnable { get => showOnEnable; set => showOnEnable = value; }
         internal string PlainText { get => plainText; set => plainText = value; }
         internal TimeMode TimeMode { get => timeMode; set => timeMode = value; }
@@ -98,6 +102,7 @@ namespace HarryTools.TextEffects {
         private int[] sourceIndices = Array.Empty<int>();
         private TypingVoice currentVoice;
         private bool unknownVoiceWarned;
+        private int soundableCount;
         private bool hasText;
 
         // TextMeshPro does not generate the mesh of an inactive object, so the load waits for OnEnable
@@ -139,6 +144,7 @@ namespace HarryTools.TextEffects {
             hasText = true;
             unknownVoiceWarned = false;
             currentVoice = defaultVoice;
+            soundableCount = 0;
             State = EffectTextState.Hidden;
             animationTime = 0f;
             if (_show) Show();
@@ -152,6 +158,7 @@ namespace HarryTools.TextEffects {
             if (meshLoadPending && CanGenerateMesh) LoadMesh();
             typewriter.CharactersPerSecond = ResolveCharactersPerSecond();
             currentVoice = defaultVoice;
+            soundableCount = 0;
             animationTime = 0f;
             animator.HideAll();
             typewriter.Start();
@@ -265,9 +272,10 @@ namespace HarryTools.TextEffects {
         #region ITypewriterListener
         void ITypewriterListener.OnCharacterShown(int _index, bool _skipped) {
             animator.OnCharacterShown(_index, animationTime);
-            if (CharacterShown == null) return;
             TMP_TextInfo _info = Tmp.textInfo;
             char _character = _index < _info.characterCount ? _info.characterInfo[_index].character : '\0';
+            if (!_skipped && !PreviewMode) PlayTypingSound(_character);
+            if (CharacterShown == null) return;
             CharacterShown(new CharacterShownArgs(_index, _character, currentVoice, _skipped));
         }
 
@@ -285,6 +293,7 @@ namespace HarryTools.TextEffects {
         void ITypewriterListener.OnVoiceChanged(string _voiceName) {
             if (TextEffectsSettings.Current.TryGetVoice(_voiceName, out TypingVoice _voice)) {
                 currentVoice = _voice;
+                soundableCount = 0;
                 return;
             }
 
@@ -343,6 +352,24 @@ namespace HarryTools.TextEffects {
             string _message = "In the text of '" + name + "'" + (_withPosition && _issue.Position >= 0 ? " at position " + _issue.Position : string.Empty) + ": " + _issue.Message;
             if (_issue.Severity == IssueSeverity.Error) Logger.LogError("TextEffects", _message);
             else Logger.LogWarning("TextEffects", _message);
+        }
+
+        /// <summary> Counts the character when the voice can sound it and plays on every N-th one, starting with the first </summary>
+        private void PlayTypingSound(char _character) {
+            TypingVoice _voice = currentVoice;
+            if (_voice == null || !_voice.CanSound(_character)) return;
+
+            int _count = soundableCount++;
+            if (!_voice.ShouldPlay(_count)) return;
+
+            if (PlayedForTests != null) {
+                PlayedForTests(_voice);
+                return;
+            }
+#if HARRYTOOLS_TEXTEFFECTS_AUDIO
+            TMP_Text _tmp = Tmp;
+            TypingVoicePlayer.Play(_voice, _tmp.transform, _tmp is TextMeshPro);
+#endif
         }
 
         private bool IsUnscaled() {
