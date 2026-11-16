@@ -14,6 +14,9 @@ namespace HarryTools.TextEffects.Editor {
         private const string PlainTextField = "plainText";
         private const string LocalizedTextField = "localizedText";
 
+        /// <summary> Seconds between checks for changes made outside this inspector: string tables, settings, scripts </summary>
+        private const double ExternalRefreshInterval = 1.0;
+
         private readonly List<TextIssue> textIssues = new List<TextIssue>();
         private readonly List<LocaleIssue> localeIssues = new List<LocaleIssue>();
         private readonly Dictionary<string, string> textByLocale = new Dictionary<string, string>();
@@ -22,6 +25,9 @@ namespace HarryTools.TextEffects.Editor {
         private SerializedProperty sourceMode;
         private EffectTextPreview preview;
         private bool settingsMissing;
+        private bool localizedMissing;
+        private bool issuesDirty = true;
+        private double lastRefreshTime;
         private string selectedLocale;
         private Vector2 eventScroll;
 
@@ -35,9 +41,12 @@ namespace HarryTools.TextEffects.Editor {
         private void OnEnable() {
             sourceMode = serializedObject.FindProperty(SourceModeField);
             if (targets.Length == 1) preview = new EffectTextPreview((EffectText)target);
+            issuesDirty = true;
+            Undo.undoRedoPerformed += MarkIssuesDirty;
         }
 
         private void OnDisable() {
+            Undo.undoRedoPerformed -= MarkIssuesDirty;
             preview?.Stop();
         }
 
@@ -47,13 +56,14 @@ namespace HarryTools.TextEffects.Editor {
 
         public override void OnInspectorGUI() {
             serializedObject.Update();
+            EditorGUI.BeginChangeCheck();
             DrawFields();
-            serializedObject.ApplyModifiedProperties();
+            if (serializedObject.ApplyModifiedProperties() | EditorGUI.EndChangeCheck()) issuesDirty = true;
 
             if (targets.Length > 1) return;
-            // Issues are rebuilt once per layout pass so layout and repaint draw the same boxes
+            // Issues are rebuilt on a layout pass, so layout and repaint draw the same boxes, and only after a change
             if (Event.current.type == EventType.Layout) {
-                RefreshIssues();
+                if (issuesDirty || EditorApplication.timeSinceStartup - lastRefreshTime > ExternalRefreshInterval) RefreshIssues();
                 previewShown = preview.IsPlaying;
                 eventsShown = preview.EventLog.Count;
             }
@@ -97,7 +107,13 @@ namespace HarryTools.TextEffects.Editor {
 
         // ==================== VALIDATION ====================
         #region Validation
+        private void MarkIssuesDirty() {
+            issuesDirty = true;
+        }
+
         private void RefreshIssues() {
+            issuesDirty = false;
+            lastRefreshTime = EditorApplication.timeSinceStartup;
             EffectText _effect = (EffectText)target;
             TextEffectsSettings _settings = TextEffectsSettingsLocator.Find();
             settingsMissing = _settings == null;
@@ -106,9 +122,11 @@ namespace HarryTools.TextEffects.Editor {
             textIssues.Clear();
             localeIssues.Clear();
             localeCodes.Clear();
+            localizedMissing = false;
             if (_effect.SourceMode == TextSourceMode.Localized) {
 #if HARRYTOOLS_TEXTEFFECTS_LOCALIZATION
                 string _baseLocale = LocalizedTextSource.ReadAll(_effect.LocalizedText, textByLocale);
+                localizedMissing = textByLocale.Count == 0;
                 TextValidator.ValidateLocales(_baseLocale, textByLocale, _settings, localeIssues, _eventExists);
                 localeCodes.AddRange(textByLocale.Keys);
                 localeCodes.Sort(StringComparer.Ordinal);
@@ -122,6 +140,7 @@ namespace HarryTools.TextEffects.Editor {
 
         private void DrawIssues() {
             if (settingsMissing) EditorGUILayout.HelpBox("Text Effects settings not found: every preset and voice is reported as unknown.", MessageType.Info);
+            if (localizedMissing) EditorGUILayout.HelpBox("No localized string selected, or its table entry was not found.", MessageType.Warning);
 
             for (int _i = 0; _i < textIssues.Count; _i++) {
                 TextIssue _issue = textIssues[_i];

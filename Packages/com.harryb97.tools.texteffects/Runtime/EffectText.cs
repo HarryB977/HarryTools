@@ -256,6 +256,20 @@ namespace HarryTools.TextEffects {
                     break;
             }
         }
+
+        /// <summary> Forgets the text the editor preview loaded, so the next OnEnable loads the source again </summary>
+        internal void ResetAfterPreview() {
+            TextParser.Parse(string.Empty, null, parsed);
+            hasText = false;
+            State = EffectTextState.Hidden;
+            meshLoadPending = false;
+            loadIssuesPending = false;
+            animationTime = 0f;
+            awaitingLocalized = false;
+            Array.Clear(requestOrder, 0, requestOrder.Length);
+            pendingText = null;
+            pendingLocalized = null;
+        }
         #endregion
 
         #region Unity Callbacks

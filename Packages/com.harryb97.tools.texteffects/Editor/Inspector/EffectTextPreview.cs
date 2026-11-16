@@ -9,7 +9,8 @@ using UnityEngine.SceneManagement;
 namespace HarryTools.TextEffects.Editor {
     /// <summary>
     /// Plays an EffectText in edit mode: typing, effects, pauses and hiding, with events listed instead of run and no sound.
-    /// The TMP text and mesh are put back on stop, and nothing is recorded in the scene or the prefab
+    /// The TMP text and mesh are put back on stop, and nothing is recorded in the scene or the prefab.
+    /// Only one preview drives an EffectText: playing a second one stops the first
     /// </summary>
     internal sealed class EffectTextPreview {
         // ==================== VARIABLES ===================
@@ -17,12 +18,17 @@ namespace HarryTools.TextEffects.Editor {
         /// <summary> Longest step per editor update, so a stalled editor does not jump the text forward </summary>
         private const float MaxStep = 0.1f;
 
+        /// <summary> The preview driving each EffectText. Every preview stops before entering play mode and on assembly reload, so it never outlives them </summary>
+        private static readonly Dictionary<EffectText, EffectTextPreview> active = new Dictionary<EffectText, EffectTextPreview>();
+
         private readonly EffectText target;
         private readonly List<string> eventLog = new List<string>();
         private readonly Action<string> onEventReached;
 
         private TMP_Text tmp;
         private string originalText;
+        // Text the preview itself last wrote into the TMP. Any other value means someone else changed it
+        private string writtenText;
         private string localeCode;
         private double lastUpdateTime;
         #endregion
@@ -50,6 +56,7 @@ namespace HarryTools.TextEffects.Editor {
             localeCode = _localeCode;
             eventLog.Clear();
             target.SetText(ReadText(_localeCode));
+            writtenText = tmp.text;
             Repaint();
         }
 
@@ -77,11 +84,16 @@ namespace HarryTools.TextEffects.Editor {
             Play(localeCode);
         }
 
-        /// <summary> Stops driving the text and puts the TMP text and mesh back as they were </summary>
+        /// <summary>
+        /// Stops driving the text and puts the TMP text and mesh back as they were. A TMP text changed by someone else
+        /// during the preview is kept as it is
+        /// </summary>
         public void Stop() {
             if (!IsPlaying) return;
             IsPlaying = false;
             Unsubscribe();
+            // Compared by reference so a destroyed target is unregistered too
+            if (!ReferenceEquals(target, null) && active.TryGetValue(target, out EffectTextPreview _driver) && _driver == this) active.Remove(target);
 
             if (target != null) {
                 target.EventReached -= onEventReached;
@@ -89,14 +101,16 @@ namespace HarryTools.TextEffects.Editor {
                 target.Animator.StopListening();
                 target.Animator.Restore();
                 target.PreviewMode = false;
+                target.ResetAfterPreview();
             }
 
             if (tmp != null) {
-                tmp.text = originalText;
+                if (tmp.text == writtenText) tmp.text = originalText;
                 tmp.ForceMeshUpdate(false, true);
             }
             tmp = null;
             originalText = null;
+            writtenText = null;
             Repaint();
         }
         #endregion
@@ -105,7 +119,8 @@ namespace HarryTools.TextEffects.Editor {
         /// <summary> Advances the preview by '_dt' seconds. The editor update calls it, tests call it directly </summary>
         internal void Step(float _dt) {
             if (!IsPlaying) return;
-            if (target == null || tmp == null || !target.isActiveAndEnabled) {
+            // A text changed from outside, by the user or a script, ends the preview and is kept
+            if (target == null || tmp == null || !target.isActiveAndEnabled || tmp.text != writtenText) {
                 Stop();
                 return;
             }
@@ -118,6 +133,9 @@ namespace HarryTools.TextEffects.Editor {
         // ==================== PRIVATE ====================
         #region Private Methods
         private void Begin() {
+            if (active.TryGetValue(target, out EffectTextPreview _other) && _other != this) _other.Stop();
+            active[target] = this;
+
             tmp = target.GetComponent<TMP_Text>();
             // Kept as a plain string and written back directly: no Undo record, so the scene is not marked as modified
             originalText = tmp.text;
@@ -131,6 +149,7 @@ namespace HarryTools.TextEffects.Editor {
             EditorApplication.update += OnEditorUpdate;
             EditorApplication.playModeStateChanged += OnPlayModeStateChanged;
             AssemblyReloadEvents.beforeAssemblyReload += Stop;
+            Undo.undoRedoPerformed += Stop;
             EditorSceneManager.sceneSaving += OnSceneSaving;
             PrefabStage.prefabSaving += OnPrefabSaving;
         }
@@ -139,21 +158,27 @@ namespace HarryTools.TextEffects.Editor {
             EditorApplication.update -= OnEditorUpdate;
             EditorApplication.playModeStateChanged -= OnPlayModeStateChanged;
             AssemblyReloadEvents.beforeAssemblyReload -= Stop;
+            Undo.undoRedoPerformed -= Stop;
             EditorSceneManager.sceneSaving -= OnSceneSaving;
             PrefabStage.prefabSaving -= OnPrefabSaving;
         }
 
         private bool CanDrive() {
             if (!IsPlaying) return false;
-            if (target != null && tmp != null) return true;
+            if (target != null && tmp != null && tmp.text == writtenText) return true;
             Stop();
             return false;
         }
 
+        /// <summary> Same source as the runtime: a localized source without the Localization package has no text </summary>
         private string ReadText(string _localeCode) {
+            if (target.SourceMode == TextSourceMode.Localized) {
 #if HARRYTOOLS_TEXTEFFECTS_LOCALIZATION
-            if (target.SourceMode == TextSourceMode.Localized) return LocalizedTextSource.Read(target.LocalizedText, _localeCode) ?? string.Empty;
+                return LocalizedTextSource.Read(target.LocalizedText, _localeCode) ?? string.Empty;
+#else
+                return string.Empty;
 #endif
+            }
             return target.PlainText ?? string.Empty;
         }
 

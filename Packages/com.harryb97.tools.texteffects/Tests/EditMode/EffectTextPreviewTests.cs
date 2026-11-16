@@ -126,6 +126,52 @@ namespace HarryTools.TextEffects.Tests {
             TMP_CharacterInfo _first = tmp.textInfo.characterInfo[0];
             Color32 _color = tmp.textInfo.meshInfo[_first.materialReferenceIndex].colors32[_first.vertexIndex];
             Assert.AreEqual(tmp.color.a, _color.a / 255f, 0.01f);
+
+            // The previewed text is forgotten, so a later OnEnable loads the source again
+            Assert.AreEqual(EffectTextState.Hidden, effect.State);
+            Assert.AreEqual(string.Empty, effect.Text);
+        }
+
+        [Test]
+        public void Preview_UserEditDuringPreview_NotOverwritten() {
+            preview.Play(null);
+            preview.Step(0.1f);
+
+            tmp.text = "User edit";
+            preview.Step(0.1f);
+            Assert.IsFalse(preview.IsPlaying);
+            Assert.IsFalse(effect.PreviewMode);
+            Assert.AreEqual("User edit", tmp.text);
+
+            // A stop after the edit also keeps it
+            preview.Play(null);
+            tmp.text = "Second edit";
+            preview.Stop();
+            Assert.AreEqual("Second edit", tmp.text);
+        }
+
+        [Test]
+        public void Preview_SecondPreviewSameObject_SinglePreviewActive() {
+            EffectTextPreview _second = new EffectTextPreview(effect);
+            try {
+                preview.Play(null);
+                preview.Step(0.1f);
+                _second.Play(null);
+
+                Assert.IsFalse(preview.IsPlaying);
+                Assert.IsTrue(_second.IsPlaying);
+                Assert.IsTrue(effect.PreviewMode);
+
+                // The first one stopping again must not touch the running preview
+                preview.Stop();
+                Assert.IsTrue(effect.PreviewMode);
+
+                _second.Stop();
+                Assert.IsFalse(effect.PreviewMode);
+                Assert.AreEqual(OriginalText, tmp.text);
+            } finally {
+                _second.Stop();
+            }
         }
 
         [Test]
