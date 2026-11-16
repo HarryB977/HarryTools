@@ -83,6 +83,9 @@ namespace HarryTools.TextEffects {
         [ClearOnReload] internal static Action<TypingVoice> PlayedForTests;
 
         internal TextSourceMode SourceMode => sourceMode;
+
+        /// <summary> True until the first localized value arrives. Tests set it to simulate that wait </summary>
+        internal bool AwaitingLocalized { get => awaitingLocalized; set => awaitingLocalized = value; }
 #if HARRYTOOLS_TEXTEFFECTS_LOCALIZATION
         internal LocalizedString LocalizedText => localizedText;
 #endif
@@ -162,19 +165,25 @@ namespace HarryTools.TextEffects {
         /// <summary> Starts typing the current text from the beginning </summary>
         public void Show() {
             if (Defer(Request.Show)) return;
+            if (awaitingLocalized) {
+                // Typing starts when the first localized value arrives
+                State = EffectTextState.Typing;
+                return;
+            }
             ShowFrom(0);
         }
 
         /// <summary> Reveals the text up to the next waitinput, or to the end </summary>
         public void Skip() {
             if (Defer(Request.Skip)) return;
-            if (State != EffectTextState.Typing) return;
-            RunTypewriter(true, 0f);
+            if (State != EffectTextState.Typing || awaitingLocalized) return;
+            RunTypewriter(TypewriterCall.Skip, 0f);
             animator.Render(animationTime);
         }
 
         /// <summary> Resumes typing after a waitinput. Does nothing when not waiting </summary>
         public void Continue() {
+            if (Defer(Request.Continue)) return;
             if (State != EffectTextState.WaitingInput) return;
             typewriter.Continue();
             State = EffectTextState.Typing;
@@ -213,7 +222,7 @@ namespace HarryTools.TextEffects {
             if (State == EffectTextState.Hidden) return;
 
             animationTime += _dt;
-            if (State == EffectTextState.Typing) RunTypewriter(false, _dt);
+            if (State == EffectTextState.Typing && !awaitingLocalized) RunTypewriter(TypewriterCall.Tick, _dt);
 
             if (State == EffectTextState.Hiding && animator.IsHideFinished(animationTime)) {
                 HideImmediate();
@@ -230,8 +239,10 @@ namespace HarryTools.TextEffects {
             }
 
             if (awaitingLocalized) {
+                // A Show made while waiting left the state in Typing
+                bool _show = showOnEnable || State != EffectTextState.Hidden;
                 awaitingLocalized = false;
-                SetText(_value, showOnEnable);
+                SetText(_value, _show);
                 return;
             }
 
@@ -435,7 +446,7 @@ namespace HarryTools.TextEffects {
             animator.HideAll();
             int _count = Tmp.textInfo.characterCount;
             for (int _i = 0; _i < _count; _i++) animator.OnCharacterShown(_i, animationTime);
-            typewriter.ShowAllImmediate(this);
+            RunTypewriter(TypewriterCall.ShowAll, 0f);
             animator.Render(animationTime);
         }
 
@@ -503,16 +514,26 @@ namespace HarryTools.TextEffects {
             Skip,
             Hide,
             HideImmediate,
+            Continue,
             ApplyLocalized,
             Count
         }
 
-        /// <summary> Advances or skips the typewriter, then applies the requests its listeners made meanwhile </summary>
-        private void RunTypewriter(bool _skip, float _dt) {
+        private enum TypewriterCall {
+            Tick,
+            Skip,
+            ShowAll
+        }
+
+        /// <summary> Advances, skips or completes the typewriter, then applies the requests its listeners made meanwhile </summary>
+        private void RunTypewriter(TypewriterCall _call, float _dt) {
             insideTypewriter = true;
             try {
-                if (_skip) typewriter.Skip(this);
-                else typewriter.Tick(_dt, this);
+                switch (_call) {
+                    case TypewriterCall.Tick: typewriter.Tick(_dt, this); break;
+                    case TypewriterCall.Skip: typewriter.Skip(this); break;
+                    case TypewriterCall.ShowAll: typewriter.ShowAllImmediate(this); break;
+                }
             } catch {
                 // Requests made before the failure are dropped so they do not run on a later, unrelated call
                 Array.Clear(requestOrder, 0, requestOrder.Length);
@@ -555,6 +576,7 @@ namespace HarryTools.TextEffects {
                         break;
                     case Request.Show: Show(); break;
                     case Request.Skip: Skip(); break;
+                    case Request.Continue: Continue(); break;
                     case Request.Hide: Hide(); break;
                     case Request.HideImmediate: HideImmediate(); break;
                 }

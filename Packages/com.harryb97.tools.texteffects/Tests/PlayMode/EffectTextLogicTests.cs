@@ -238,6 +238,40 @@ namespace HarryTools.TextEffects.Tests {
         }
 
         [Test]
+        public void Continue_FromWaitingInputListenerDuringSkip_IsDeferred() {
+            EffectText _effect = Build("ab<waitinput>cd", _e => _e.CharactersPerSecond = 1f);
+            EffectTextState _stateAfterContinue = EffectTextState.Hidden;
+            _effect.WaitingInput += () => {
+                _effect.Continue();
+                _stateAfterContinue = _effect.State;
+            };
+
+            _effect.Skip();
+
+            Assert.AreEqual(EffectTextState.WaitingInput, _stateAfterContinue);
+            Assert.AreEqual(EffectTextState.Typing, _effect.State);
+            Assert.AreEqual(2, _effect.VisibleCount);
+        }
+
+        [Test]
+        public void TypingCompleted_FromLocaleChangeWhenComplete_RequestsAreDeferred() {
+            EffectText _effect = Build("xx");
+            _effect.Tick(1f);
+            Assert.AreEqual(EffectTextState.Complete, _effect.State);
+
+            EffectTextState _stateAfterHide = EffectTextState.Hidden;
+            _effect.TypingCompleted += () => {
+                _effect.HideImmediate();
+                _stateAfterHide = _effect.State;
+            };
+
+            _effect.ApplyLocalizedText("yyyy");
+
+            Assert.AreEqual(EffectTextState.Complete, _stateAfterHide);
+            Assert.AreEqual(EffectTextState.Hidden, _effect.State);
+        }
+
+        [Test]
         public void HideImmediate_StateHidden_FiresHiddenOnce() {
             EffectText _effect = Build("hello");
             int _hidden = 0;
