@@ -42,7 +42,11 @@ namespace HarryTools.TextEffects {
             _text.Hidden += _finish;
             try {
                 _text.Hide();
-                while (!_waiter.Done && _text != null && _text.isActiveAndEnabled && _text.State != EffectTextState.Hidden) {
+                // A Hide deferred by the text has been applied by the next frame
+                if (!_waiter.Done && _text.State != EffectTextState.Hiding) await UniTask.Yield(PlayerLoopTiming.Update, _token);
+
+                // Leaving Hiding without Hidden means a Show interrupted the hide
+                while (!_waiter.Done && _text != null && _text.isActiveAndEnabled && _text.State == EffectTextState.Hiding) {
                     await UniTask.Yield(PlayerLoopTiming.Update, _token);
                 }
             } finally {

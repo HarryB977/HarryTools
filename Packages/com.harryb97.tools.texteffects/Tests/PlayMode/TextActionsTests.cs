@@ -143,6 +143,23 @@ namespace HarryTools.TextEffects.Tests {
             }
         }
 
+        [UnityTest]
+        public IEnumerator HideWait_ShowInterruptsHide_Returns() => UniTask.ToCoroutine(async () => {
+            UseDisappearPreset();
+            EffectText _effect = Build("hello");
+            _effect.Show();
+            _effect.Skip();
+            UniTask _task = new HideTextAction(Target(_effect), true).Run(Context(_effect), CancellationToken.None);
+            Assert.AreEqual(EffectTextState.Hiding, _effect.State);
+
+            _effect.Show();
+            Assert.AreEqual(EffectTextState.Typing, _effect.State);
+            await UniTask.Yield();
+            await UniTask.Yield();
+            Assert.AreEqual(UniTaskStatus.Succeeded, _task.Status);
+            Assert.AreNotEqual(EffectTextState.Hidden, _effect.State);
+        });
+
         [Test]
         public void HideWait_AlreadyHidden_ReturnsImmediately() {
             EffectText _effect = Build("hello");
