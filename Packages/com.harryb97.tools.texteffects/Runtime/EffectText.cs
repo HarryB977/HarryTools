@@ -118,6 +118,10 @@ namespace HarryTools.TextEffects {
         private int requestCounter;
         private string pendingText;
         private bool pendingShow;
+        private string pendingLocalized;
+
+        // Set on subscribe: the first localized value is a fresh load, not a locale change
+        private bool awaitingLocalized;
         #endregion
 
         // ==================== METHODS ====================
@@ -154,16 +158,7 @@ namespace HarryTools.TextEffects {
         /// <summary> Starts typing the current text from the beginning </summary>
         public void Show() {
             if (Defer(Request.Show)) return;
-            if (!hasText) LoadSource();
-            if (meshLoadPending && CanGenerateMesh) LoadMesh();
-            typewriter.CharactersPerSecond = ResolveCharactersPerSecond();
-            currentVoice = defaultVoice;
-            soundableCount = 0;
-            animationTime = 0f;
-            animator.HideAll();
-            typewriter.Start();
-            State = EffectTextState.Typing;
-            animator.Render(animationTime);
+            ShowFrom(0);
         }
 
         /// <summary> Reveals the text up to the next waitinput, or to the end </summary>
@@ -222,12 +217,52 @@ namespace HarryTools.TextEffects {
             }
             animator.Render(animationTime);
         }
+
+        /// <summary> Applies a text from the localized source. Applies the locale change rules to the current state </summary>
+        internal void ApplyLocalizedText(string _value) {
+            if (Defer(Request.ApplyLocalized)) {
+                pendingLocalized = _value;
+                return;
+            }
+
+            if (awaitingLocalized) {
+                awaitingLocalized = false;
+                SetText(_value, showOnEnable);
+                return;
+            }
+
+            switch (State) {
+                case EffectTextState.Typing:
+                case EffectTextState.WaitingInput:
+                    // Events already notified keep their ordinal and are not repeated
+                    int _ordinal = typewriter.NextEventOrdinal;
+                    SetText(_value, false);
+                    ShowFrom(_ordinal);
+                    break;
+                case EffectTextState.Complete:
+                    SetText(_value, false);
+                    ShowCompleteImmediate();
+                    break;
+                case EffectTextState.Hiding:
+                    HideImmediate();
+                    SetText(_value, false);
+                    break;
+                default:
+                    SetText(_value, false);
+                    break;
+            }
+        }
         #endregion
 
         #region Unity Callbacks
         private void OnEnable() {
             animator.Bind(Tmp);
             animator.StartListening();
+            if (sourceMode == TextSourceMode.Localized) {
+                EnterLocalized();
+                return;
+            }
+
             if (!hasText) {
                 LoadSource();
             } else {
@@ -251,6 +286,7 @@ namespace HarryTools.TextEffects {
         }
 
         private void OnDisable() {
+            LeaveLocalized();
             Queue.Cancel();
             animator.StopListening();
             // Whoever waits for Hidden must not wait forever
@@ -326,7 +362,63 @@ namespace HarryTools.TextEffects {
         private bool CanGenerateMesh => enabled && gameObject.activeInHierarchy;
 
         private void LoadSource() {
-            SetText(plainText, false);
+            SetText(sourceMode == TextSourceMode.Localized ? string.Empty : plainText, false);
+        }
+
+        /// <summary> Starts from hidden and waits for the first localized value, which may arrive on a later frame </summary>
+        private void EnterLocalized() {
+            if (!hasText) LoadSource();
+            State = EffectTextState.Hidden;
+            animator.HideAll();
+            animator.Render(animationTime);
+
+#if HARRYTOOLS_TEXTEFFECTS_LOCALIZATION
+            if (localizedText == null) return;
+            awaitingLocalized = true;
+            // Raises StringChanged with the current value when it is already loaded
+            localizedText.StringChanged += OnLocalizedStringChanged;
+#endif
+        }
+
+        private void LeaveLocalized() {
+            awaitingLocalized = false;
+#if HARRYTOOLS_TEXTEFFECTS_LOCALIZATION
+            if (localizedText != null) localizedText.StringChanged -= OnLocalizedStringChanged;
+#endif
+        }
+
+#if HARRYTOOLS_TEXTEFFECTS_LOCALIZATION
+        private void OnLocalizedStringChanged(string _value) {
+            ApplyLocalizedText(_value);
+        }
+#endif
+
+        /// <summary> Starts typing from the first character. Events below '_suppressEventsBelowOrdinal' are not notified </summary>
+        private void ShowFrom(int _suppressEventsBelowOrdinal) {
+            if (!hasText) LoadSource();
+            if (meshLoadPending && CanGenerateMesh) LoadMesh();
+            typewriter.CharactersPerSecond = ResolveCharactersPerSecond();
+            currentVoice = defaultVoice;
+            soundableCount = 0;
+            animationTime = 0f;
+            animator.HideAll();
+            typewriter.Start(_suppressEventsBelowOrdinal);
+            State = EffectTextState.Typing;
+            animator.Render(animationTime);
+        }
+
+        /// <summary> Shows every character at once with no events, voices or typing </summary>
+        private void ShowCompleteImmediate() {
+            if (meshLoadPending && CanGenerateMesh) LoadMesh();
+            if (meshLoadPending) return;
+
+            typewriter.CharactersPerSecond = ResolveCharactersPerSecond();
+            animationTime = 0f;
+            animator.HideAll();
+            int _count = Tmp.textInfo.characterCount;
+            for (int _i = 0; _i < _count; _i++) animator.OnCharacterShown(_i, animationTime);
+            typewriter.ShowAllImmediate(this);
+            animator.Render(animationTime);
         }
 
         /// <summary> Generates the TMP mesh and loads the animator and the typewriter from it. Allocates </summary>
@@ -393,6 +485,7 @@ namespace HarryTools.TextEffects {
             Skip,
             Hide,
             HideImmediate,
+            ApplyLocalized,
             Count
         }
 
@@ -406,6 +499,7 @@ namespace HarryTools.TextEffects {
                 // Requests made before the failure are dropped so they do not run on a later, unrelated call
                 Array.Clear(requestOrder, 0, requestOrder.Length);
                 pendingText = null;
+                pendingLocalized = null;
                 throw;
             } finally {
                 insideTypewriter = false;
@@ -435,6 +529,11 @@ namespace HarryTools.TextEffects {
                         string _text = pendingText;
                         pendingText = null;
                         SetText(_text, pendingShow);
+                        break;
+                    case Request.ApplyLocalized:
+                        string _localized = pendingLocalized;
+                        pendingLocalized = null;
+                        ApplyLocalizedText(_localized);
                         break;
                     case Request.Show: Show(); break;
                     case Request.Skip: Skip(); break;
