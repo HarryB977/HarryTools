@@ -61,7 +61,7 @@ namespace HarryTools.TextEffects.Editor {
 
         #region Helpers
         /// <summary> The project locale when the collection has a table for it, otherwise the first table's locale </summary>
-        private static string FindBaseLocale(IReadOnlyList<StringTable> _tables) {
+        internal static string FindBaseLocale(IReadOnlyList<StringTable> _tables) {
             string first = null;
             string project = LocalizationSettings.ProjectLocale?.Identifier.Code;
             for (int i = 0; i < _tables.Count; i++) {

@@ -82,6 +82,10 @@ namespace HarryTools.TextEffects {
         /// <summary> Replaces the real playback when assigned, so tests do not need an audio catalog </summary>
         [ClearOnReload] internal static Action<TypingVoice> PlayedForTests;
 
+        internal TextSourceMode SourceMode => sourceMode;
+#if HARRYTOOLS_TEXTEFFECTS_LOCALIZATION
+        internal LocalizedString LocalizedText => localizedText;
+#endif
         internal bool ShowOnEnable { get => showOnEnable; set => showOnEnable = value; }
         internal string PlainText { get => plainText; set => plainText = value; }
         internal TimeMode TimeMode { get => timeMode; set => timeMode = value; }

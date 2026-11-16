@@ -42,15 +42,15 @@ namespace HarryTools.TextEffects.Editor {
             AddUnknownPresetIssues(parsed.Source, _lookup, _into);
         }
 
-        /// <summary> Adds the problems of every locale, plus the differences of each one against the base locale. Empty texts are not compared </summary>
-        internal static void ValidateLocales(string _baseLocale, IReadOnlyDictionary<string, string> _textByLocale, ITagLookup _lookup, List<LocaleIssue> _into) {
+        /// <summary> Adds the problems of every locale, plus the differences of each one against the base locale. Empty texts are not compared. A null '_eventExists' skips the event check </summary>
+        internal static void ValidateLocales(string _baseLocale, IReadOnlyDictionary<string, string> _textByLocale, ITagLookup _lookup, List<LocaleIssue> _into, Func<string, bool> _eventExists = null) {
             if (_textByLocale == null) return;
 
             List<TextIssue> issues = new List<TextIssue>();
             foreach (KeyValuePair<string, string> pair in _textByLocale) {
                 if (string.IsNullOrWhiteSpace(pair.Value)) continue;
                 issues.Clear();
-                ValidateText(pair.Value, _lookup, null, issues);
+                ValidateText(pair.Value, _lookup, _eventExists, issues);
                 for (int i = 0; i < issues.Count; i++) _into.Add(new LocaleIssue(pair.Key, issues[i]));
             }
 

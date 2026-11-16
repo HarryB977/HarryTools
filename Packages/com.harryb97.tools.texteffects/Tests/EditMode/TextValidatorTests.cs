@@ -139,6 +139,19 @@ namespace HarryTools.TextEffects.Tests {
             Assert.AreEqual(1, issues.Count);
             Assert.AreEqual("es", issues[0].Locale);
         }
+
+        [Test]
+        public void Locales_WithEventLookup_ReportsMissingTableEntry() {
+            Dictionary<string, string> texts = new Dictionary<string, string> { { "en", "a<event=x>b" }, { "es", "c<event=x>d" } };
+            List<LocaleIssue> issues = new List<LocaleIssue>();
+            TextValidator.ValidateLocales("en", texts, lookup, issues, _name => false);
+
+            Assert.AreEqual(2, issues.Count);
+            for (int i = 0; i < issues.Count; i++) {
+                Assert.AreEqual(IssueSeverity.Warning, issues[i].Issue.Severity);
+                StringAssert.Contains("event table", issues[i].Issue.Message);
+            }
+        }
         #endregion
     }
 }
