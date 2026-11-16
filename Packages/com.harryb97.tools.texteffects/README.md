@@ -9,7 +9,7 @@ Typewriter y efectos de texto para TextMeshPro, controlados con marcas dentro de
 - Eventos de texto que ejecutan `ActionList` del paquete `actions`, en una cola secuencial, más un evento C#.
 - Texto localizado en el propio componente (`LocalizedString`) si está instalado `com.unity.localization`.
 - Validación del marcado en el inspector y entre idiomas, y vista previa en el editor sin entrar en Play.
-- Sin allocations por frame mientras el texto se escribe, se anima o se oculta.
+- Sin allocations por frame mientras el texto se escribe, se anima o se oculta; los frames que ejecutan acciones de eventos o hacen sonar una voz pueden reservar memoria (la de las acciones y la del paquete audio).
 
 > **Beta:** la API aún puede cambiar antes de la 1.0.0.
 
@@ -72,10 +72,10 @@ Mientras el asset `TextEffectsSettings` existe, el registro se mantiene solo: ca
 | Miembro | Descripción |
 |---|---|
 | `SetText(string, bool show = true)` | Parsea y carga un texto. Empieza a escribirlo salvo que `show` sea `false`. No vacía la cola de eventos. |
-| `Show()` | Empieza a escribir el texto actual desde el principio. |
+| `Show()` | Empieza a escribir el texto actual desde el principio. Si se llama durante la desaparición, la interrumpe sin lanzar `Hidden`. |
 | `Skip()` | Completa el texto hasta el siguiente `<waitinput>` o hasta el final. Ignora las pausas, aplica los cambios de voz sin sonar y ejecuta los eventos saltados en orden si su entrada lo permite. |
 | `Continue()` | Sigue tras un `<waitinput>`. Si no se está esperando, no hace nada. |
-| `Hide()` | Lanza la desaparición con efecto. Si se llama mientras escribe, desaparecen las letras ya visibles. |
+| `Hide()` | Lanza la desaparición con efecto. Si se llama mientras escribe, desaparecen las letras ya visibles. Si el texto ya está oculto, no hace nada y no lanza `Hidden`. |
 | `HideImmediate()` | Oculta al instante. |
 | `DefaultVoice` | Voz por defecto, también asignable por código. |
 | `SetEventProvider(ITextEventProvider)` | Sustituye la tabla de eventos del componente por otra fuente. `null` vuelve a la tabla propia. |
@@ -147,7 +147,6 @@ Los parámetros que se pueden escribir en una marca son los campos serializados 
 
 Hereda de `TextEffect` (clase `[Serializable]`), sobrescribe la propiedad `Kind` para declarar su tipo y el método `Apply(ref CharacterState, in EffectTime)`, y declara los parámetros como campos serializados. El efecto aparece en el selector de tipos del preset igual que los del paquete, y sus campos se pueden sobrescribir desde las marcas.
 
-
 `CharacterState` da acceso a las cuatro esquinas y colores de la letra (`BottomLeft`, `TopLeft`, `TopRight`, `BottomRight`, `ColorBL`…), su índice y el de su tramo, y trae ayudas (`Translate`, `ScaleAroundCenter`, `RotateAroundCenter`, `MultiplyAlpha`, `LerpColor`). `EffectTime` da `Elapsed`, `Progress` (0 a 1 sin easing; los continuos reciben 0 y usan `GlobalTime`) y `GlobalTime`. `Apply` se llama cada frame por cada letra afectada: no debe reservar memoria. La base aporta `duration` y `ease` (`Eased(t)`).
 
 ## Voz de tecleo
@@ -181,7 +180,7 @@ Para el paquete `actions`, con un `EffectText` como objetivo (desplegable **Text
 | Acción | Descripción |
 |---|---|
 | **Show Text** | Llama a `Show()`. Con *Wait Until Complete* espera a que acabe de escribirse, incluidas las esperas de `<waitinput>`. |
-| **Hide Text** | Llama a `Hide()`. Con *Wait Until Hidden* espera a que quede oculto. |
+| **Hide Text** | Llama a `Hide()`. Con *Wait Until Hidden* espera a que quede oculto; la espera también termina si el texto ya estaba oculto o si `Show()` interrumpe la desaparición. |
 | **Skip Text** | Llama a `Skip()`. |
 | **Continue Text** | Llama a `Continue()`. |
 
@@ -214,7 +213,7 @@ En el inspector de `EffectText`, en edit mode y con el objeto activo: selector d
 ## Rendimiento
 
 - El texto se parsea y se preparan los buffers solo al cambiar el texto; ahí sí se reserva memoria.
-- Por frame no hay allocations mientras el texto se escribe, se anima o se oculta.
+- Por frame no hay allocations mientras el texto se escribe, se anima o se oculta; los frames que ejecutan acciones de eventos o hacen sonar una voz pueden reservar memoria (la de las acciones y la del paquete audio).
 - Los efectos se calculan en un solo bucle sobre las letras visibles, sin tweens por letra: el `Ease` de PrimeTween se evalúa como función.
 - Un texto completo sin efectos continuos deja de tocar el mesh.
 

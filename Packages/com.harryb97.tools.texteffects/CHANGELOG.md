@@ -12,4 +12,4 @@
 - `TextEffectsSettings`: registro global de presets y voces, efectos por defecto, tiempo y velocidad por defecto, con página en **Project Settings > HarryTools > Text Effects** (también desde **Tools > HarryTools > Text Effects > Open Settings**) que crea el asset y mantiene el registro al importar presets y voces.
 - Validación del marcado en el inspector y entre idiomas, y menú **Tools > HarryTools > Text Effects > Validate String Tables**.
 - Vista previa en edit mode desde el inspector, sin sonido y sin ejecutar las acciones de los eventos.
-- Cero allocations por frame mientras el texto se escribe, se anima o se oculta.
+- Cero allocations por frame mientras el texto se escribe, se anima o se oculta; los frames que ejecutan acciones de eventos o hacen sonar una voz pueden reservar memoria (la de las acciones y la del paquete audio).
