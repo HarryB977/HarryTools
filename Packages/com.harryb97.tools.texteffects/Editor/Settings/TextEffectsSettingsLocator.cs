@@ -33,6 +33,9 @@ namespace HarryTools.TextEffects.Editor {
 
         /// <summary> The project's settings; when missing, creates them at the default path and registers every preset and voice in the project </summary>
         internal static TextEffectsSettings GetOrCreate() {
+            // Runtime reads made before the asset existed cached an empty instance
+            TextEffectsSettings.ForgetFallback();
+
             TextEffectsSettings _existing = Find();
             if (_existing != null) return _existing;
 

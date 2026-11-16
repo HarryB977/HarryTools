@@ -28,12 +28,25 @@ namespace HarryTools.TextEffects.Editor {
         internal static List<TextEffectPreset> FindAllPresets() => FindAll<TextEffectPreset>();
 
         internal static List<TypingVoice> FindAllVoices() => FindAll<TypingVoice>();
+
+        /// <summary> Drops the empty settings that runtime reads cached when one of the paths is a settings asset </summary>
+        internal static void ForgetFallbackOnSettingsImport(string[] _paths) {
+            for (int i = 0; i < _paths.Length; i++) {
+                if (!_paths[i].EndsWith(".asset", System.StringComparison.OrdinalIgnoreCase)) continue;
+                if (AssetDatabase.GetMainAssetTypeAtPath(_paths[i]) != typeof(TextEffectsSettings)) continue;
+                TextEffectsSettings.ForgetFallback();
+                return;
+            }
+        }
         #endregion
 
         // ==================== POSTPROCESSOR ====================
         #region Postprocessor
         private static void OnPostprocessAllAssets(string[] _imported, string[] _deleted, string[] _moved, string[] _movedFrom) {
             if (!AnyAssetFile(_imported) && !AnyAssetFile(_deleted) && !AnyAssetFile(_moved)) return;
+
+            ForgetFallbackOnSettingsImport(_imported);
+            ForgetFallbackOnSettingsImport(_moved);
 
             TextEffectsSettings _settings = TextEffectsSettingsLocator.Find();
             if (_settings == null) return;

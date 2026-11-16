@@ -1,8 +1,11 @@
 using System.Collections.Generic;
+using System.Reflection;
+using System.Text.RegularExpressions;
 using HarryTools.TextEffects.Editor;
 using NUnit.Framework;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.TestTools;
 
 namespace HarryTools.TextEffects.Tests {
     public class RegistryMaintainerTests {
@@ -16,6 +19,7 @@ namespace HarryTools.TextEffects.Tests {
         [TearDown]
         public void TearDown() {
             TextEffectsSettingsLocator.OverrideForTests = null;
+            TextEffectsSettings.ClearForTests();
             foreach (Object _object in created) {
                 if (_object != null) Object.DestroyImmediate(_object);
             }
@@ -26,6 +30,19 @@ namespace HarryTools.TextEffects.Tests {
             T _asset = ScriptableObject.CreateInstance<T>();
             created.Add(_asset);
             return _asset;
+        }
+
+        /// <summary> Makes Current hold the empty instance used when no settings asset exists </summary>
+        private TextEffectsSettings CacheFallback() {
+            LogAssert.Expect(LogType.Warning, new Regex("TextEffectsSettings"));
+            TextEffectsSettings _fallback = TextEffectsSettings.LoadOrEmpty(() => null);
+            created.Add(_fallback);
+            TextEffectsSettings.UseForTests(_fallback);
+            return _fallback;
+        }
+
+        private static TextEffectsSettings CachedCurrent() {
+            return (TextEffectsSettings)typeof(TextEffectsSettings).GetField("current", BindingFlags.NonPublic | BindingFlags.Static).GetValue(null);
         }
         #endregion
 
@@ -59,6 +76,52 @@ namespace HarryTools.TextEffects.Tests {
 
             Undo.PerformUndo();
             Assert.AreEqual(0, _settings.PresetList.Count);
+        }
+
+        [Test]
+        public void GetOrCreate_DropsCachedFallback() {
+            TextEffectsSettingsLocator.OverrideForTests = Make<TextEffectsSettings>();
+            CacheFallback();
+
+            TextEffectsSettingsLocator.GetOrCreate();
+
+            Assert.IsNull(CachedCurrent());
+        }
+
+        [Test]
+        public void GetOrCreate_KeepsCachedAsset() {
+            TextEffectsSettingsLocator.OverrideForTests = Make<TextEffectsSettings>();
+            TextEffectsSettings _real = Make<TextEffectsSettings>();
+            TextEffectsSettings.UseForTests(_real);
+
+            TextEffectsSettingsLocator.GetOrCreate();
+
+            Assert.AreSame(_real, CachedCurrent());
+        }
+
+        [Test]
+        public void SettingsImport_DropsCachedFallback() {
+            const string _folder = "Assets/__TextEffectsTests__";
+            const string _settingsPath = _folder + "/ImportedSettings.asset";
+            const string _presetPath = _folder + "/ImportedPreset.asset";
+            TextEffectsSettingsLocator.OverrideForTests = Make<TextEffectsSettings>();
+            bool _createdFolder = !AssetDatabase.IsValidFolder(_folder);
+            if (_createdFolder) AssetDatabase.CreateFolder("Assets", "__TextEffectsTests__");
+            try {
+                AssetDatabase.CreateAsset(ScriptableObject.CreateInstance<TextEffectsSettings>(), _settingsPath);
+                AssetDatabase.CreateAsset(ScriptableObject.CreateInstance<TextEffectPreset>(), _presetPath);
+
+                TextEffectsSettings _fallback = CacheFallback();
+                TextEffectsRegistryMaintainer.ForgetFallbackOnSettingsImport(new[] { _presetPath });
+                Assert.AreSame(_fallback, CachedCurrent());
+
+                TextEffectsRegistryMaintainer.ForgetFallbackOnSettingsImport(new[] { _presetPath, _settingsPath });
+                Assert.IsNull(CachedCurrent());
+            } finally {
+                AssetDatabase.DeleteAsset(_settingsPath);
+                AssetDatabase.DeleteAsset(_presetPath);
+                if (_createdFolder) AssetDatabase.DeleteAsset(_folder);
+            }
         }
         #endregion
     }
