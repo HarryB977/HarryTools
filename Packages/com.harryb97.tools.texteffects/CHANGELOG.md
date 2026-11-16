@@ -9,7 +9,7 @@
 - Tabla de eventos con `ActionList` por evento, opción de ejecutar al saltar y cola secuencial de acciones. `ITextEventProvider` para sustituir la tabla por código.
 - Acciones **Show Text**, **Hide Text**, **Skip Text** y **Continue Text** para `actions`.
 - Texto localizado en el propio componente con `LocalizedString` (opcional, `com.unity.localization`), con reglas de cambio de idioma que no repiten los eventos ya disparados.
-- `TextEffectsSettings`: registro global de presets y voces, efectos por defecto, tiempo y velocidad por defecto, con página en **Project Settings > HarryTools > Text Effects** que crea el asset y mantiene el registro al importar presets y voces.
+- `TextEffectsSettings`: registro global de presets y voces, efectos por defecto, tiempo y velocidad por defecto, con página en **Project Settings > HarryTools > Text Effects** (también desde **Tools > HarryTools > Text Effects > Open Settings**) que crea el asset y mantiene el registro al importar presets y voces.
 - Validación del marcado en el inspector y entre idiomas, y menú **Tools > HarryTools > Text Effects > Validate String Tables**.
 - Vista previa en edit mode desde el inspector, sin sonido y sin ejecutar las acciones de los eventos.
 - Cero allocations por frame mientras el texto se escribe, se anima o se oculta.

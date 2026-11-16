@@ -24,7 +24,7 @@ Typewriter y efectos de texto para TextMeshPro, controlados con marcas dentro de
    openupm add com.harryb97.tools.texteffects@1.0.0-beta.1
    ```
 
-Para instalarlo por URL de git hay que añadir también sus dependencias, porque Unity no las resuelve en ese caso:
+Para instalarlo por URL de git hay que añadir también sus dependencias, porque Unity no las resuelve en ese caso. UniTask (`com.cysharp.unitask`) se instala desde OpenUPM:
 
 ```json
 "com.harryb97.tools.texteffects": "https://github.com/HarryB977/HarryTools.git?path=/Packages/com.harryb97.tools.texteffects#texteffects/1.0.0-beta.1",
@@ -34,7 +34,7 @@ Para instalarlo por URL de git hay que añadir también sus dependencias, porque
 "com.harryb97.tools.serializereferences": "https://github.com/HarryB977/HarryTools.git?path=/Packages/com.harryb97.tools.serializereferences#serializereferences/1.0.3",
 "com.harryb97.tools.logger": "https://github.com/HarryB977/HarryTools.git?path=/Packages/com.harryb97.tools.logger#logger/1.0.3",
 "com.harryb97.tools.domainreload": "https://github.com/HarryB977/HarryTools.git?path=/Packages/com.harryb97.tools.domainreload#domainreload/1.0.3",
-"com.cysharp.unitask": "https://github.com/Cysharp/UniTask.git?path=src/UniTask/Assets/Plugins/UniTask#2.5.10"
+"com.cysharp.unitask": "2.5.10"
 ```
 
 Requiere Unity 6000.0 o superior y `com.unity.ugui` 2.0.0 (TextMeshPro).
@@ -48,7 +48,7 @@ Requiere Unity 6000.0 o superior y `com.unity.ugui` 2.0.0 (TextMeshPro).
 
 ## Puesta en marcha
 
-1. Abre **Project Settings > HarryTools > Text Effects**. La primera vez que se abre la página (fuera de Play) se crea el asset `TextEffectsSettings` en `Assets/HarryTools/TextEffects/Resources/`, ya con los 10 presets del paquete y los efectos por defecto: aparición `fade` y desaparición `fadeout`. Este asset va en git y en la build.
+1. Abre **Project Settings > HarryTools > Text Effects** (o el menú **Tools > HarryTools > Text Effects > Open Settings**). La primera vez que se abre la página (fuera de Play) se crea el asset `TextEffectsSettings` en `Assets/HarryTools/TextEffects/Resources/`, ya con los 10 presets del paquete y los efectos por defecto: aparición `fade` y desaparición `fadeout`. Este asset va en git y en la build.
 2. Añade un componente **EffectText** a un objeto con `TextMeshProUGUI` o `TextMeshPro` (se añade solo el requisito `TMP_Text`).
 3. Escribe el texto con marcas en el inspector y pulsa **Play** en la vista previa del propio componente, o entra en Play.
 
@@ -58,7 +58,7 @@ Mientras el asset `TextEffectsSettings` existe, el registro se mantiene solo: ca
 
 | Campo | Qué hace |
 |---|---|
-| **Source Mode** | `Plain` (campo de texto) o `Localized` (`LocalizedString`, solo con `com.unity.localization`). |
+| **Source Mode** | `Plain` (campo de texto del componente, `Plain Text`) o `Localized` (`LocalizedString`, solo con `com.unity.localization`). |
 | **Characters Per Second** | Velocidad base del typewriter. Con 0 o menos se usa la de Settings (por defecto 40). |
 | **Time Mode** | `Default` (el de Settings), `Scaled` o `Unscaled`. |
 | **Show On Enable** | Empieza a escribir al activarse el componente. |
@@ -107,7 +107,7 @@ Las marcas usan los mismos `< >` que TextMeshPro. El parser solo consume las que
 | `<preset>…</>` | Aplica el preset a ese tramo. Varios presets pueden solaparse. |
 | `<preset param=valor param2=valor>…</>` | Igual, sobrescribiendo parámetros del preset solo en ese tramo. |
 
-**Cierre de marcas de rango:** `</>` cierra la última marca de rango propia abierta (no cierra marcas de TextMeshPro); `</nombre>` cierra la última abierta con ese nombre; una marca de rango sin cerrar llega hasta el final del texto.
+**Cierre de marcas de rango:** `</>` cierra la última marca de rango propia abierta (no cierra marcas de TextMeshPro); `</nombre>` cierra la última abierta con ese nombre y también las abiertas después de ella; `</>` cierra también `<instant>`; una marca de rango sin cerrar llega hasta el final del texto.
 
 **Nombres reservados:** `pause`, `speed`, `waitinput`, `event`, `voice`, `instant` y las marcas de TextMeshPro. Un preset o una voz con nombre reservado, repetido o con caracteres no válidos (solo letras, dígitos, `_` y `-`) no se registra y se avisa en Settings. Los nombres no distinguen mayúsculas.
 
@@ -145,24 +145,8 @@ Los parámetros que se pueden escribir en una marca son los campos serializados 
 
 ### Efectos propios
 
-Hereda de `TextEffect`, declara los parámetros como campos serializados y escribe `Apply`. El efecto aparece en el selector de tipos del preset igual que los del paquete, y sus campos se pueden sobrescribir desde las marcas.
+Hereda de `TextEffect` (clase `[Serializable]`), sobrescribe la propiedad `Kind` para declarar su tipo y el método `Apply(ref CharacterState, in EffectTime)`, y declara los parámetros como campos serializados. El efecto aparece en el selector de tipos del preset igual que los del paquete, y sus campos se pueden sobrescribir desde las marcas.
 
-```csharp
-using HarryTools.TextEffects;
-using UnityEngine;
-
-[System.Serializable]
-public sealed class TiltEffect : TextEffect {
-    [SerializeField] private float degrees = 8f;
-    [SerializeField] private float frequency = 1f;
-
-    public override EffectKind Kind => EffectKind.Continuous;
-
-    public override void Apply(ref CharacterState _char, in EffectTime _time) {
-        _char.RotateAroundCenter(Mathf.Sin(_time.GlobalTime * frequency * Mathf.PI * 2f) * degrees);
-    }
-}
-```
 
 `CharacterState` da acceso a las cuatro esquinas y colores de la letra (`BottomLeft`, `TopLeft`, `TopRight`, `BottomRight`, `ColorBL`…), su índice y el de su tramo, y trae ayudas (`Translate`, `ScaleAroundCenter`, `RotateAroundCenter`, `MultiplyAlpha`, `LerpColor`). `EffectTime` da `Elapsed`, `Progress` (0 a 1 sin easing; los continuos reciben 0 y usan `GlobalTime`) y `GlobalTime`. `Apply` se llama cada frame por cada letra afectada: no debe reservar memoria. La base aporta `duration` y `ease` (`Eased(t)`).
 
@@ -209,14 +193,15 @@ Con `com.unity.localization` instalado, el componente acepta un `LocalizedString
 - Si estaba completo, se muestra completo sin typewriter.
 - Si se estaba ocultando, queda oculto con el texto nuevo.
 
-`SetText(string)` sigue disponible para alimentar el texto desde fuera. El paquete solo depende del paquete de localización de Unity.
+`SetText(string)` sigue disponible para alimentar el texto desde fuera. La localización es opcional: solo se usa `com.unity.localization` y no hace falta el paquete `localization` de HarryTools.
 
 ## Validación
 
 En el inspector del componente, siempre visible y actualizada al editar:
 
 - Marca de rango mal formada, `</>` sin nada abierto, parámetro inexistente o con valor no válido.
-- Preset o voz desconocidos.
+- Voz desconocida (`<voice=nombre>`): siempre es un error.
+- Preset desconocido: solo se detecta cuando la marca parece nuestra, es decir, lleva parámetros (`x=y`) o se cierra con `</>` o `</nombre>`; una marca desconocida sin parámetros ni cierre se deja a TextMeshPro sin avisar.
 - `<event>` sin entrada en la tabla del componente.
 - Entre idiomas (modo *Localized*): comparado con el idioma base del proyecto, cada traducción debe tener los mismos `<event>` y `<waitinput>` (mismo número y nombres), y es un **error** si no. Que falten o sobren pausas o presets es un **aviso**.
 
@@ -229,7 +214,7 @@ En el inspector de `EffectText`, en edit mode y con el objeto activo: selector d
 ## Rendimiento
 
 - El texto se parsea y se preparan los buffers solo al cambiar el texto; ahí sí se reserva memoria.
-- Por frame no hay allocations mientras el texto se escribe, se anima o se oculta; un test mide `GC.Alloc` para comprobarlo.
+- Por frame no hay allocations mientras el texto se escribe, se anima o se oculta.
 - Los efectos se calculan en un solo bucle sobre las letras visibles, sin tweens por letra: el `Ease` de PrimeTween se evalúa como función.
 - Un texto completo sin efectos continuos deja de tocar el mesh.
 
