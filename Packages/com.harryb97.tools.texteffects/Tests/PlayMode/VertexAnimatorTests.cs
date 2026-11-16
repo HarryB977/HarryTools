@@ -1,0 +1,494 @@
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.Reflection;
+using HarryTools.Actions;
+using NUnit.Framework;
+using TMPro;
+using Unity.Profiling;
+using UnityEngine;
+using UnityEngine.TestTools;
+
+namespace HarryTools.TextEffects.Tests {
+    public class VertexAnimatorTests {
+        // ==================== VARIABLES ===================
+        private GameObject canvasObject;
+        private TextEffectsSettings settings;
+        private float savedTimeScale;
+        private readonly List<UnityEngine.Object> created = new List<UnityEngine.Object>();
+
+        // ==================== SETUP ===================
+        [SetUp]
+        public void SetUp() {
+            // Update ticks with scaled time: a zero time scale leaves the tests in control of time
+            savedTimeScale = Time.timeScale;
+            Time.timeScale = 0f;
+            RecordingWaitAction.Log.Clear();
+            settings = ScriptableObject.CreateInstance<TextEffectsSettings>();
+            settings.hideFlags = HideFlags.HideAndDontSave;
+            TextEffectsSettings.UseForTests(settings);
+
+            canvasObject = new GameObject("TextEffectsTestCanvas", typeof(Canvas));
+        }
+
+        [TearDown]
+        public void TearDown() {
+            Time.timeScale = savedTimeScale;
+            if (canvasObject != null) UnityEngine.Object.DestroyImmediate(canvasObject);
+            for (int _i = 0; _i < created.Count; _i++) {
+                if (created[_i] != null) UnityEngine.Object.DestroyImmediate(created[_i]);
+            }
+            created.Clear();
+            TextEffectsSettings.ClearForTests();
+            UnityEngine.Object.DestroyImmediate(settings);
+        }
+
+        // ==================== HELPERS ===================
+        private EffectText Build(string _text, Action<EffectText> _configure = null, bool _worldSpace = false) {
+            GameObject _go = new GameObject("Text");
+            _go.SetActive(false);
+            if (_worldSpace) {
+                created.Add(_go);
+                _go.AddComponent<TextMeshPro>();
+            } else {
+                _go.transform.SetParent(canvasObject.transform, false);
+                _go.AddComponent<TextMeshProUGUI>();
+            }
+
+            EffectText _effect = _go.AddComponent<EffectText>();
+            _effect.PlainText = _text;
+            _effect.CharactersPerSecond = 1f;
+            _configure?.Invoke(_effect);
+            _go.SetActive(true);
+            return _effect;
+        }
+
+        /// <summary> Creates a preset. '_params' are name/value pairs applied to the effect </summary>
+        private TextEffectPreset Preset(string _tag, TextEffect _effect, params string[] _params) {
+            for (int _i = 0; _i + 1 < _params.Length; _i += 2) {
+                Assert.IsTrue(EffectParamBinder.TryApply(_effect, _params[_i], _params[_i + 1], out string _error), _error);
+            }
+
+            TextEffectPreset _preset = ScriptableObject.CreateInstance<TextEffectPreset>();
+            _preset.hideFlags = HideFlags.HideAndDontSave;
+            created.Add(_preset);
+            typeof(TextEffectPreset).GetField("tagName", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(_preset, _tag);
+            typeof(TextEffectPreset).GetField("effect", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(_preset, _effect);
+            return _preset;
+        }
+
+        private TextEffectPreset Register(string _tag, TextEffect _effect, params string[] _params) {
+            TextEffectPreset _preset = Preset(_tag, _effect, _params);
+            settings.PresetList.Add(_preset);
+            settings.Invalidate();
+            return _preset;
+        }
+
+        private static TMP_Text Tmp(EffectText _effect) => _effect.GetComponent<TMP_Text>();
+
+        private static byte Alpha(EffectText _effect, int _index) {
+            TMP_TextInfo _info = Tmp(_effect).textInfo;
+            TMP_CharacterInfo _char = _info.characterInfo[_index];
+            return _info.meshInfo[_char.materialReferenceIndex].colors32[_char.vertexIndex].a;
+        }
+
+        /// <summary> Bottom left, top left, top right, bottom right of a character as currently written in the mesh data </summary>
+        private static Vector3[] Quad(EffectText _effect, int _index) {
+            TMP_TextInfo _info = Tmp(_effect).textInfo;
+            TMP_CharacterInfo _char = _info.characterInfo[_index];
+            Vector3[] _vertices = _info.meshInfo[_char.materialReferenceIndex].vertices;
+            int _v = _char.vertexIndex;
+            return new[] { _vertices[_v], _vertices[_v + 1], _vertices[_v + 2], _vertices[_v + 3] };
+        }
+
+        private static Vector3 Center(Vector3[] _quad) => (_quad[0] + _quad[1] + _quad[2] + _quad[3]) * 0.25f;
+
+        private static float Width(Vector3[] _quad) => _quad[2].x - _quad[1].x;
+
+        /// <summary> Quads of the given characters as animated, then as originally generated by TMP </summary>
+        private static (Vector3[][] animated, Vector3[][] original) AnimatedAndOriginal(EffectText _effect, params int[] _indices) {
+            Vector3[][] _animated = new Vector3[_indices.Length][];
+            for (int _i = 0; _i < _indices.Length; _i++) _animated[_i] = Quad(_effect, _indices[_i]);
+            _effect.Animator.Restore();
+            Vector3[][] _original = new Vector3[_indices.Length][];
+            for (int _i = 0; _i < _indices.Length; _i++) _original[_i] = Quad(_effect, _indices[_i]);
+            return (_animated, _original);
+        }
+
+        // ==================== TESTS ===================
+        [Test]
+        public void HiddenChars_AlphaZero() {
+            EffectText _effect = Build("hello");
+            _effect.Tick(0f);
+
+            Assert.AreEqual(1, _effect.VisibleCount);
+            Assert.AreEqual(255, Alpha(_effect, 0));
+            for (int _i = 1; _i < 5; _i++) Assert.AreEqual(0, Alpha(_effect, _i), "Character " + _i);
+
+            Vector3[] _hidden = Quad(_effect, 1);
+            Assert.AreEqual(_hidden[0], _hidden[2], "Hidden characters are collapsed to their center");
+        }
+
+        [Test]
+        public void HiddenChars_NoShowOnEnable_AllAlphaZero() {
+            EffectText _effect = Build("hello", _e => _e.ShowOnEnable = false);
+            for (int _i = 0; _i < 5; _i++) Assert.AreEqual(0, Alpha(_effect, _i), "Character " + _i);
+        }
+
+        [Test]
+        public void AppearFade_MidwayAlphaBetween() {
+            settings.DefaultAppearAsset = Preset("fadein", new FadeTransition(), "duration", "1", "ease", "Linear");
+            EffectText _effect = Build("ab");
+
+            _effect.Tick(0f);
+            Assert.AreEqual(0, Alpha(_effect, 0), "Appear starts at progress 0");
+
+            _effect.Tick(0.5f);
+            Assert.That((int)Alpha(_effect, 0), Is.InRange(100, 155));
+            Assert.AreEqual(0, Alpha(_effect, 1));
+
+            // The second character appears on this tick, so its fade starts now
+            _effect.Tick(0.6f);
+            Assert.AreEqual(255, Alpha(_effect, 0));
+            Assert.AreEqual(0, Alpha(_effect, 1));
+
+            _effect.Tick(0.25f);
+            Assert.That((int)Alpha(_effect, 1), Is.InRange(40, 90));
+        }
+
+        [Test]
+        public void Continuous_OnlyOnSpanChars() {
+            Register("wave", new WaveEffect(), "amplitude", "0.5");
+            EffectText _effect = Build("a<wave>b</>c");
+            _effect.Skip();
+            _effect.Tick(0.1f);
+
+            var (_animated, _original) = AnimatedAndOriginal(_effect, 0, 1, 2);
+            Assert.AreEqual(_original[0][0], _animated[0][0]);
+            Assert.AreNotEqual(_original[1][0], _animated[1][0]);
+            Assert.AreEqual(_original[2][0], _animated[2][0]);
+        }
+
+        [Test]
+        public void OneShot_StartsWhenFirstSpanCharShows() {
+            Register("jolt", new ShakeOnceEffect(), "duration", "10", "amplitude", "1");
+            EffectText _effect = Build("ab<jolt>cd</>");
+
+            _effect.Tick(0f);
+            _effect.Tick(1f);
+            Assert.AreEqual(2, _effect.VisibleCount);
+            Assert.AreEqual(1, _effect.Animator.OneShotSpans.Count);
+            Assert.AreEqual(-1f, _effect.Animator.OneShotSpans[0].StartTime);
+
+            _effect.Tick(1f);
+            Assert.AreEqual(3, _effect.VisibleCount);
+            Assert.AreEqual(2f, _effect.Animator.OneShotSpans[0].StartTime, 0.0001f);
+            Assert.AreEqual(0, Alpha(_effect, 3), "The next character is still hidden");
+
+            var (_animated, _original) = AnimatedAndOriginal(_effect, 0, 2);
+            Assert.AreEqual(Center(_original[0]), Center(_animated[0]));
+            Assert.AreNotEqual(Center(_original[1]), Center(_animated[1]));
+        }
+
+        [Test]
+        public void AppearPresetSpan_OverridesDefault() {
+            settings.DefaultAppearAsset = Preset("fadein", new FadeTransition(), "duration", "1", "ease", "Linear");
+            Register("grow", new ScaleTransition(), "duration", "1", "ease", "Linear");
+            EffectText _effect = Build("a<grow>b</>");
+            _effect.Skip();
+            _effect.Tick(0.5f);
+
+            Assert.That((int)Alpha(_effect, 0), Is.InRange(100, 155), "Default appear on the first character");
+            Assert.AreEqual(255, Alpha(_effect, 1), "The span preset replaces the default fade");
+
+            var (_animated, _original) = AnimatedAndOriginal(_effect, 0, 1);
+            Assert.AreEqual(Width(_original[0]), Width(_animated[0]), 0.001f);
+            Assert.AreEqual(Width(_original[1]) * 0.5f, Width(_animated[1]), 0.01f);
+        }
+
+        [Test]
+        public void AppearPresetSpans_Overlapping_LastOpenedWins() {
+            Register("grow", new ScaleTransition(), "duration", "1", "ease", "Linear");
+            Register("fadein", new FadeTransition(), "duration", "1", "ease", "Linear");
+            EffectText _effect = Build("<grow><fadein>a</></>");
+            _effect.Skip();
+            _effect.Tick(0.5f);
+
+            Assert.That((int)Alpha(_effect, 0), Is.InRange(100, 155));
+            var (_animated, _original) = AnimatedAndOriginal(_effect, 0);
+            Assert.AreEqual(Width(_original[0]), Width(_animated[0]), 0.001f);
+        }
+
+        [Test]
+        public void Overrides_FromTag_Applied() {
+            Register("shake", new ShakeEffect(), "amplitude", "1");
+            EffectText _effect = Build("<shake amplitude=0>a</>b<shake>c</>");
+            _effect.Skip();
+            _effect.Tick(0.37f);
+
+            var (_animated, _original) = AnimatedAndOriginal(_effect, 0, 2);
+            Assert.AreEqual(Center(_original[0]), Center(_animated[0]), "amplitude=0 leaves the character in place");
+            Assert.AreNotEqual(Center(_original[1]), Center(_animated[1]), "The preset values still shake the other span");
+        }
+
+        [Test]
+        public void Overrides_UnknownParam_LogsWarningOnce() {
+            Register("shake", new ShakeEffect());
+            LogAssert.Expect(LogType.Warning, new System.Text.RegularExpressions.Regex("nope"));
+            EffectText _effect = Build("<shake nope=1>a</>");
+            _effect.Skip();
+            _effect.Tick(0.1f);
+            _effect.Tick(0.1f);
+            LogAssert.NoUnexpectedReceived();
+        }
+
+        [Test]
+        public void Hide_PerCharacter_Backward_LastCharFirst() {
+            settings.DefaultDisappearAsset = Preset("fadeout", new FadeTransition(), "direction", "Out", "duration", "0.5", "ease", "Linear");
+            EffectText _effect = Build("abc", _e => {
+                _e.HideMode = HideMode.PerCharacter;
+                _e.HideOrder = HideOrder.Backward;
+                _e.HideCharacterDelay = 0.2f;
+            });
+            _effect.Skip();
+            _effect.Hide();
+            Assert.AreEqual(EffectTextState.Hiding, _effect.State);
+
+            _effect.Tick(0.1f);
+            Assert.That((int)Alpha(_effect, 2), Is.InRange(1, 254));
+            Assert.AreEqual(255, Alpha(_effect, 1));
+            Assert.AreEqual(255, Alpha(_effect, 0));
+
+            _effect.Tick(0.2f);
+            Assert.That((int)Alpha(_effect, 1), Is.InRange(1, 254));
+            Assert.AreEqual(255, Alpha(_effect, 0));
+            Assert.AreEqual(EffectTextState.Hiding, _effect.State);
+        }
+
+        [Test]
+        public void Hide_AllAtOnce_FinishesAfterDuration_FiresHiddenOnce() {
+            settings.DefaultDisappearAsset = Preset("fadeout", new FadeTransition(), "direction", "Out", "duration", "0.5", "ease", "Linear");
+            EffectText _effect = Build("abc", _e => _e.HideMode = HideMode.AllAtOnce);
+            int _hidden = 0;
+            _effect.Hidden += () => _hidden++;
+            _effect.Skip();
+            _effect.Hide();
+
+            _effect.Tick(0.3f);
+            Assert.AreEqual(EffectTextState.Hiding, _effect.State);
+            Assert.That((int)Alpha(_effect, 0), Is.InRange(1, 254));
+            Assert.AreEqual(Alpha(_effect, 0), Alpha(_effect, 2));
+            Assert.AreEqual(0, _hidden);
+
+            _effect.Tick(0.3f);
+            Assert.AreEqual(EffectTextState.Hidden, _effect.State);
+            Assert.AreEqual(1, _hidden);
+
+            _effect.Tick(1f);
+            _effect.Hide();
+            Assert.AreEqual(1, _hidden);
+            for (int _i = 0; _i < 3; _i++) Assert.AreEqual(0, Alpha(_effect, _i));
+        }
+
+        [Test]
+        public void Hide_MidTyping_OnlyVisibleCharsDisappear_TypingStops() {
+            settings.DefaultDisappearAsset = Preset("fadeout", new FadeTransition(), "direction", "Out", "duration", "0.5", "ease", "Linear");
+            EffectText _effect = Build("abcd", _e => _e.HideMode = HideMode.AllAtOnce);
+            _effect.Tick(0f);
+            _effect.Tick(1f);
+            _effect.Hide();
+
+            _effect.Tick(0.25f);
+            Assert.That((int)Alpha(_effect, 0), Is.InRange(1, 254));
+            Assert.AreEqual(0, Alpha(_effect, 2));
+            _effect.Tick(5f);
+            Assert.AreEqual(EffectTextState.Hidden, _effect.State);
+            Assert.AreEqual(0, Alpha(_effect, 2));
+        }
+
+        [Test]
+        public void Hide_NoDisappearEffect_FinishesImmediately() {
+            EffectText _effect = Build("abc");
+            int _hidden = 0;
+            _effect.Hidden += () => _hidden++;
+            _effect.Skip();
+            _effect.Hide();
+
+            Assert.AreEqual(EffectTextState.Hidden, _effect.State);
+            Assert.AreEqual(1, _hidden);
+            Assert.AreEqual(0, Alpha(_effect, 0));
+        }
+
+        [Test]
+        public void ContinuousEffects_KeepRunning_AfterComplete() {
+            Register("wave", new WaveEffect(), "amplitude", "0.5");
+            EffectText _effect = Build("<wave>a</>");
+            _effect.Skip();
+            Assert.AreEqual(EffectTextState.Complete, _effect.State);
+
+            _effect.Tick(0.1f);
+            Vector3 _first = Quad(_effect, 0)[0];
+            _effect.Tick(0.1f);
+            Assert.AreNotEqual(_first, Quad(_effect, 0)[0]);
+        }
+
+        [Test]
+        public void Parse_TmpTagsAndSprite_IndicesMatchCharacterInfo() {
+            Register("wave", new WaveEffect());
+            EffectText _effect = Build("<b>x</b><sprite=0><wave>y</>z");
+            TMP_TextInfo _info = Tmp(_effect).textInfo;
+
+            Assert.AreEqual(4, _info.characterCount);
+            Assert.AreEqual(1, _effect.Animator.ContinuousSpans.Count);
+            ResolvedSpan _span = _effect.Animator.ContinuousSpans[0];
+            Assert.AreEqual(2, _span.First);
+            Assert.AreEqual(3, _span.End);
+            Assert.AreEqual('y', _info.characterInfo[_span.First].character);
+        }
+
+        [UnityTest]
+        public IEnumerator MeshRegenerated_MidTyping_KeepsVisibleCount() {
+            EffectText _effect = Build("hello");
+            _effect.Tick(0f);
+            _effect.Tick(1f);
+            Assert.AreEqual(2, _effect.VisibleCount);
+
+            RectTransform _rect = (RectTransform)_effect.transform;
+            _rect.sizeDelta = new Vector2(_rect.sizeDelta.x + 300f, _rect.sizeDelta.y + 50f);
+            Canvas.ForceUpdateCanvases();
+            yield return null;
+
+            Assert.AreEqual(2, _effect.VisibleCount);
+            Assert.AreEqual(255, Alpha(_effect, 0));
+            Assert.AreEqual(255, Alpha(_effect, 1));
+            for (int _i = 2; _i < 5; _i++) Assert.AreEqual(0, Alpha(_effect, _i), "Character " + _i);
+
+            // The cached originals follow the new layout
+            var (_animated, _original) = AnimatedAndOriginal(_effect, 0);
+            Assert.AreEqual(_original[0][0], _animated[0][0]);
+        }
+
+        [UnityTest]
+        public IEnumerator DisableMidTyping_CancelsQueue_ReenableRestarts() {
+            TextEventTable _table = new TextEventTable(new List<TextEventEntry> {
+                new TextEventEntry("e", new ActionList(new RecordingWaitAction("e", 1000)))
+            });
+            EffectText _effect = Build("a<event=e>bcd");
+            _effect.SetEventProvider(_table);
+            _effect.Tick(0f);
+            _effect.Tick(1f);
+            Assert.AreEqual(2, _effect.VisibleCount);
+            Assert.IsTrue(_effect.Queue.IsRunning);
+
+            _effect.gameObject.SetActive(false);
+            Assert.IsFalse(_effect.Queue.IsRunning);
+
+            _effect.gameObject.SetActive(true);
+            Assert.AreEqual(EffectTextState.Typing, _effect.State);
+            Canvas.ForceUpdateCanvases();
+            yield return null;
+
+            Assert.LessOrEqual(_effect.VisibleCount, 1);
+            for (int _i = 1; _i < 4; _i++) Assert.AreEqual(0, Alpha(_effect, _i), "Character " + _i);
+        }
+
+        [UnityTest]
+        public IEnumerator WorldSpaceTextMeshPro_Works() {
+            Register("wave", new WaveEffect(), "amplitude", "0.5");
+            EffectText _effect = Build("a<wave>b</>c", null, true);
+            _effect.Tick(0f);
+            _effect.Tick(1f);
+            yield return null;
+
+            Assert.AreEqual(255, Alpha(_effect, 0));
+            Assert.AreEqual(255, Alpha(_effect, 1));
+            Assert.AreEqual(0, Alpha(_effect, 2));
+
+            // The rendered mesh carries the animated data, not only the TMP buffers
+            TMP_Text _tmp = Tmp(_effect);
+            Color32[] _meshColors = _tmp.mesh.colors32;
+            Assert.AreEqual(0, _meshColors[_tmp.textInfo.characterInfo[2].vertexIndex].a);
+
+            var (_animated, _original) = AnimatedAndOriginal(_effect, 0, 1);
+            Assert.AreEqual(_original[0][0], _animated[0][0]);
+            Assert.AreNotEqual(_original[1][0], _animated[1][0]);
+        }
+
+        [Test]
+        public void Frame_NoAllocations() {
+            Register("shake", new ShakeEffect());
+            Register("wave", new WaveEffect());
+            settings.DefaultAppearAsset = Preset("fadein", new FadeTransition(), "duration", "0.2");
+            settings.DefaultDisappearAsset = Preset("fadeout", new FadeTransition(), "direction", "Out", "duration", "0.2");
+
+            System.Text.StringBuilder _builder = new System.Text.StringBuilder("<shake><wave>");
+            for (int _i = 0; _i < 100; _i++) _builder.Append("abcd ");
+            _builder.Append("</></>");
+            EffectText _effect = Build(_builder.ToString(), _e => _e.CharactersPerSecond = 1000f);
+            Assert.AreEqual(500, Tmp(_effect).textInfo.characterCount);
+
+            const float Dt = 1f / 60f;
+            _effect.Tick(Dt);
+            _effect.Tick(Dt);
+
+            using ProfilerRecorder _recorder = ProfilerRecorder.StartNew(ProfilerCategory.Memory, "GC.Alloc", 1, ProfilerRecorderOptions.Default | ProfilerRecorderOptions.CollectOnlyOnCurrentThread);
+
+            // Positive control: the measure must see a known allocation
+            object[] _sink = new object[1];
+            long _controlStart = _recorder.CurrentValue;
+            for (int _i = 0; _i < 1000; _i++) _sink = new object[1];
+            Assert.Greater(_recorder.CurrentValue - _controlStart, 0, "Positive control must register allocations, otherwise the measure is useless");
+            Assert.IsNotNull(_sink);
+
+            long _start = _recorder.CurrentValue;
+            for (int _i = 0; _i < 60; _i++) _effect.Tick(Dt);
+            long _typingAndContinuous = _recorder.CurrentValue - _start;
+            Assert.AreEqual(EffectTextState.Complete, _effect.State);
+
+            _effect.Hide();
+            _start = _recorder.CurrentValue;
+            for (int _i = 0; _i < 30 && _effect.State == EffectTextState.Hiding; _i++) _effect.Tick(Dt);
+            long _hiding = _recorder.CurrentValue - _start;
+
+            Assert.AreEqual(0, _typingAndContinuous, "Typing and continuous effects must not allocate");
+            Assert.AreEqual(0, _hiding, "Hiding must not allocate");
+        }
+
+        [Test]
+        public void SetText_FromEventHandler_DuringTick_IsSafe() {
+            EffectText _effect = Build("a<event=x>bcd", _e => _e.CharactersPerSecond = 1000f);
+            int _calls = 0;
+            _effect.EventReached += _name => {
+                _calls++;
+                _effect.SetText("other");
+            };
+
+            Assert.DoesNotThrow(() => _effect.Tick(1f));
+            Assert.AreEqual(1, _calls);
+            Assert.AreEqual("other", _effect.Text);
+            Assert.AreEqual(EffectTextState.Typing, _effect.State);
+            Assert.LessOrEqual(_effect.VisibleCount, 1);
+
+            _effect.Tick(1f);
+            Assert.AreEqual(EffectTextState.Complete, _effect.State);
+            Assert.AreEqual(5, _effect.VisibleCount);
+            Assert.AreEqual(255, Alpha(_effect, 4));
+        }
+
+        [Test]
+        public void Hide_FromEventHandler_DuringTick_AppliesAfterTypewriter() {
+            settings.DefaultDisappearAsset = Preset("fadeout", new FadeTransition(), "direction", "Out", "duration", "1", "ease", "Linear");
+            EffectText _effect = Build("a<event=x>bcd", _e => {
+                _e.CharactersPerSecond = 1000f;
+                _e.HideMode = HideMode.AllAtOnce;
+            });
+            _effect.EventReached += _name => _effect.Hide();
+
+            _effect.Tick(1f);
+            Assert.AreEqual(EffectTextState.Hiding, _effect.State, "Completing the typing must not override the hide");
+
+            _effect.Tick(0.5f);
+            for (int _i = 0; _i < 4; _i++) Assert.That((int)Alpha(_effect, _i), Is.InRange(1, 254), "Character " + _i);
+        }
+    }
+}
