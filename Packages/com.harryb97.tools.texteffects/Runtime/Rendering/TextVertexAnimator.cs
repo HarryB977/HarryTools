@@ -271,11 +271,11 @@ namespace HarryTools.TextEffects {
             int _count = Mathf.Min(characterCount, _info.characterCount);
 
             for (int _c = 0; _c < _count; _c++) {
-                ref TMP_CharacterInfo _info_c = ref _chars[_c];
-                if (!_info_c.isVisible) continue;
+                ref TMP_CharacterInfo _charInfo = ref _chars[_c];
+                if (!_charInfo.isVisible) continue;
 
-                int _material = _info_c.materialReferenceIndex;
-                int _v = _info_c.vertexIndex;
+                int _material = _charInfo.materialReferenceIndex;
+                int _v = _charInfo.vertexIndex;
                 if (_material >= capturedMaterials || _material >= _meshes.Length) continue;
 
                 Vector3[] _srcVertices = originalVertices[_material];
@@ -297,7 +297,7 @@ namespace HarryTools.TextEffects {
                     Index = _c,
                     IndexInSpan = _c,
                     SpanLength = characterCount,
-                    Size = Mathf.Abs(_info_c.ascender - _info_c.descender)
+                    Size = Mathf.Abs(_charInfo.ascender - _charInfo.descender)
                 };
 
                 if (!Animate(ref _state, _c, _time)) Collapse(ref _state);

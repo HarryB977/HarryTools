@@ -100,6 +100,10 @@ namespace HarryTools.TextEffects {
         private bool unknownVoiceWarned;
         private bool hasText;
 
+        // TextMeshPro does not generate the mesh of an inactive object, so the load waits for OnEnable
+        private bool meshLoadPending;
+        private bool loadIssuesPending;
+
         /// <summary> Seconds of animation since the text was last shown </summary>
         private float animationTime;
 
@@ -125,20 +129,12 @@ namespace HarryTools.TextEffects {
             TextEffectsSettings _settings = TextEffectsSettings.Current;
             TextParser.Parse(_text, _settings, parsed);
 
-            TMP_Text _tmp = Tmp;
-            _tmp.text = parsed.TmpText;
-            animator.Bind(_tmp);
-            loadIssues.Clear();
-            animator.Load(parsed, _settings, appearPreset, disappearPreset, loadIssues);
-            for (int _i = 0; _i < loadIssues.Count; _i++) {
-                Logger.LogWarning("TextEffects", "In the text of '" + name + "': " + loadIssues[_i].Message);
-            }
+            Tmp.text = parsed.TmpText;
+            for (int _i = 0; _i < parsed.Issues.Count; _i++) LogIssue(parsed.Issues[_i], true);
 
-            TMP_TextInfo _info = _tmp.textInfo;
-            int _count = _info.characterCount;
-            if (sourceIndices.Length < _count) sourceIndices = new int[Mathf.Max(_count, sourceIndices.Length * 2)];
-            for (int _i = 0; _i < _count; _i++) sourceIndices[_i] = _info.characterInfo[_i].index;
-            typewriter.Load(parsed, sourceIndices, _count);
+            loadIssuesPending = true;
+            if (CanGenerateMesh) LoadMesh();
+            else meshLoadPending = true;
 
             hasText = true;
             unknownVoiceWarned = false;
@@ -153,6 +149,7 @@ namespace HarryTools.TextEffects {
         public void Show() {
             if (Defer(Request.Show)) return;
             if (!hasText) LoadSource();
+            if (meshLoadPending && CanGenerateMesh) LoadMesh();
             typewriter.CharactersPerSecond = ResolveCharactersPerSecond();
             currentVoice = defaultVoice;
             animationTime = 0f;
@@ -224,7 +221,18 @@ namespace HarryTools.TextEffects {
         private void OnEnable() {
             animator.Bind(Tmp);
             animator.StartListening();
-            if (!hasText) LoadSource();
+            if (!hasText) {
+                LoadSource();
+            } else {
+                // Reloading picks up a text set while inactive and any mesh change missed while disabled
+                bool _wasShown = meshLoadPending && State != EffectTextState.Hidden;
+                LoadMesh();
+                if (_wasShown) {
+                    Show();
+                    return;
+                }
+            }
+
             if (showOnEnable) {
                 Show();
                 return;
@@ -238,6 +246,8 @@ namespace HarryTools.TextEffects {
         private void OnDisable() {
             Queue.Cancel();
             animator.StopListening();
+            // Whoever waits for Hidden must not wait forever
+            if (State == EffectTextState.Hiding) HideImmediate();
         }
 
         private void OnDestroy() {
@@ -303,8 +313,36 @@ namespace HarryTools.TextEffects {
             }
         }
 
+        /// <summary> TextMeshPro only generates the mesh of an active and enabled object </summary>
+        private bool CanGenerateMesh => enabled && gameObject.activeInHierarchy;
+
         private void LoadSource() {
             SetText(plainText, false);
+        }
+
+        /// <summary> Generates the TMP mesh and loads the animator and the typewriter from it. Allocates </summary>
+        private void LoadMesh() {
+            TMP_Text _tmp = Tmp;
+            animator.Bind(_tmp);
+            loadIssues.Clear();
+            animator.Load(parsed, TextEffectsSettings.Current, appearPreset, disappearPreset, loadIssues);
+            if (loadIssuesPending) {
+                loadIssuesPending = false;
+                for (int _i = 0; _i < loadIssues.Count; _i++) LogIssue(loadIssues[_i], false);
+            }
+
+            TMP_TextInfo _info = _tmp.textInfo;
+            int _count = _info.characterCount;
+            if (sourceIndices.Length < _count) sourceIndices = new int[Mathf.Max(_count, sourceIndices.Length * 2)];
+            for (int _i = 0; _i < _count; _i++) sourceIndices[_i] = _info.characterInfo[_i].index;
+            typewriter.Load(parsed, sourceIndices, _count);
+            meshLoadPending = false;
+        }
+
+        private void LogIssue(TextIssue _issue, bool _withPosition) {
+            string _message = "In the text of '" + name + "'" + (_withPosition && _issue.Position >= 0 ? " at position " + _issue.Position : string.Empty) + ": " + _issue.Message;
+            if (_issue.Severity == IssueSeverity.Error) Logger.LogError("TextEffects", _message);
+            else Logger.LogWarning("TextEffects", _message);
         }
 
         private bool IsUnscaled() {
@@ -337,6 +375,11 @@ namespace HarryTools.TextEffects {
             try {
                 if (_skip) typewriter.Skip(this);
                 else typewriter.Tick(_dt, this);
+            } catch {
+                // Requests made before the failure are dropped so they do not run on a later, unrelated call
+                Array.Clear(requestOrder, 0, requestOrder.Length);
+                pendingText = null;
+                throw;
             } finally {
                 insideTypewriter = false;
             }

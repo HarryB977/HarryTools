@@ -476,6 +476,68 @@ namespace HarryTools.TextEffects.Tests {
         }
 
         [Test]
+        public void SetText_WhileInactive_ShowsAfterActivation() {
+            // Never activated: TextMeshPro cannot generate the mesh yet
+            EffectText _effect = Build("x", _e => {
+                _e.ShowOnEnable = false;
+                _e.CharactersPerSecond = 1000f;
+                _e.SetText("hello");
+            });
+            Assert.AreEqual(EffectTextState.Typing, _effect.State);
+            _effect.Tick(1f);
+            Assert.AreEqual(EffectTextState.Complete, _effect.State);
+            Assert.AreEqual(5, _effect.VisibleCount);
+            for (int _i = 0; _i < 5; _i++) Assert.AreEqual(255, Alpha(_effect, _i), "Character " + _i);
+
+            // Deactivated after a shorter text was loaded, then given a longer one
+            _effect.gameObject.SetActive(false);
+            _effect.SetText("abcdefgh");
+            _effect.gameObject.SetActive(true);
+            Assert.AreEqual(8, Tmp(_effect).textInfo.characterCount);
+            _effect.Tick(1f);
+            Assert.AreEqual(EffectTextState.Complete, _effect.State);
+            Assert.AreEqual(8, _effect.VisibleCount);
+            for (int _i = 0; _i < 8; _i++) Assert.AreEqual(255, Alpha(_effect, _i), "Character " + _i);
+        }
+
+        [Test]
+        public void DisableWhileHiding_FiresHiddenOnce() {
+            settings.DefaultDisappearAsset = Preset("fadeout", new FadeTransition(), "direction", "Out", "duration", "1", "ease", "Linear");
+            EffectText _effect = Build("abc", _e => _e.ShowOnEnable = false);
+            int _hidden = 0;
+            _effect.Hidden += () => _hidden++;
+            _effect.Show();
+            _effect.Skip();
+            _effect.Hide();
+            _effect.Tick(0.1f);
+            Assert.AreEqual(EffectTextState.Hiding, _effect.State);
+
+            _effect.gameObject.SetActive(false);
+            Assert.AreEqual(EffectTextState.Hidden, _effect.State);
+            Assert.AreEqual(1, _hidden);
+
+            _effect.gameObject.SetActive(true);
+            _effect.Tick(1f);
+            Assert.AreEqual(EffectTextState.Hidden, _effect.State);
+            Assert.AreEqual(1, _hidden);
+        }
+
+        [Test]
+        public void ParseAndOverrideIssues_LoggedOncePerSetText_WithSeverity() {
+            Register("shake", new ShakeEffect());
+            LogAssert.Expect(LogType.Error, new System.Text.RegularExpressions.Regex("<pause>"));
+            LogAssert.Expect(LogType.Warning, new System.Text.RegularExpressions.Regex("no open range"));
+            LogAssert.Expect(LogType.Warning, new System.Text.RegularExpressions.Regex("nope"));
+            EffectText _effect = Build("a<pause=-1>b</><shake nope=1>c</>");
+            _effect.Skip();
+            _effect.Tick(0.1f);
+            _effect.gameObject.SetActive(false);
+            _effect.gameObject.SetActive(true);
+            _effect.Tick(0.1f);
+            LogAssert.NoUnexpectedReceived();
+        }
+
+        [Test]
         public void Hide_FromEventHandler_DuringTick_AppliesAfterTypewriter() {
             settings.DefaultDisappearAsset = Preset("fadeout", new FadeTransition(), "direction", "Out", "duration", "1", "ease", "Linear");
             EffectText _effect = Build("a<event=x>bcd", _e => {
