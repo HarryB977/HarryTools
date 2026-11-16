@@ -1,0 +1,34 @@
+{
+  "name": "com.harryb97.tools.texteffects",
+  "version": "1.0.0-beta.1",
+  "displayName": "HarryTools Text Effects",
+  "description": "Typewriter y efectos de texto para TextMeshPro: marcado en el propio texto, presets de efectos, pausas, eventos y voces de tecleo.",
+  "unity": "6000.0",
+  "author": {
+    "name": "HarryB97",
+    "url": "https://github.com/HarryB977"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/HarryB977/HarryTools.git",
+    "directory": "Packages/com.harryb97.tools.texteffects"
+  },
+  "keywords": [
+    "text",
+    "typewriter",
+    "textmeshpro",
+    "effects"
+  ],
+  "hideInEditor": true,
+  "license": "MIT",
+  "dependencies": {
+    "com.unity.ugui": "2.0.0",
+    "com.kyrylokuzyk.primetween": "1.5.0",
+    "com.harryb97.tools.actions": "2.0.0-beta.1",
+    "com.harryb97.tools.conditions": "2.0.0-beta.1",
+    "com.harryb97.tools.serializereferences": "1.0.3",
+    "com.harryb97.tools.logger": "1.0.3",
+    "com.harryb97.tools.domainreload": "1.0.3",
+    "com.cysharp.unitask": "2.5.10"
+  }
+}

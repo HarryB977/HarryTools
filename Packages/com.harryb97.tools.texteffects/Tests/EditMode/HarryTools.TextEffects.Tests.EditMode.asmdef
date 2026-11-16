@@ -1,0 +1,24 @@
+{
+    "name": "HarryTools.TextEffects.Tests.EditMode",
+    "rootNamespace": "HarryTools.TextEffects.Tests",
+    "references": [
+        "GUID:76383890d5b860d438cd9a729219bf9d",
+        "GUID:0041dcec109cc6048ba5b78acc00af1b",
+        "GUID:f51ebe6a0ceec4240a699833d6309b23",
+        "UnityEngine.TestRunner",
+        "UnityEditor.TestRunner"
+    ],
+    "includePlatforms": [ "Editor" ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "nunit.framework.dll"
+    ],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
