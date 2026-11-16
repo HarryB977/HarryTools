@@ -26,6 +26,17 @@ namespace HarryTools.TextEffects {
             return _name != null && set.Contains(_name);
         }
 
+        /// <summary> The one rule for tag, preset, voice, event and parameter names: ASCII letters, digits, '_' or '-', not empty </summary>
+        internal static bool IsValidName(ReadOnlySpan<char> _name) {
+            if (_name.Length == 0) return false;
+            for (int i = 0; i < _name.Length; i++) {
+                char c = _name[i];
+                bool valid = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' || c == '-';
+                if (!valid) return false;
+            }
+            return true;
+        }
+
         /// <summary> True for the tags the parser itself consumes (pause, speed, waitinput, event, voice, instant) </summary>
         internal static bool IsOwn(string _name) {
             for (int i = 0; i < ownNames.Length; i++) {

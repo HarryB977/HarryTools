@@ -95,6 +95,26 @@ namespace HarryTools.TextEffects.Tests {
         }
 
         [Test]
+        public void Settings_NonAsciiName_IssueNotRegistered() {
+            TextEffectsSettings _settings = MakeSettings(new[] { MakePreset("sacudón") }, new[] { MakeVoice("niño") });
+
+            Assert.IsFalse(_settings.TryGetPreset("sacudón", out _));
+            Assert.IsFalse(_settings.TryGetVoice("niño", out _));
+            Assert.AreEqual(2, _settings.RegistryIssues.Count);
+        }
+
+        [Test]
+        public void Settings_NameRule_MatchesParser() {
+            TextEffectsSettings _settings = MakeSettings(new[] { MakePreset("wave_2-b") }, new TypingVoice[0]);
+            ParsedText _parsed = new ParsedText();
+
+            TextParser.Parse("<wave_2-b>x</wave_2-b>", _settings, _parsed);
+
+            Assert.IsTrue(_settings.TryGetPreset("wave_2-b", out _));
+            Assert.AreEqual("x", _parsed.TmpText);
+        }
+
+        [Test]
         public void Settings_NoResources_EmptyAndWarnsOnce() {
             LogAssert.Expect(LogType.Warning, new System.Text.RegularExpressions.Regex("TextEffectsSettings"));
             TextEffectsSettings _empty = TextEffectsSettings.LoadOrEmpty(() => null);

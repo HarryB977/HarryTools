@@ -170,7 +170,7 @@ namespace HarryTools.TextEffects.Editor {
             int nameEnd = 0;
             while (nameEnd < _content.Length && _content[nameEnd] != '=' && !char.IsWhiteSpace(_content[nameEnd])) nameEnd++;
             string name = _content.Substring(0, nameEnd);
-            if (!IsValidName(name) || ReservedTags.IsReserved(name)) return;
+            if (!ReservedTags.IsValidName(name) || ReservedTags.IsReserved(name)) return;
             if (_lookup != null && _lookup.IsPreset(name)) return;
 
             bool hasParams = _content.IndexOf('=', nameEnd) >= 0;
@@ -185,16 +185,6 @@ namespace HarryTools.TextEffects.Editor {
                 if (_text[i] == '<') return -1;
             }
             return -1;
-        }
-
-        private static bool IsValidName(string _name) {
-            if (_name.Length == 0) return false;
-            for (int i = 0; i < _name.Length; i++) {
-                char c = _name[i];
-                bool valid = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' || c == '-';
-                if (!valid) return false;
-            }
-            return true;
         }
         #endregion
     }

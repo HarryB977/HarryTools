@@ -56,6 +56,9 @@ namespace HarryTools.TextEffects {
         private readonly Dictionary<string, TypingVoice> voiceByName = new Dictionary<string, TypingVoice>(StringComparer.OrdinalIgnoreCase);
         private readonly List<TextIssue> issues = new List<TextIssue>();
         private bool built;
+
+        // The empty instance returned when no asset exists, which Current drops once the asset appears
+        private bool isFallback;
         #endregion
 
         // ==================== INTERNAL ====================
@@ -81,7 +84,13 @@ namespace HarryTools.TextEffects {
             Logger.LogWarning("TextEffects", "No TextEffectsSettings asset found in a Resources folder, so no presets or voices are registered. Create it from Project Settings > HarryTools > Text Effects.");
             TextEffectsSettings _empty = CreateInstance<TextEffectsSettings>();
             _empty.hideFlags = HideFlags.DontSave;
+            _empty.isFallback = true;
             return _empty;
+        }
+
+        /// <summary> When Current holds the empty fallback, drops it so the next read loads the asset again </summary>
+        internal static void ForgetFallback() {
+            if (current != null && current.isFallback) current = null;
         }
 
         internal static void UseForTests(TextEffectsSettings _settings) {
@@ -152,7 +161,7 @@ namespace HarryTools.TextEffects {
 
         private bool CanRegister(string _tag, string _assetName, string _kind) {
             if (string.IsNullOrEmpty(_tag)) return Reject($"The {_kind} '{_assetName}' has no tag name and is not registered.");
-            if (!IsValidName(_tag)) return Reject($"The {_kind} '{_assetName}' has the invalid tag name '{_tag}' (use letters, digits, '_' or '-') and is not registered.");
+            if (!ReservedTags.IsValidName(_tag)) return Reject($"The {_kind} '{_assetName}' has the invalid tag name '{_tag}' (use letters, digits, '_' or '-') and is not registered.");
             if (ReservedTags.IsReserved(_tag)) return Reject($"The {_kind} '{_assetName}' uses the reserved tag name '{_tag}' and is not registered.");
             if (presetByName.ContainsKey(_tag) || voiceByName.ContainsKey(_tag)) return Reject($"The {_kind} '{_assetName}' repeats the tag name '{_tag}' and is not registered.");
             return true;
@@ -161,14 +170,6 @@ namespace HarryTools.TextEffects {
         private bool Reject(string _message) {
             issues.Add(new TextIssue(IssueSeverity.Warning, _message, -1));
             return false;
-        }
-
-        private static bool IsValidName(string _name) {
-            for (int i = 0; i < _name.Length; i++) {
-                char _c = _name[i];
-                if (!char.IsLetterOrDigit(_c) && _c != '_' && _c != '-') return false;
-            }
-            return true;
         }
         #endregion
     }

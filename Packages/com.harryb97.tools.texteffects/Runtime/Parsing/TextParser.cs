@@ -83,7 +83,7 @@ namespace HarryTools.TextEffects {
             int nameEnd = 0;
             while (nameEnd < _content.Length && _content[nameEnd] != '=' && !char.IsWhiteSpace(_content[nameEnd])) nameEnd++;
             ReadOnlySpan<char> name = _content.Slice(0, nameEnd);
-            if (!IsValidName(name)) return false;
+            if (!ReservedTags.IsValidName(name)) return false;
             ReadOnlySpan<char> rest = _content.Slice(nameEnd);
 
             if (name.Equals("pause", StringComparison.OrdinalIgnoreCase)) return HandlePause(rest, _position, _into);
@@ -166,7 +166,7 @@ namespace HarryTools.TextEffects {
         }
 
         private static bool HandleEvent(ReadOnlySpan<char> _rest, int _position, ParsedText _into) {
-            if (!TryGetValue(_rest, out ReadOnlySpan<char> value) || !IsValidName(value)) {
+            if (!TryGetValue(_rest, out ReadOnlySpan<char> value) || !ReservedTags.IsValidName(value)) {
                 _into.Issues.Add(new TextIssue(IssueSeverity.Error, "Tag <event> needs a name made of letters, digits, '_' or '-'.", _position));
                 return true;
             }
@@ -176,7 +176,7 @@ namespace HarryTools.TextEffects {
         }
 
         private static bool HandleVoice(ReadOnlySpan<char> _rest, int _position, ITagLookup _lookup, ParsedText _into) {
-            if (!TryGetValue(_rest, out ReadOnlySpan<char> value) || !IsValidName(value)) {
+            if (!TryGetValue(_rest, out ReadOnlySpan<char> value) || !ReservedTags.IsValidName(value)) {
                 _into.Issues.Add(new TextIssue(IssueSeverity.Error, "Tag <voice> needs a name made of letters, digits, '_' or '-'.", _position));
                 return true;
             }
@@ -201,16 +201,6 @@ namespace HarryTools.TextEffects {
 
         private static bool IsNoParseOpen(ReadOnlySpan<char> _content) {
             return _content.Trim().Equals("noparse", StringComparison.OrdinalIgnoreCase);
-        }
-
-        private static bool IsValidName(ReadOnlySpan<char> _name) {
-            if (_name.Length == 0) return false;
-            for (int i = 0; i < _name.Length; i++) {
-                char c = _name[i];
-                bool valid = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' || c == '-';
-                if (!valid) return false;
-            }
-            return true;
         }
 
         /// <summary> Reads the value of '=value' (optionally in double quotes). False if there is no '=' or the value is empty </summary>
@@ -242,7 +232,7 @@ namespace HarryTools.TextEffects {
                 int keyStart = position;
                 while (position < _rest.Length && _rest[position] != '=' && !char.IsWhiteSpace(_rest[position])) position++;
                 ReadOnlySpan<char> key = _rest.Slice(keyStart, position - keyStart);
-                if (!IsValidName(key)) {
+                if (!ReservedTags.IsValidName(key)) {
                     _error = "invalid parameter name";
                     return false;
                 }
