@@ -20,7 +20,8 @@ namespace HarryTools.Dialogue {
             Showing,
             EndActions,
             DelayAfter,
-            WaitActions
+            WaitActions,
+            Choice
         }
 
         private readonly struct CallFrame {
@@ -43,12 +44,14 @@ namespace HarryTools.Dialogue {
         // Self of the current line's actions
         private GameObject lineActor;
         private RunState stateBeforePause;
+        private bool warnedAmbientChoice;
 
         // Requests made while the run is ticking are applied once the current step is done
         private bool ticking;
         private bool stopRequested;
         private bool advanceRequested;
         private bool pauseRequested;
+        private ChoiceOption choiceRequested;
         #endregion
 
         #region Public Variables
@@ -66,8 +69,16 @@ namespace HarryTools.Dialogue {
 
         public DialogueTime Time { get; }
 
+        /// <summary> The choice waiting for an answer, or null </summary>
+        public ChoicePrompt CurrentChoice { get; private set; }
+
         public event Action<DialogueRun, LineNode> LineStarted;
         public event Action<DialogueRun, LineNode> LineEnded;
+        public event Action<DialogueRun, ChoicePrompt> ChoicePresented;
+
+        /// <summary> Raised when an option is chosen, by the player, the timer or an ambient dialogue. Not raised for the no answer output </summary>
+        public event Action<DialogueRun, ChoiceOption> ChoiceMade;
+
         public event Action<DialogueRun, EndReason> Ended;
         #endregion
 
@@ -76,6 +87,11 @@ namespace HarryTools.Dialogue {
 
         /// <summary> Seconds this run has ticked on its own clock. Frozen while paused </summary>
         internal float Clock => clock;
+        #endregion
+
+        #region Private Properties
+        // Moving through the graph or waiting for a choice
+        private bool IsActive => State == RunState.Running || State == RunState.WaitingChoice;
         #endregion
 
         // ==================== START ====================
@@ -135,7 +151,7 @@ namespace HarryTools.Dialogue {
         #region Tick
         /// <summary> Moves through the graph until something has to wait </summary>
         internal void Tick(float _scaledDt, float _unscaledDt) {
-            if (ticking || State != RunState.Running) return;
+            if (ticking || !IsActive) return;
             clock += Time == DialogueTime.Scaled ? _scaledDt : _unscaledDt;
 
             ticking = true;
@@ -147,7 +163,7 @@ namespace HarryTools.Dialogue {
                         break;
                     }
                     bool _moved = Step();
-                    if (ApplyRequests() || !_moved || State != RunState.Running) break;
+                    if (ApplyRequests() || !_moved || !IsActive) break;
                 }
             } finally {
                 ticking = false;
@@ -214,6 +230,17 @@ namespace HarryTools.Dialogue {
                     GoTo(((ActionsNode)Current).Next);
                     return true;
 
+                case Phase.Choice:
+                    if (choiceRequested != null) {
+                        ChoiceOption _option = choiceRequested;
+                        choiceRequested = null;
+                        TakeOption(_option);
+                        return true;
+                    }
+                    if (!CurrentChoice.TimedOut) return false;
+                    TimeOut();
+                    return true;
+
                 default:
                     return false;
             }
@@ -252,6 +279,10 @@ namespace HarryTools.Dialogue {
 
                 case BranchNode _branch:
                     GoTo(PickCase(_branch));
+                    break;
+
+                case ChoiceNode _choice:
+                    Offer(_choice);
                     break;
 
                 case JumpNode _jump:
@@ -333,6 +364,94 @@ namespace HarryTools.Dialogue {
         }
         #endregion
 
+        // ==================== CHOICES ====================
+        #region Choices
+        /// <summary> Shows the choice in a main run. An ambient run answers at once </summary>
+        private void Offer(ChoiceNode _node) {
+            ChoicePrompt _prompt = new ChoicePrompt(this, _node, Context(null));
+
+            if (!IsMain) {
+                if (!warnedAmbientChoice) {
+                    warnedAmbientChoice = true;
+                    Logger.LogWarning(Dialogue.LogCategory, $"Dialogue '{CurrentAsset.name}' reached a choice in an ambient run. Choices belong to main dialogues: the default option is taken.");
+                }
+                ChoiceOption _option = _prompt.Fallback();
+                if (_option != null) TakeOption(_option);
+                else TakeNoOption(_node);
+                return;
+            }
+
+            if (!_prompt.HasAvailable) {
+                TakeNoOption(_node);
+                return;
+            }
+
+            CurrentChoice = _prompt;
+            State = RunState.WaitingChoice;
+            phase = Phase.Choice;
+            ChoicePresented?.Invoke(this, _prompt);
+            Dialogue.RaiseChoicePresented(this, _prompt);
+            Dialogue.ChoiceShown?.Invoke(_prompt);
+        }
+
+        /// <summary> Called by the open prompt. Applied at once, or after the current step when the run is ticking </summary>
+        internal void RequestChoice(ChoicePrompt _prompt, ChoiceOption _option) {
+            if (State != RunState.WaitingChoice || _prompt != CurrentChoice || choiceRequested != null) return;
+            if (ticking) {
+                choiceRequested = _option;
+                return;
+            }
+
+            ticking = true;
+            try {
+                TakeOption(_option);
+            } finally {
+                ticking = false;
+            }
+            ApplyRequests();
+        }
+
+        private void TimeOut() {
+            ChoicePrompt _prompt = CurrentChoice;
+            ChoiceOption _option = _prompt.Node.TimeoutRule == TimeoutRule.ChooseSelected ? _prompt.Fallback() : null;
+            if (_option != null) {
+                TakeOption(_option);
+                return;
+            }
+            CloseChoice();
+            GoTo(_prompt.Node.NoAnswer);
+        }
+
+        /// <summary> Remembers the option, runs its actions without waiting and follows it </summary>
+        private void TakeOption(ChoiceOption _option) {
+            CloseChoice();
+            DialogueMemory.MarkChosen(CurrentAsset, _option.Id);
+            ChoiceMade?.Invoke(this, _option);
+            Dialogue.RaiseChoiceMade(this, _option);
+            RunActions(_option.OnChosen, null);
+            GoTo(_option.Next);
+        }
+
+        /// <summary> No option can be chosen: the no answer output, or the end with a warning when it is not connected </summary>
+        private void TakeNoOption(ChoiceNode _node) {
+            if (!_node.NoAnswer.IsConnected) {
+                Logger.LogWarning(Dialogue.LogCategory, $"Dialogue '{CurrentAsset.name}': a choice has no option to offer and its no answer output is not connected. The dialogue ends there.");
+            }
+            GoTo(_node.NoAnswer);
+        }
+
+        /// <summary> Closes the open choice, if any, and lets the run move again </summary>
+        private void CloseChoice() {
+            choiceRequested = null;
+            if (CurrentChoice == null) return;
+            ChoicePrompt _prompt = CurrentChoice;
+            CurrentChoice = null;
+            _prompt.IsOpen = false;
+            if (State == RunState.WaitingChoice) State = RunState.Running;
+            Dialogue.ChoiceHidden?.Invoke(_prompt);
+        }
+        #endregion
+
         // ==================== FLOW ====================
         #region Flow
         private void MoveTo(DialogueNode _node) {
@@ -385,6 +504,7 @@ namespace HarryTools.Dialogue {
             if (awaited != null && awaited.IsRunning) awaited.Cancel();
             awaited = null;
             ReleaseLine();
+            CloseChoice();
 
             Dialogue.Unregister(this);
             Ended?.Invoke(this, _reason);

@@ -18,6 +18,8 @@ namespace HarryTools.Dialogue {
         [ClearOnReload] private static Action<DialogueRun, EndReason> endedHandlers;
         [ClearOnReload] private static Action<DialogueRun, LineNode> lineStartedHandlers;
         [ClearOnReload] private static Action<DialogueRun, LineNode> lineEndedHandlers;
+        [ClearOnReload] private static Action<DialogueRun, ChoicePrompt> choicePresentedHandlers;
+        [ClearOnReload] private static Action<DialogueRun, ChoiceOption> choiceMadeHandlers;
         #endregion
 
         #region Public Variables
@@ -34,6 +36,12 @@ namespace HarryTools.Dialogue {
 
         /// <summary> When true, nothing ticks the dialogues except <see cref="TickAll"/> </summary>
         [ClearOnReload] internal static bool ManualTick;
+
+        /// <summary> Raised for the choice view when a main dialogue offers a choice </summary>
+        [ClearOnReload] internal static Action<ChoicePrompt> ChoiceShown;
+
+        /// <summary> Raised for the choice view when an offered choice closes: answered, timed out or its run ended </summary>
+        [ClearOnReload] internal static Action<ChoicePrompt> ChoiceHidden;
         #endregion
 
         // ==================== EVENTS ====================
@@ -56,6 +64,17 @@ namespace HarryTools.Dialogue {
         public static event Action<DialogueRun, LineNode> LineEnded {
             add => lineEndedHandlers += value;
             remove => lineEndedHandlers -= value;
+        }
+
+        public static event Action<DialogueRun, ChoicePrompt> ChoicePresented {
+            add => choicePresentedHandlers += value;
+            remove => choicePresentedHandlers -= value;
+        }
+
+        /// <summary> Raised when an option is chosen, by the player, the timer or an ambient dialogue. Not raised for the no answer output </summary>
+        public static event Action<DialogueRun, ChoiceOption> ChoiceMade {
+            add => choiceMadeHandlers += value;
+            remove => choiceMadeHandlers -= value;
         }
         #endregion
 
@@ -128,8 +147,10 @@ namespace HarryTools.Dialogue {
         internal static void RaiseEnded(DialogueRun _run, EndReason _reason) => endedHandlers?.Invoke(_run, _reason);
         internal static void RaiseLineStarted(DialogueRun _run, LineNode _line) => lineStartedHandlers?.Invoke(_run, _line);
         internal static void RaiseLineEnded(DialogueRun _run, LineNode _line) => lineEndedHandlers?.Invoke(_run, _line);
+        internal static void RaiseChoicePresented(DialogueRun _run, ChoicePrompt _prompt) => choicePresentedHandlers?.Invoke(_run, _prompt);
+        internal static void RaiseChoiceMade(DialogueRun _run, ChoiceOption _option) => choiceMadeHandlers?.Invoke(_run, _option);
 
-        /// <summary> Drops every run without ending it, the handlers, the resolver and the driver </summary>
+        /// <summary> Drops every run without ending it, the handlers, the resolver, the choice view hooks and the driver </summary>
         internal static void ClearForTests() {
             active.Clear();
             tickBuffer.Clear();
@@ -138,7 +159,11 @@ namespace HarryTools.Dialogue {
             endedHandlers = null;
             lineStartedHandlers = null;
             lineEndedHandlers = null;
+            choicePresentedHandlers = null;
+            choiceMadeHandlers = null;
             ChannelResolver = null;
+            ChoiceShown = null;
+            ChoiceHidden = null;
             ManualTick = false;
             DialogueDriver.DestroyInstance();
         }

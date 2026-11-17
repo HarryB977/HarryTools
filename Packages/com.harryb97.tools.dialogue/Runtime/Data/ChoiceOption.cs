@@ -50,8 +50,17 @@ namespace HarryTools.Dialogue {
         }
 
         public List<ChoiceTag> Tags => tags;
-        public ConditionList Visible => visible;
-        public ConditionList Available => available;
+
+        public ConditionList Visible {
+            get => visible;
+            internal set => visible = value;
+        }
+
+        public ConditionList Available {
+            get => available;
+            internal set => available = value;
+        }
+
         public LocalizedString LockedReason => lockedReason;
 
         public bool IsDefault {
@@ -64,7 +73,11 @@ namespace HarryTools.Dialogue {
             internal set => afterChosen = value;
         }
 
-        public ActionList OnChosen => onChosen;
+        public ActionList OnChosen {
+            get => onChosen;
+            internal set => onChosen = value;
+        }
+
         public NodeOutput Next => next;
         #endregion
     }
