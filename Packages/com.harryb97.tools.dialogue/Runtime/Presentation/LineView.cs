@@ -87,7 +87,7 @@ namespace HarryTools.Dialogue {
         /// <summary> Called after <see cref="Bind"/>, once the view is part of the visible lines </summary>
         public virtual void OnEnter() { }
 
-        /// <summary> Called when the line leaves the visible lines, before its text hides. The view goes back to the pool once hidden. When the container reuses the view, the next line is bound to it right after, without hiding </summary>
+        /// <summary> Called when the line leaves the visible lines, before its text hides. The view goes back to the pool once hidden. When the container reuses the view, the next line is bound to it without waiting for the hide </summary>
         public virtual void OnExit() { }
 
         /// <summary> Called when the position of the line among the visible lines changes. Index 0 is the oldest </summary>

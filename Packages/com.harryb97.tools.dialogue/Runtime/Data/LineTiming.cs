@@ -15,6 +15,12 @@ namespace HarryTools.Dialogue {
         [Tooltip("Both input and the lifetime advance the line")] Both
     }
 
+    public enum LineExit {
+        [Tooltip("A line leaves when a new line needs its place or its dialogue ends")] PushedOut,
+        [Tooltip("A line leaves once its stay time is over, even after its dialogue ends. Max Visible does not apply")] AfterTime,
+        [Tooltip("A line leaves when a new line needs its place or once its stay time is over, even after its dialogue ends")] Both
+    }
+
     public enum DialogueTime { Scaled, Unscaled }
 
     public enum AmbientPolicy {

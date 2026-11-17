@@ -7,6 +7,11 @@ namespace HarryTools.Dialogue {
         [Tooltip("The history is kept until it is cleared in code")] Never
     }
 
+    public enum InitialSelection {
+        [Tooltip("A choice opens with its first available default option selected, or else its first available option")] DefaultOrFirst,
+        [Tooltip("A choice opens with nothing selected")] None
+    }
+
     /// <summary> Project-wide defaults for dialogues. Without an asset, the defaults below apply silently </summary>
     public sealed class DialogueSettings : ScriptableObject {
         // ==================== VARIABLES ===================
@@ -28,6 +33,11 @@ namespace HarryTools.Dialogue {
 
         public LineLifetime DefaultLifetime => defaultLifetime;
         public AdvanceMode DefaultAdvance => defaultAdvance;
+        public InitialSelection InitialSelection {
+            get => initialSelection;
+            internal set => initialSelection = value;
+        }
+
         public bool HistoryEnabled {
             get => historyEnabled;
             internal set => historyEnabled = value;
@@ -68,6 +78,9 @@ namespace HarryTools.Dialogue {
 
         [Tooltip("How lines advance when they do not set their own"), SerializeField]
         private AdvanceMode defaultAdvance = AdvanceMode.Both;
+
+        [Tooltip("Which option is selected when a choice opens"), SerializeField]
+        private InitialSelection initialSelection = InitialSelection.DefaultOrFirst;
 
         [Tooltip("Record the lines and choices that were shown"), SerializeField]
         private bool historyEnabled = false;

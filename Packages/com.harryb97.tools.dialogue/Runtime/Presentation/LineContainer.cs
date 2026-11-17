@@ -9,7 +9,7 @@ using UnityEngine;
 using Logger = HarryTools.LoggerTool.Logger;
 
 namespace HarryTools.Dialogue {
-    /// <summary> Shows dialogue lines with pooled <see cref="LineView"/>s under <see cref="LineParent"/>: how many stay on screen, how long and how they advance. It only orders the views as siblings and notifies them; layout and animation belong to the views. A line stays on screen until a new line needs its place, its run skips or its run ends </summary>
+    /// <summary> Shows dialogue lines with pooled <see cref="LineView"/>s under <see cref="LineParent"/>: how many stay on screen, how long and how they advance. It only orders the views as siblings and notifies them; layout and animation belong to the views. <see cref="Exit"/> sets when a line leaves the screen; a line also leaves when its run skips </summary>
     [AddComponentMenu("HarryTools/Dialogue/Line Container")]
     public class LineContainer : MonoBehaviour, ILineChannel {
         // ==================== VARIABLES ===================
@@ -24,7 +24,13 @@ namespace HarryTools.Dialogue {
         private int maxVisible = 1;
 
         [Tooltip("With Max Visible 1, each new line is written in the view already on screen instead of a new one, without hiding the previous text first"), SerializeField]
-        private bool reuseView;
+        private bool reuseView = true;
+
+        [Tooltip("When a line leaves the screen"), SerializeField]
+        private LineExit exit = LineExit.PushedOut;
+
+        [Tooltip("Seconds a line stays on screen once the dialogue moves past it, with Exit After Time or Both"), SerializeField, Min(0f)]
+        private float stayTime = 2f;
 
         [Tooltip("How long a line lasts once typed, unless the line sets its own"), SerializeField]
         private LineLifetime lifetime = LineLifetime.Default;
@@ -88,6 +94,16 @@ namespace HarryTools.Dialogue {
             set => reuseView = value;
         }
 
+        public LineExit Exit {
+            get => exit;
+            set => exit = value;
+        }
+
+        public float StayTime {
+            get => stayTime;
+            set => stayTime = Mathf.Max(0f, value);
+        }
+
         public LineLifetime Lifetime {
             get => lifetime;
             set => lifetime = value;
@@ -147,8 +163,11 @@ namespace HarryTools.Dialogue {
 
             CleanStale();
             DropDestroyedViews();
-            LineView _view = reuseView && maxVisible <= 1 && visible.Count == 1 ? TakeForReuse() : null;
-            while (visible.Count >= Mathf.Max(1, maxVisible)) RemoveAt(0);
+            bool _capped = exit != LineExit.AfterTime;
+            LineView _view = reuseView && _capped && maxVisible <= 1 ? TakeForReuse() : null;
+            if (_capped) {
+                while (visible.Count >= Mathf.Max(1, maxVisible)) RemoveAt(0);
+            }
 
             LineLifetime _lifetime = _line.Line.OverrideLifetime ? _line.Lifetime : lifetime;
             AdvanceMode _advance = _line.Line.OverrideAdvance ? _line.Advance : advance;
@@ -205,6 +224,14 @@ namespace HarryTools.Dialogue {
             leaving.Clear();
         }
 
+        /// <summary> Lines whose stay time is over leave. Runs after every Update, so a line replaced in the same frame is reused instead of hidden </summary>
+        protected virtual void LateUpdate() {
+            if (exit == LineExit.PushedOut) return;
+            for (int _i = handles.Count - 1; _i >= 0; _i--) {
+                if (_i < handles.Count && handles[_i].StayOver(stayTime)) RemoveAt(_i);
+            }
+        }
+
         protected virtual void OnDestroy() {
             Dialogue.ChoiceShown -= OnChoiceShown;
             Dialogue.ChoiceHidden -= OnChoiceHidden;
@@ -227,8 +254,18 @@ namespace HarryTools.Dialogue {
             return _view;
         }
 
-        /// <summary> Takes the line on screen off the visible list without hiding its view, so the next line is written in it </summary>
+        /// <summary> Takes the line on screen off the visible list without hiding its view, so the next line is written in it. With no line on screen, takes back a view that is still hiding. Null when there is neither </summary>
         private LineView TakeForReuse() {
+            if (visible.Count == 0) {
+                if (leaving.Count == 0) return null;
+                LineHandle _hiding = leaving[leaving.Count - 1];
+                leaving.RemoveAt(leaving.Count - 1);
+                _hiding.StopWaitingHidden();
+                if (_hiding.View == null) return null;
+                _hiding.View.Unbind();
+                return _hiding.View;
+            }
+
             LineView _view = visible[0];
             LineHandle _handle = handles[0];
             visible.RemoveAt(0);
@@ -315,9 +352,15 @@ namespace HarryTools.Dialogue {
             stale.Clear();
         }
 
-        /// <summary> The lines of a run that ended leave the screen </summary>
+        /// <summary> The lines of a run that ended leave the screen, or start their stay time when lines leave by time </summary>
         private void OnRunEnded(DialogueRun _run, EndReason _reason) {
-            RemoveLinesOf(_run);
+            if (exit == LineExit.PushedOut) {
+                RemoveLinesOf(_run);
+                return;
+            }
+            for (int _i = 0; _i < handles.Count; _i++) {
+                if (handles[_i].Run == _run) handles[_i].StartStay();
+            }
         }
 
         /// <summary> The lines of a run that starts skipping leave the screen </summary>
@@ -373,6 +416,8 @@ namespace HarryTools.Dialogue {
             private bool paused;
             private bool released;
             private bool onScreen = true;
+            // When the dialogue moved past the line, on the line's clock. Negative until then
+            private float stayStart = -1f;
             private ILineHandle fallback;
 
             public LineHandle(LineContainer _container, LineView _view, LinePresentation _presentation, LineLifetime _lifetime, AdvanceMode _advance) {
@@ -513,10 +558,11 @@ namespace HarryTools.Dialogue {
                 else _text.Resume();
             }
 
-            /// <summary> The run moves on; the view stays on screen until it is replaced or its run ends </summary>
+            /// <summary> The run moves on; the view stays on screen until the container's exit rule takes it off </summary>
             public void Release() {
                 if (released) return;
                 released = true;
+                StartStay();
                 if (fallback != null) {
                     fallback.Release();
                     return;
@@ -525,6 +571,15 @@ namespace HarryTools.Dialogue {
                 EffectText _text = Text;
                 if (paused && _text != null) _text.Resume();
             }
+
+            /// <summary> Starts the stay time, unless it already started </summary>
+            public void StartStay() {
+                if (stayStart < 0f) stayStart = Now;
+            }
+
+            public bool StayOver(float _seconds) => stayStart >= 0f && Now - stayStart >= _seconds;
+
+            private float Now => presentation.Time == DialogueTime.Scaled ? Time.time : Time.unscaledTime;
 
             /// <summary> The view left the screen: replaced, skipped or its run ended. A line still running ends </summary>
             public void LeaveScreen() {

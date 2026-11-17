@@ -70,6 +70,8 @@ namespace HarryTools.Dialogue {
                 bool _seen = _chosen && _option.AfterChosen == AfterChosen.MarkSeen;
                 options.Add(new ChoiceOptionState(_option, _available, _seen));
             }
+
+            if (DialogueSettings.Current.InitialSelection == InitialSelection.DefaultOrFirst) SelectedIndex = FallbackIndex();
         }
 
         // ==================== CONTROL ====================
@@ -118,18 +120,24 @@ namespace HarryTools.Dialogue {
         /// <summary> The selected option, then the first default one, then the first one. Only available options count; null when none is </summary>
         internal ChoiceOption Fallback() {
             if (IsChoosable(SelectedIndex)) return options[SelectedIndex].Option;
-            for (int _i = 0; _i < options.Count; _i++) {
-                if (options[_i].Available && options[_i].IsDefault) return options[_i].Option;
-            }
-            for (int _i = 0; _i < options.Count; _i++) {
-                if (options[_i].Available) return options[_i].Option;
-            }
-            return null;
+            int _index = FallbackIndex();
+            return _index >= 0 ? options[_index].Option : null;
         }
         #endregion
 
         // ==================== PRIVATE ====================
         #region Private Methods
+        /// <summary> The first available default option, then the first available one. -1 when none is available </summary>
+        private int FallbackIndex() {
+            for (int _i = 0; _i < options.Count; _i++) {
+                if (options[_i].Available && options[_i].IsDefault) return _i;
+            }
+            for (int _i = 0; _i < options.Count; _i++) {
+                if (options[_i].Available) return _i;
+            }
+            return -1;
+        }
+
         private bool IsChoosable(int _index) {
             return _index >= 0 && _index < options.Count && options[_index].Available;
         }

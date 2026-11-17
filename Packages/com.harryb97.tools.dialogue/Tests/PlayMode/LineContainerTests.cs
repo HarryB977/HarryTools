@@ -191,6 +191,7 @@ namespace HarryTools.Dialogue.Tests {
         [UnityTest]
         public IEnumerator Max1_ReplacesPrevious() {
             LineContainer _container = BuildContainer(1, AdvanceMode.Input);
+            _container.ReuseView = false;
             List<LineView> _removed = new List<LineView>();
             _container.LineRemoved += _removed.Add;
             DialogueAsset _asset = Lines(out LineNode[] _lines, "first", "second", "third");
@@ -216,6 +217,69 @@ namespace HarryTools.Dialogue.Tests {
             // The pool reuses the views: no view was created per line after the first ones
             Assert.LessOrEqual(_container.LineParent.childCount, 2);
             Assert.AreEqual(1, CountActive(_container.LineParent));
+        }
+
+        [Test]
+        public void ReuseView_IsOnByDefault() {
+            GameObject _object = Track(new GameObject("Container"));
+            Assert.IsTrue(_object.AddComponent<LineContainer>().ReuseView);
+        }
+
+        [UnityTest]
+        public IEnumerator Exit_AfterTime_LinesLeaveByTime_WithoutCap() {
+            LineContainer _container = BuildContainer(1, AdvanceMode.Input);
+            _container.Exit = LineExit.AfterTime;
+            _container.StayTime = 0.2f;
+            DialogueAsset _asset = Lines(out LineNode[] _lines, "first", "second");
+            yield return null;
+
+            DialogueRun _run = StartMain(_asset);
+            _run.Advance();
+            _run.Advance();
+            Tick();
+            // Max Visible does not apply: the first line stays until its time is over
+            Assert.AreEqual(2, _container.Visible.Count);
+
+            yield return new WaitForSecondsRealtime(0.3f);
+            Assert.AreEqual(1, _container.Visible.Count);
+            Assert.AreSame(_lines[1], _container.Visible[0].Current.Line);
+        }
+
+        [UnityTest]
+        public IEnumerator Exit_Both_LineOutlivesRun_ThenLeaves() {
+            LineContainer _container = BuildContainer(2, AdvanceMode.Input);
+            _container.Exit = LineExit.Both;
+            _container.StayTime = 0.2f;
+            DialogueAsset _asset = Lines(out _, "only");
+            yield return null;
+
+            DialogueRun _run = StartMain(_asset);
+            _run.Advance();
+            _run.Advance();
+            Tick();
+            CollectionAssert.AreEqual(new[] { EndReason.Completed }, endReasons);
+            Assert.AreEqual(1, _container.Visible.Count);
+            yield return null;
+            Assert.AreEqual(1, _container.Visible.Count);
+
+            yield return new WaitForSecondsRealtime(0.3f);
+            Assert.AreEqual(0, _container.Visible.Count);
+        }
+
+        [UnityTest]
+        public IEnumerator Exit_Both_CapStillPushesOut() {
+            LineContainer _container = BuildContainer(1, AdvanceMode.Input);
+            _container.Exit = LineExit.Both;
+            _container.StayTime = 100f;
+            DialogueAsset _asset = Lines(out LineNode[] _lines, "first", "second");
+            yield return null;
+
+            DialogueRun _run = StartMain(_asset);
+            _run.Advance();
+            _run.Advance();
+            Tick();
+            Assert.AreEqual(1, _container.Visible.Count);
+            Assert.AreSame(_lines[1], _container.Visible[0].Current.Line);
         }
 
         [UnityTest]

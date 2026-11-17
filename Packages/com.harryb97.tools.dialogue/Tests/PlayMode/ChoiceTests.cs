@@ -22,6 +22,7 @@ namespace HarryTools.Dialogue.Tests {
             RecordingAction.Log.Clear();
             DialogueMemory.ClearForTests();
             settings = ScriptableObject.CreateInstance<DialogueSettings>();
+            settings.InitialSelection = InitialSelection.None;
             DialogueSettings.UseForTests(settings);
             Dialogue.ManualTick = true;
             channel = new FakeLineChannel();
@@ -501,6 +502,19 @@ namespace HarryTools.Dialogue.Tests {
 
         // ==================== SELECTION ====================
         #region Selection
+        [Test]
+        public void InitialSelection_DefaultOrFirst() {
+            settings.InitialSelection = InitialSelection.DefaultOrFirst;
+            DialogueRun _withDefault = Dialogue.Start(WithChoice(out _, Option(_available: false), Option(), Option(_isDefault: true)));
+            Tick();
+            Assert.AreEqual(2, _withDefault.CurrentChoice.SelectedIndex);
+            _withDefault.Stop();
+
+            DialogueRun _withoutDefault = Dialogue.Start(WithChoice(out _, Option(_available: false), Option(), Option()));
+            Tick();
+            Assert.AreEqual(1, _withoutDefault.CurrentChoice.SelectedIndex);
+        }
+
         [Test]
         public void MoveSelection_SkipsUnavailable_Wraps() {
             ChoiceOption _a = Option();

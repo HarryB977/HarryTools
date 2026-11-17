@@ -142,6 +142,8 @@ Cada respuesta (`ChoiceOption`) tiene:
 **Temporizador** (opcional): duración en segundos del reloj de la conversación y regla al llegar a 0:
 
 - `ChooseSelected`: la respuesta seleccionada; si no hay, la primera marcada por defecto; si no hay, la primera disponible.
+
+Al abrirse, la decisión selecciona la primera respuesta disponible marcada por defecto o, si no hay, la primera disponible. **Initial Selection** en Settings lo cambia a `None` (sin selección).
 - `NoAnswer`: se toma la salida *No Answer*.
 
 Si todas las respuestas visibles están bloqueadas o no hay ninguna visible, se toma *No Answer*; si no está conectada, el diálogo termina ahí con un aviso.
@@ -177,8 +179,10 @@ Opcional: se activa en Settings (**History Enabled**). `DialogueHistory.Entries`
 |---|---|
 | **Is Main** | Recibe las líneas de la conversación principal y muestra sus decisiones. |
 | **Is Default Ambient** | Recibe las líneas ambientales cuyo actor no tiene contenedor. |
-| **Max Visible** | Máximo de líneas en pantalla. Con 1, cada línea sustituye a la anterior; con más, al entrar una nueva con el contenedor lleno sale la más antigua. |
-| **Reuse View** | Con **Max Visible** 1, cada línea nueva se escribe en la vista que ya está en pantalla, sin ocultar antes el texto anterior. |
+| **Max Visible** | Máximo de líneas en pantalla. Con 1, cada línea sustituye a la anterior; con más, al entrar una nueva con el contenedor lleno sale la más antigua. No se aplica con **Exit** `AfterTime`. |
+| **Reuse View** | Con **Max Visible** 1, cada línea nueva se escribe en la vista que ya está en pantalla, sin ocultar antes el texto anterior. Activado por defecto. |
+| **Exit** | Cuándo sale una línea de la pantalla: `PushedOut` (por antigüedad), `AfterTime` (por tiempo) o `Both` (lo primero que ocurra). Ver abajo. |
+| **Stay Time** | Segundos que una línea sigue en pantalla después de que el diálogo pase a lo siguiente, con **Exit** `AfterTime` o `Both`. |
 | **Lifetime** | Cuánto dura una línea tras escribirse: `Fixed` (segundos), `ByTextLength` (base + segundos por carácter), `ByVoice` (por ahora igual que `ByTextLength`) o `UntilNext` (no caduca). |
 | **Advance** | `Input`, `Auto` o `Both`. |
 | **Line Prefab** | Prefab con un `LineView`. Las vistas se reutilizan desde un pool. |
@@ -191,7 +195,13 @@ Si hay varios contenedores principales (o ambientales por defecto) activos, se u
 
 **Vida y avance:** la vida empieza a contar cuando termina la escritura. Cada línea usa la vida y el avance del contenedor, salvo que la línea los sobrescriba; los valores de Settings se aplican a las líneas que no tienen contenedor. Con input, la primera llamada a `Advance` completa la escritura, o continúa si el texto espera en `<waitinput>` (en cualquier modo); la siguiente termina la línea. Una línea automática con vida `UntilNext` también acepta input, para no quedarse para siempre.
 
-**Cuándo sale una línea de la pantalla:** al terminar una línea el diálogo sigue, pero la vista se queda visible hasta que otra la sustituye o la empuja fuera, hasta que su conversación salta o hasta que su conversación termina. Las líneas de una misma conversación se acumulan mientras sigue y salen todas cuando acaba. Al salir, se llama a `Hide` del texto y la vista vuelve al pool cuando termina de ocultarse.
+**Cuándo sale una línea de la pantalla:** al terminar una línea el diálogo sigue, pero la vista se queda visible según **Exit**:
+
+- `PushedOut`: hasta que otra la sustituye o la empuja fuera, o hasta que su conversación termina. Las líneas de una misma conversación se acumulan mientras sigue y salen todas cuando acaba.
+- `AfterTime`: hasta que pasa su **Stay Time**, aunque su conversación ya haya terminado. No hay máximo de líneas.
+- `Both`: lo primero de las dos cosas: la empuja otra línea o pasa su **Stay Time**. Al terminar la conversación, cada línea sigue hasta su **Stay Time**.
+
+En todos los casos sale al saltar su conversación. Al salir, se llama a `Hide` del texto y la vista vuelve al pool cuando termina de ocultarse.
 
 Eventos del contenedor: `LineAdded`, `LineRemoved` y `LinesMoved`; `Visible` lista las vistas en pantalla, de la más antigua a la más nueva. El contenedor solo ordena las vistas como hermanas; el layout y las animaciones son de las vistas (o de un `LayoutGroup`).
 
@@ -258,6 +268,7 @@ Sin ningún idioma en el proyecto, el campo de texto muestra un aviso y no escri
 | **Default Time** | Reloj de los diálogos que no tienen uno propio. Por defecto `Unscaled`. |
 | **Default Ambient Policy** | Política de ambientales cuando ni la llamada ni el asset la indican. Por defecto `Continue`. |
 | **Default Lifetime / Default Advance** | Vida y avance de las líneas sin contenedor que no los sobrescriben. |
+| **Initial Selection** | Respuesta seleccionada al abrir una decisión: `DefaultOrFirst` (por defecto) o `None`. |
 | **History Enabled / History Max / History Clear** | Historial (ver arriba). |
 | **Tables Folder** | Carpeta donde se crean las colecciones de los diálogos. |
 | **Source Locale Code** | Idioma en el que se escriben los diálogos. Vacío usa el del proyecto. |
