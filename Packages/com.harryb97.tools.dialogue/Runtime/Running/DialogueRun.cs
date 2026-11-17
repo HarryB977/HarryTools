@@ -45,7 +45,7 @@ namespace HarryTools.Dialogue {
         private ILineHandle lineHandle;
         private LinePresentation presentation;
         // Self of the current line's actions
-        private GameObject lineActor;
+        private DialogueActor lineActor;
         private RunState stateBeforePause;
         private bool warnedAmbientChoice;
 
@@ -235,7 +235,7 @@ namespace HarryTools.Dialogue {
 
                 case Phase.DelayBefore:
                     if (clock < waitUntil) return false;
-                    awaited = RunActions(((LineNode)Current).Before.Actions, lineActor);
+                    awaited = RunActions(((LineNode)Current).Before.Actions, SelfOf(lineActor));
                     phase = Phase.BeforeActions;
                     return true;
 
@@ -297,7 +297,7 @@ namespace HarryTools.Dialogue {
                     break;
 
                 case LineNode _line:
-                    lineActor = null;
+                    lineActor = ResolveActor(_line);
                     waitUntil = clock + _line.DelayBefore;
                     phase = Phase.DelayBefore;
                     break;
@@ -375,13 +375,13 @@ namespace HarryTools.Dialogue {
 
             LineStarted?.Invoke(this, _line);
             Dialogue.RaiseLineStarted(this, _line);
-            RunActions(_line.OnStart.Actions, lineActor);
+            RunActions(_line.OnStart.Actions, SelfOf(lineActor));
         }
 
         private void EndLine() {
             LineNode _line = (LineNode)Current;
             ReleaseLine();
-            awaited = RunActions(_line.OnEnd.Actions, lineActor);
+            awaited = RunActions(_line.OnEnd.Actions, SelfOf(lineActor));
             phase = Phase.EndActions;
         }
 
@@ -543,7 +543,7 @@ namespace HarryTools.Dialogue {
         private void SkipThrough(DialogueNode _node) {
             switch (_node) {
                 case LineNode _line:
-                    lineActor = null;
+                    lineActor = ResolveActor(_line);
                     EnqueueSkipped(_line.Before);
                     EnqueueSkipped(_line.OnStart);
                     EnqueueTextEvents(_line);
@@ -568,7 +568,7 @@ namespace HarryTools.Dialogue {
         }
 
         private void EnqueueSkipped(SkippableActions _actions) {
-            if (_actions != null && _actions.RunWhenSkipped) Enqueue(_actions.Actions, lineActor);
+            if (_actions != null && _actions.RunWhenSkipped) Enqueue(_actions.Actions, SelfOf(lineActor));
         }
 
         /// <summary> Queues the events of the line's markup, in text order, from its current text </summary>
@@ -584,7 +584,7 @@ namespace HarryTools.Dialogue {
             for (int _i = 0; _i < _commands.Count; _i++) {
                 if (_commands[_i].Type != TextCommandType.Event) continue;
                 if (!_table.TryGetEvent(_commands[_i].Name, out ActionList _actions, out bool _runWhenSkipped)) continue;
-                if (_runWhenSkipped) Enqueue(_actions, lineActor);
+                if (_runWhenSkipped) Enqueue(_actions, SelfOf(lineActor));
             }
         }
 
@@ -675,6 +675,27 @@ namespace HarryTools.Dialogue {
         private ActionHandle RunActions(ActionList _actions, GameObject _self) {
             if (_actions == null || _actions.IsEmpty) return null;
             return _actions.Run(Context(_self));
+        }
+
+        private static GameObject SelfOf(DialogueActor _actor) {
+            return _actor != null ? _actor.gameObject : null;
+        }
+
+        /// <summary> The actor of the line's character: explicit binding, then the registered actor nearest to the origin, then none </summary>
+        private DialogueActor ResolveActor(LineNode _line) {
+            DialogueCharacter _character = _line.Character;
+            if (_character == null) return null;
+
+            List<ActorBinding> _bindings = Options.Actors;
+            if (_bindings != null) {
+                for (int _i = 0; _i < _bindings.Count; _i++) {
+                    ActorBinding _binding = _bindings[_i];
+                    if (_binding != null && _binding.Character == _character && _binding.Actor != null) return _binding.Actor;
+                }
+            }
+
+            Vector3? _near = Options.Origin != null ? Options.Origin.transform.position : (Vector3?)null;
+            return DialogueActors.Find(_character, _near);
         }
 
         private LogicContext Context(GameObject _self) {

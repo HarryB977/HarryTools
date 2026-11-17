@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace HarryTools.Dialogue {
@@ -16,6 +17,9 @@ namespace HarryTools.Dialogue {
 
         /// <summary> The object that started the dialogue. Target of every action and condition the dialogue runs </summary>
         public GameObject Origin { get; set; }
+
+        /// <summary> Actors fixed for this run. A binding wins over the registered actors of its character </summary>
+        public List<ActorBinding> Actors { get; set; } = new List<ActorBinding>();
         #endregion
     }
 }
