@@ -1,0 +1,147 @@
+using System;
+using System.Collections.Generic;
+using HarryTools.DomainReload;
+using Logger = HarryTools.LoggerTool.Logger;
+
+namespace HarryTools.Dialogue {
+    /// <summary> Starts dialogues and keeps track of the ones running </summary>
+    public static class Dialogue {
+        // ==================== VARIABLES ===================
+        #region Private Variables
+        internal const string LogCategory = "Dialogue";
+
+        [ClearOnReload(AssignNewInstance = true)] private static List<DialogueRun> active = new List<DialogueRun>();
+        [ClearOnReload(AssignNewInstance = true)] private static List<DialogueRun> tickBuffer = new List<DialogueRun>();
+        [ClearOnReload] private static DialogueRun main;
+
+        [ClearOnReload] private static Action<DialogueRun> startedHandlers;
+        [ClearOnReload] private static Action<DialogueRun, EndReason> endedHandlers;
+        [ClearOnReload] private static Action<DialogueRun, LineNode> lineStartedHandlers;
+        [ClearOnReload] private static Action<DialogueRun, LineNode> lineEndedHandlers;
+        #endregion
+
+        #region Public Variables
+        /// <summary> The main dialogue running, or null </summary>
+        public static DialogueRun Main => main;
+
+        /// <summary> Every dialogue running, main and ambient </summary>
+        public static IReadOnlyList<DialogueRun> Active => active;
+        #endregion
+
+        #region Internal Variables
+        /// <summary> Picks the channel that shows a line. Null, or a null result, uses the channel without view </summary>
+        [ClearOnReload] internal static Func<LinePresentation, ILineChannel> ChannelResolver;
+
+        /// <summary> When true, nothing ticks the dialogues except <see cref="TickAll"/> </summary>
+        [ClearOnReload] internal static bool ManualTick;
+        #endregion
+
+        // ==================== EVENTS ====================
+        #region Events
+        public static event Action<DialogueRun> Started {
+            add => startedHandlers += value;
+            remove => startedHandlers -= value;
+        }
+
+        public static event Action<DialogueRun, EndReason> Ended {
+            add => endedHandlers += value;
+            remove => endedHandlers -= value;
+        }
+
+        public static event Action<DialogueRun, LineNode> LineStarted {
+            add => lineStartedHandlers += value;
+            remove => lineStartedHandlers -= value;
+        }
+
+        public static event Action<DialogueRun, LineNode> LineEnded {
+            add => lineEndedHandlers += value;
+            remove => lineEndedHandlers -= value;
+        }
+        #endregion
+
+        // ==================== METHODS ====================
+        #region Public Methods
+        /// <summary> Starts the dialogue. It begins on the next tick, so the run's events can be subscribed first </summary>
+        /// <returns> The run, or null when the dialogue cannot start or a main dialogue is already running </returns>
+        public static DialogueRun Start(DialogueAsset _asset, DialogueStartOptions _options = null) {
+            if (_asset == null) {
+                Logger.LogWarning(LogCategory, "Cannot start a null dialogue.");
+                return null;
+            }
+            if (_asset.Start == null) {
+                Logger.LogWarning(LogCategory, $"Dialogue '{_asset.name}' has no start node.");
+                return null;
+            }
+
+            _options = _options ?? new DialogueStartOptions();
+            if (_options.IsMain && main != null) {
+                Logger.LogWarning(LogCategory, $"Dialogue '{_asset.name}' not started: main dialogue '{main.Asset.name}' is still running.");
+                return null;
+            }
+
+            DialogueRun _run = new DialogueRun(_asset, _options);
+            active.Add(_run);
+            if (_run.IsMain) main = _run;
+
+            DialogueDriver.Ensure();
+            DialogueMemory.MarkPlayed(_asset);
+            startedHandlers?.Invoke(_run);
+            return _run;
+        }
+
+        public static void PauseAll() {
+            DialogueRun[] _runs = active.ToArray();
+            for (int _i = 0; _i < _runs.Length; _i++) _runs[_i].Pause();
+        }
+
+        public static void ResumeAll() {
+            DialogueRun[] _runs = active.ToArray();
+            for (int _i = 0; _i < _runs.Length; _i++) _runs[_i].Resume();
+        }
+
+        public static void StopAll() {
+            DialogueRun[] _runs = active.ToArray();
+            for (int _i = 0; _i < _runs.Length; _i++) _runs[_i].Stop();
+        }
+        #endregion
+
+        // ==================== INTERNAL ====================
+        #region Internal
+        /// <summary> Advances every run once. Runs started during the call wait for the next one </summary>
+        internal static void TickAll(float _scaledDt, float _unscaledDt) {
+            tickBuffer.Clear();
+            tickBuffer.AddRange(active);
+            for (int _i = 0; _i < tickBuffer.Count; _i++) tickBuffer[_i].Tick(_scaledDt, _unscaledDt);
+            tickBuffer.Clear();
+        }
+
+        internal static ILineChannel ResolveChannel(LinePresentation _line) {
+            return ChannelResolver?.Invoke(_line) ?? HeadlessLineChannel.Instance;
+        }
+
+        /// <summary> Called by a run as it ends, before its Ended events, so their handlers can start another main dialogue </summary>
+        internal static void Unregister(DialogueRun _run) {
+            active.Remove(_run);
+            if (main == _run) main = null;
+        }
+
+        internal static void RaiseEnded(DialogueRun _run, EndReason _reason) => endedHandlers?.Invoke(_run, _reason);
+        internal static void RaiseLineStarted(DialogueRun _run, LineNode _line) => lineStartedHandlers?.Invoke(_run, _line);
+        internal static void RaiseLineEnded(DialogueRun _run, LineNode _line) => lineEndedHandlers?.Invoke(_run, _line);
+
+        /// <summary> Drops every run without ending it, the handlers, the resolver and the driver </summary>
+        internal static void ClearForTests() {
+            active.Clear();
+            tickBuffer.Clear();
+            main = null;
+            startedHandlers = null;
+            endedHandlers = null;
+            lineStartedHandlers = null;
+            lineEndedHandlers = null;
+            ChannelResolver = null;
+            ManualTick = false;
+            DialogueDriver.DestroyInstance();
+        }
+        #endregion
+    }
+}

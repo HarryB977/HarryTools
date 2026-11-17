@@ -10,7 +10,10 @@ namespace HarryTools.Dialogue {
         [SerializeField] private ConditionList conditions = new ConditionList();
         [SerializeField] private NodeOutput next = new NodeOutput();
 
-        public ConditionList Conditions => conditions;
+        public ConditionList Conditions {
+            get => conditions;
+            internal set => conditions = value;
+        }
         public NodeOutput Next => next;
     }
 

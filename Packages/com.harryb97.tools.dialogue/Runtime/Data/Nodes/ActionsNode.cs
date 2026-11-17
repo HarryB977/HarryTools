@@ -12,7 +12,10 @@ namespace HarryTools.Dialogue {
         [Tooltip("The actions still run when the dialogue is skipped"), SerializeField] private bool runWhenSkipped = true;
         [SerializeField] private NodeOutput next = new NodeOutput();
 
-        public ActionList Actions => actions;
+        public ActionList Actions {
+            get => actions;
+            internal set => actions = value;
+        }
 
         public bool WaitForCompletion {
             get => waitForCompletion;

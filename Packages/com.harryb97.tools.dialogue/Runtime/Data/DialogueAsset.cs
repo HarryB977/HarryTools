@@ -42,8 +42,15 @@ namespace HarryTools.Dialogue {
             }
         }
 
-        public bool OverrideTime => overrideTime;
-        public DialogueTime Time => time;
+        public bool OverrideTime {
+            get => overrideTime;
+            internal set => overrideTime = value;
+        }
+
+        public DialogueTime Time {
+            get => time;
+            internal set => time = value;
+        }
         public bool OverrideAmbientPolicy => overrideAmbientPolicy;
         public AmbientPolicy AmbientPolicy => ambientPolicy;
         public bool AllowSkip => allowSkip;
