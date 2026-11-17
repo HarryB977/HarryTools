@@ -98,16 +98,16 @@ En este bloque los nodos se editan en el **Inspector** del `DialogueAsset`: ajus
 | `Origin` | Objeto que lanzó el diálogo. Es el `Target` del `LogicContext` de todas las acciones y condiciones del diálogo, y la posición para elegir actor. |
 | `Actors` | Pares personaje → `DialogueActor` fijos para esta conversación. |
 
-**Actor de cada línea:** el asignado en `Actors`; si no hay, el `DialogueActor` activo de ese personaje más cercano al origen (o el primero registrado si no hay origen); si no hay ninguno, la línea va sin actor. El objeto del actor es el `Self` de las acciones y eventos de la línea. Las condiciones de ramas y decisiones y las acciones de los nodos *Actions* se evalúan con `Self` vacío.
+**Actor de cada línea:** el asignado en `Actors`; si no hay, el `DialogueActor` activo de ese personaje más cercano al origen (o el primero registrado si no hay origen); si no hay ninguno, la línea va sin actor. El objeto del actor es el `Self` de las acciones y eventos de la línea; sin actor, `Self` va vacío. Los eventos del texto reciben el mismo contexto que las demás acciones de la línea, se ejecuten al escribirse, al saltarse o sin vista. Las condiciones de ramas y decisiones y las acciones de los nodos *Actions* se evalúan con `Self` vacío.
 
 **Eventos:** `Started`, `Ended` (con `EndReason`: `Completed`, `Stopped` o `Skipped`), `LineStarted`, `LineEnded`, `ChoicePresented` y `ChoiceMade` en `Dialogue`, y los mismos (salvo `Started`) en cada `DialogueRun`. `ChoiceMade` no se lanza cuando se toma la salida *No Answer*.
 
-**Control:** `DialogueRun.Advance()` es el input del jugador sobre la línea actual (ver contenedores). `Dialogue.Main` es la principal en marcha, `Dialogue.Active` todas, y `Dialogue.PauseAll`, `ResumeAll` y `StopAll` actúan sobre todas.
+**Control:** `DialogueRun.Advance()` es el input del jugador sobre la línea actual (ver contenedores). `Dialogue.Main` es la principal en marcha, `Dialogue.Active` todas (una copia: se pueden detener mientras se recorre), y `Dialogue.PauseAll`, `ResumeAll` y `StopAll` actúan sobre todas.
 
 **Políticas de ambientales** (`AmbientPolicy`), que se aplican a las ambientales en marcha en el momento en que empieza una principal:
 
 - `Continue`: siguen.
-- `Pause`: se pausan con su línea y se reanudan al acabar la principal. Una ambiental pausada a mano antes no se toca ni se reanuda.
+- `Pause`: se pausan con su línea hasta que acaba la principal. Esta pausa es aparte de la pausa a mano: `Resume` y `ResumeAll` no la levantan, y el final de la principal no levanta una pausa a mano. La ambiental sigue cuando no le queda ninguna de las dos.
 - `Silence`: se detienen y no se retoman.
 
 Una ambiental que empieza mientras ya hay una principal en marcha no recibe ninguna política: sigue con normalidad.
@@ -186,17 +186,17 @@ Opcional: se activa en Settings (**History Enabled**). `DialogueHistory.Entries`
 
 Si hay varios contenedores principales (o ambientales por defecto) activos, se usa el último activado y se avisa.
 
-**Enrutado:** la conversación principal va al contenedor principal; una ambiental, al contenedor del actor de la línea, después al ambiental por defecto. Si no hay contenedor, la línea no se muestra pero el diálogo sigue con sus acciones y tiempos (la línea dura lo que diga su vida, con la vida y el avance de Settings) y se avisa una vez por conversación.
+**Enrutado:** la conversación principal va al contenedor principal; una ambiental, al contenedor del actor de la línea, después al ambiental por defecto. Si no hay contenedor, la línea no se muestra pero el diálogo sigue con sus acciones y tiempos (la línea dura lo que diga su vida, con la vida y el avance de Settings) y se avisa una vez por conversación. Los eventos de su texto se ejecutan en orden al terminar la línea; si se salta, solo los que tienen *Run When Skipped*. Una línea cuyo contenedor o vista desaparece a mitad sigue igual sin vista, con los eventos que su vista no llegó a lanzar.
 
 **Vida y avance:** la vida empieza a contar cuando termina la escritura. Cada línea usa la vida y el avance del contenedor, salvo que la línea los sobrescriba; los valores de Settings se aplican a las líneas que no tienen contenedor. Con input, la primera llamada a `Advance` completa la escritura, o continúa si el texto espera en `<waitinput>` (en cualquier modo); la siguiente termina la línea. Una línea automática con vida `UntilNext` también acepta input, para no quedarse para siempre.
 
-**Cuándo sale una línea de la pantalla:** al terminar una línea el diálogo sigue, pero la vista se queda visible hasta que otra la sustituye o la empuja fuera, hasta que el salto la retira, o hasta que su conversación termina. Las líneas de una misma conversación se acumulan mientras sigue y salen todas cuando acaba. Al salir, se llama a `Hide` del texto y la vista vuelve al pool cuando termina de ocultarse.
+**Cuándo sale una línea de la pantalla:** al terminar una línea el diálogo sigue, pero la vista se queda visible hasta que otra la sustituye o la empuja fuera, hasta que su conversación salta o hasta que su conversación termina. Las líneas de una misma conversación se acumulan mientras sigue y salen todas cuando acaba. Al salir, se llama a `Hide` del texto y la vista vuelve al pool cuando termina de ocultarse.
 
 Eventos del contenedor: `LineAdded`, `LineRemoved` y `LinesMoved`; `Visible` lista las vistas en pantalla, de la más antigua a la más nueva. El contenedor solo ordena las vistas como hermanas; el layout y las animaciones son de las vistas (o de un `LayoutGroup`).
 
 ### LineView
 
-Referencia a un `EffectText` (**Text**, con *Show On Enable* desactivado) y, opcionalmente, un `TMP_Text` para el nombre (**Speaker Name**). Al recibir una línea pone el nombre del personaje, su voz de tecleo como `DefaultVoice` (o la del prefab si el personaje no tiene), la tabla de eventos de la línea con el actor como `Self`, el reloj de la conversación, y el texto localizado, que empieza a escribirse cuando llega.
+Referencia a un `EffectText` (**Text**, con *Show On Enable* desactivado) y, opcionalmente, un `TMP_Text` para el nombre (**Speaker Name**). Al recibir una línea pone el nombre del personaje, su voz de tecleo como `DefaultVoice` (o la del prefab si el personaje no tiene), la tabla de eventos de la línea (con el actor, o nada, como `Self` y el `Origin` como `Target`), el reloj de la conversación, y el texto localizado, que empieza a escribirse cuando llega.
 
 Métodos virtuales para las subclases: `Bind`, `OnEnter`, `OnExit` y `OnIndexChanged(index, count)` (0 es la más antigua). Los eventos de texto se ejecutan en una cola de la vista: volver al pool no los cancela.
 
@@ -208,7 +208,7 @@ El paquete no lee input: el juego llama a `Advance`, `Skip` y a los métodos de 
 
 ## Saltar
 
-`DialogueRun.Skip()` avanza sin mostrar texto hasta la siguiente decisión o el final, ejecutando en orden lo que habría pasado: acciones *Before*, *On Start* y *On End*, eventos del texto y nodos *Actions*. Las listas con *Run When Skipped* desactivado no se ejecutan. La línea en pantalla se completa (sus eventos saltados se ejecutan según la regla de `texteffects`) y se retira.
+`DialogueRun.Skip()` avanza sin mostrar texto hasta la siguiente decisión o el final, ejecutando en orden lo que habría pasado: acciones *Before*, *On Start* y *On End*, eventos del texto y nodos *Actions*. Las listas con *Run When Skipped* desactivado no se ejecutan. La línea en pantalla se completa (sus eventos saltados se ejecutan según la regla de `texteffects`), y todas las líneas de esa conversación que siguen en pantalla salen por el camino normal de salida antes de abrir la decisión, sea cual sea el momento en que se salte. Las líneas de otras conversaciones no se tocan.
 
 - El salto no espera a las acciones: se encolan y se ejecutan una tras otra mientras el diálogo ya ha avanzado. Las ramas se evalúan en el momento, así que una condición puede leer el estado antes de que la cola haya terminado de aplicarlo.
 - Las acciones encoladas por un salto siguen ejecutándose aunque la conversación se detenga con `Stop`.
@@ -220,7 +220,7 @@ El paquete no lee input: el juego llama a `Advance`, `Skip` y a los métodos de 
 
 Cada conversación usa tiempo escalado o no escalado (`DialogueTime`). Por defecto, **no escalado** (Settings); cada diálogo puede sobrescribirlo y cada llamada a `Start` también. El reloj afecta a la escritura, la vida de las líneas, los delays y el temporizador de las decisiones.
 
-`DialogueRun.Pause()` congela la conversación, sus tiempos y su línea en pantalla (también la escritura, con `EffectText.Pause`). Las acciones que ya están en marcha **no** se pausan. `Resume()` la reanuda; `Dialogue.PauseAll` y `ResumeAll` actúan sobre todas.
+`DialogueRun.Pause()` congela la conversación, sus tiempos y su línea en pantalla (también la escritura, con `EffectText.Pause`). Las acciones que ya están en marcha **no** se pausan. `Resume()` deshace `Pause()`; `Dialogue.PauseAll` y `ResumeAll` actúan sobre todas. `Resume` no levanta la pausa de la política `Pause` de una principal: esa ambiental sigue pausada hasta que la principal acaba.
 
 ## Lógica
 
