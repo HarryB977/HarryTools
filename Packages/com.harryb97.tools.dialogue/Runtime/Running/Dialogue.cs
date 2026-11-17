@@ -34,7 +34,7 @@ namespace HarryTools.Dialogue {
         #endregion
 
         #region Internal Variables
-        /// <summary> Picks the channel that shows a line. Null, or a null result, uses the channel without view </summary>
+        /// <summary> Picks the channel that shows a line. Null uses <see cref="LineRouter"/>; a null result uses the channel without view </summary>
         [ClearOnReload] internal static Func<LinePresentation, ILineChannel> ChannelResolver;
 
         /// <summary> Gives the text of a line. Null reads its localized string </summary>
@@ -164,7 +164,8 @@ namespace HarryTools.Dialogue {
         }
 
         internal static ILineChannel ResolveChannel(LinePresentation _line) {
-            return ChannelResolver?.Invoke(_line) ?? HeadlessLineChannel.Instance;
+            ILineChannel _channel = ChannelResolver != null ? ChannelResolver(_line) : LineRouter.Resolve(_line);
+            return _channel ?? HeadlessLineChannel.Instance;
         }
 
         /// <summary> Called by a run as it ends, before its Ended events, so their handlers can start another main dialogue </summary>
@@ -199,6 +200,7 @@ namespace HarryTools.Dialogue {
             ChoiceShown = null;
             ChoiceHidden = null;
             ManualTick = false;
+            LineRouter.ClearForTests();
             DialogueDriver.DestroyInstance();
         }
         #endregion

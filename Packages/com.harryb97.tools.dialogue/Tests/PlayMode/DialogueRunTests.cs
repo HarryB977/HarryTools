@@ -223,6 +223,8 @@ namespace HarryTools.Dialogue.Tests {
 
             DialogueRun _run = Dialogue.Start(_asset);
             LogLines(_run);
+            // No resolver routes to the line containers; there is none in the scene
+            LogAssert.Expect(LogType.Warning, new Regex("no main line container"));
             Tick();
             Assert.AreSame(_fixed, _run.Current);
             Tick(0.5f);
