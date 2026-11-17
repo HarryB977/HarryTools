@@ -178,6 +178,7 @@ Opcional: se activa en Settings (**History Enabled**). `DialogueHistory.Entries`
 | **Is Main** | Recibe las líneas de la conversación principal y muestra sus decisiones. |
 | **Is Default Ambient** | Recibe las líneas ambientales cuyo actor no tiene contenedor. |
 | **Max Visible** | Máximo de líneas en pantalla. Con 1, cada línea sustituye a la anterior; con más, al entrar una nueva con el contenedor lleno sale la más antigua. |
+| **Reuse View** | Con **Max Visible** 1, cada línea nueva se escribe en la vista que ya está en pantalla, sin ocultar antes el texto anterior. |
 | **Lifetime** | Cuánto dura una línea tras escribirse: `Fixed` (segundos), `ByTextLength` (base + segundos por carácter), `ByVoice` (por ahora igual que `ByTextLength`) o `UntilNext` (no caduca). |
 | **Advance** | `Input`, `Auto` o `Both`. |
 | **Line Prefab** | Prefab con un `LineView`. Las vistas se reutilizan desde un pool. |

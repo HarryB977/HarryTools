@@ -219,6 +219,38 @@ namespace HarryTools.Dialogue.Tests {
         }
 
         [UnityTest]
+        public IEnumerator ReuseView_WritesNextLineInSameView() {
+            LineContainer _container = BuildContainer(1, AdvanceMode.Input);
+            _container.ReuseView = true;
+            List<LineView> _removed = new List<LineView>();
+            _container.LineRemoved += _removed.Add;
+            DialogueAsset _asset = Lines(out LineNode[] _lines, "first", "second");
+            yield return null;
+
+            DialogueRun _run = StartMain(_asset);
+            RecordingLineView _view = (RecordingLineView)_container.Visible[0];
+
+            _run.Advance();
+            _run.Advance();
+            Tick();
+            Assert.AreEqual(1, _container.Visible.Count);
+            Assert.AreSame(_view, _container.Visible[0]);
+            Assert.AreSame(_lines[1], _view.Current.Line);
+            CollectionAssert.AreEqual(new[] { _view }, _removed);
+            Assert.AreEqual(1, _view.Exits);
+            Assert.AreEqual(2, _view.Enters);
+            Assert.AreNotEqual(EffectTextState.Hiding, _view.Text.State);
+            // No second view was created
+            Assert.AreEqual(1, _container.LineParent.childCount);
+
+            // The run's end still hides the view
+            _run.Advance();
+            _run.Advance();
+            Tick();
+            Assert.AreEqual(0, _container.Visible.Count);
+        }
+
+        [UnityTest]
         public IEnumerator MaxN_OldestLeaves_WhenFull() {
             LineContainer _container = BuildContainer(2, AdvanceMode.Input);
             int _moves = 0;

@@ -23,6 +23,9 @@ namespace HarryTools.Dialogue {
         [Tooltip("Most lines on screen. With 1, each line replaces the previous one; with more, the oldest leaves when a new one comes in"), SerializeField, Min(1)]
         private int maxVisible = 1;
 
+        [Tooltip("With Max Visible 1, each new line is written in the view already on screen instead of a new one, without hiding the previous text first"), SerializeField]
+        private bool reuseView;
+
         [Tooltip("How long a line lasts once typed, unless the line sets its own"), SerializeField]
         private LineLifetime lifetime = LineLifetime.Default;
 
@@ -78,6 +81,11 @@ namespace HarryTools.Dialogue {
         public int MaxVisible {
             get => maxVisible;
             set => maxVisible = Mathf.Max(1, value);
+        }
+
+        public bool ReuseView {
+            get => reuseView;
+            set => reuseView = value;
         }
 
         public LineLifetime Lifetime {
@@ -139,11 +147,12 @@ namespace HarryTools.Dialogue {
 
             CleanStale();
             DropDestroyedViews();
+            LineView _view = reuseView && maxVisible <= 1 && visible.Count == 1 ? TakeForReuse() : null;
             while (visible.Count >= Mathf.Max(1, maxVisible)) RemoveAt(0);
 
             LineLifetime _lifetime = _line.Line.OverrideLifetime ? _line.Lifetime : lifetime;
             AdvanceMode _advance = _line.Line.OverrideAdvance ? _line.Advance : advance;
-            LineView _view = Rent();
+            if (_view == null) _view = Rent();
             LineHandle _handle = new LineHandle(this, _view, _line, _lifetime, _advance);
 
             visible.Add(_view);
@@ -215,6 +224,19 @@ namespace HarryTools.Dialogue {
             Transform _parent = lineParent != null ? (Transform)lineParent : transform;
             LineView _view = Instantiate(linePrefab, _parent, false);
             if (!_view.gameObject.activeSelf) _view.gameObject.SetActive(true);
+            return _view;
+        }
+
+        /// <summary> Takes the line on screen off the visible list without hiding its view, so the next line is written in it </summary>
+        private LineView TakeForReuse() {
+            LineView _view = visible[0];
+            LineHandle _handle = handles[0];
+            visible.RemoveAt(0);
+            handles.RemoveAt(0);
+            _handle.LeaveScreen();
+            _view.OnExit();
+            LineRemoved?.Invoke(_view);
+            _view.Unbind();
             return _view;
         }
 

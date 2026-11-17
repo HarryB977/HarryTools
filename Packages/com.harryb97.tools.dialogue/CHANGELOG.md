@@ -11,7 +11,7 @@
 - Saltar conversaciones hasta la siguiente decisión o el final, ejecutando en orden sus acciones y eventos salvo los marcados para no ejecutarse al saltar.
 - Tiempo escalado o no escalado por conversación (por defecto no escalado).
 - `DialogueActor` y resolución de actores (asignados, el más cercano al origen o el primero registrado), como `Self` de las acciones y eventos de sus líneas.
-- `LineContainer` (líneas máximas, vida, avance, contenedor principal y ambiental por defecto, enrutado) y vistas base `LineView` y `ChoiceView` sobre UGUI y `EffectText`.
+- `LineContainer` (líneas máximas, reutilizar la vista con una sola línea, vida, avance, contenedor principal y ambiental por defecto, enrutado) y vistas base `LineView` y `ChoiceView` sobre UGUI y `EffectText`.
 - `DialogueMemory`: veces reproducido y respuestas elegidas por diálogo, con `Capture` / `Restore` y el ayudante `DialogueMemoryLocalSave` sobre `localdata`.
 - `DialogueHistory` opcional con máximo de entradas y borrado al terminar cada conversación principal o manual.
 - `DialogueLauncher` (manual, en `Start` o al activarse).
