@@ -8,8 +8,8 @@ namespace HarryTools.Dialogue {
     public abstract class DialogueNode {
         // ==================== VARIABLES ===================
         #region Private Variables
-        [SerializeField] private string id = "";
-        [SerializeField] private Vector2 position;
+        [SerializeField, HideInInspector] private string id = "";
+        [SerializeField, HideInInspector] private Vector2 position;
         #endregion
 
         #region Public Variables

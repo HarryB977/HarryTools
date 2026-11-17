@@ -7,7 +7,7 @@ namespace HarryTools.Dialogue {
     public sealed class NodeOutput {
         // ==================== VARIABLES ===================
         #region Private Variables
-        [SerializeField] private string id = "";
+        [SerializeField, HideInInspector] private string id = "";
         [SerializeField] private string target = "";
         #endregion
 

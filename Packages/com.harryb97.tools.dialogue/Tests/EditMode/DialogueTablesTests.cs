@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
 using HarryTools.Dialogue.Editor;
@@ -8,6 +9,7 @@ using UnityEngine;
 using UnityEngine.Localization;
 using UnityEngine.Localization.Settings;
 using UnityEngine.Localization.Tables;
+using UnityEngine.TestTools;
 
 namespace HarryTools.Dialogue.Tests {
     public class DialogueTablesTests {
@@ -19,6 +21,7 @@ namespace HarryTools.Dialogue.Tests {
         private const string TablesFolder = TempFolder + "/Tables";
         private const string SourceCode = "en";
         private const string OtherCode = "es";
+        private const int MaxWaitFrames = 200;
 
         private readonly List<Locale> addedLocales = new List<Locale>();
         private LocalizationSettings createdSettings;
@@ -227,6 +230,85 @@ namespace HarryTools.Dialogue.Tests {
             Assert.IsEmpty(_asset.TableCollectionGuid);
             Assert.IsTrue(_line.Text.IsEmpty);
             Assert.IsNull(LocalizationEditorSettings.GetStringTableCollection("Dialogue_TablesNoLocale"));
+        }
+
+        [UnityTest]
+        public IEnumerator Duplicate_GetsOwnCollectionAndIds_TextCopied() {
+            DialogueAsset _original = NewAsset("TablesSource");
+            LineNode _line = _original.AddNode<LineNode>();
+            ChoiceNode _choice = _original.AddNode<ChoiceNode>();
+            _choice.Options.Add(new ChoiceOption());
+            _original.EnsureIds();
+            ChoiceOption _option = _choice.Options[0];
+            _original.Start.Next.Target = _line.Id;
+            _line.Next.Target = _choice.Id;
+            DialogueTables.SetSourceText(_original, _line.Text, _line.Id, "Hello");
+            DialogueTables.SetSourceText(_original, _option.Text, _option.Id, "Yes");
+            DialogueTables.SetSourceText(_original, _option.LockedReason, _option.Id + ".locked", "Not yet");
+            StringTableCollection _originalCollection = DialogueTables.EnsureCollection(_original);
+            long _lineKeyId = _line.Text.TableEntryReference.KeyId;
+            Table(_originalCollection, OtherCode).AddEntry(_lineKeyId, "Hola");
+            EditorUtility.SetDirty(Table(_originalCollection, OtherCode));
+            AssetDatabase.SaveAssets();
+
+            string _copyPath = AssetsFolder + "/TablesCopy.asset";
+            Assert.IsTrue(AssetDatabase.CopyAsset(AssetDatabase.GetAssetPath(_original), _copyPath));
+            DialogueAsset _copy = AssetDatabase.LoadAssetAtPath<DialogueAsset>(_copyPath);
+            for (int _i = 0; _i < MaxWaitFrames && string.IsNullOrEmpty(_copy.TableCollectionGuid); _i++) yield return null;
+
+            LineNode _copyLine = (LineNode) _copy.Nodes[1];
+            ChoiceNode _copyChoice = (ChoiceNode) _copy.Nodes[2];
+            ChoiceOption _copyOption = _copyChoice.Options[0];
+            StringTableCollection _copyCollection = DialogueTables.EnsureCollection(_copy);
+
+            Assert.AreEqual(AssetDatabase.AssetPathToGUID(_copyPath), _copy.AssetId);
+            Assert.AreNotEqual(_line.Id, _copyLine.Id);
+            Assert.AreNotEqual(_choice.Id, _copyChoice.Id);
+            Assert.AreNotEqual(_option.Id, _copyOption.Id);
+            Assert.AreNotEqual(_line.Next.Id, _copyLine.Next.Id);
+            Assert.AreEqual(_copyLine.Id, _copy.Start.Next.Target);
+            Assert.AreEqual(_copyChoice.Id, _copyLine.Next.Target);
+
+            Assert.IsNotNull(_copyCollection);
+            Assert.AreNotSame(_originalCollection, _copyCollection);
+            Assert.AreEqual("Dialogue_TablesCopy", _copyCollection.TableCollectionName);
+            Assert.AreEqual(_copyCollection.SharedData.TableCollectionNameGuid, _copyLine.Text.TableReference.TableCollectionNameGuid);
+            Assert.AreEqual(_copyCollection.SharedData.GetEntry(_copyLine.Id).Id, _copyLine.Text.TableEntryReference.KeyId);
+            Assert.AreEqual("Hello", DialogueTables.GetSourceText(_copyLine.Text));
+            Assert.AreEqual("Hola", Table(_copyCollection, OtherCode).GetEntry(_copyLine.Text.TableEntryReference.KeyId)?.Value);
+            Assert.AreEqual("Yes", DialogueTables.GetSourceText(_copyOption.Text));
+            Assert.AreEqual("Not yet", DialogueTables.GetSourceText(_copyOption.LockedReason));
+            Assert.IsNotNull(_copyCollection.SharedData.GetEntry(_copyOption.Id + ".locked"));
+
+            DialogueTables.SetSourceText(_copy, _copyLine.Text, _copyLine.Id, "Changed");
+
+            Assert.AreEqual("Changed", DialogueTables.GetSourceText(_copyLine.Text));
+            Assert.AreEqual("Hello", DialogueTables.GetSourceText(_line.Text));
+            Assert.AreEqual("Yes", DialogueTables.GetSourceText(_option.Text));
+            Assert.AreEqual(_originalCollection.SharedData.TableCollectionNameGuid, _line.Text.TableReference.TableCollectionNameGuid);
+        }
+
+        [UnityTest]
+        public IEnumerator Rename_DoesNotDuplicateCollection() {
+            DialogueAsset _asset = NewAsset("TablesRenameA");
+            LineNode _line = _asset.AddNode<LineNode>();
+            DialogueTables.SetSourceText(_asset, _line.Text, _line.Id, "Hello");
+            AssetDatabase.SaveAssets();
+            string _lineId = _line.Id;
+            string _link = _asset.TableCollectionGuid;
+            string _assetId = _asset.AssetId;
+            int _count = LocalizationEditorSettings.GetStringTableCollections().Count;
+
+            string _path = AssetDatabase.GetAssetPath(_asset);
+            Assert.IsEmpty(AssetDatabase.RenameAsset(_path, "TablesRenameB"));
+            AssetDatabase.ImportAsset(AssetsFolder + "/TablesRenameB.asset", ImportAssetOptions.ForceUpdate);
+            for (int _i = 0; _i < 10; _i++) yield return null;
+
+            Assert.AreEqual(_assetId, _asset.AssetId);
+            Assert.AreEqual(_lineId, _asset.Nodes[1].Id);
+            Assert.AreEqual(_link, _asset.TableCollectionGuid);
+            Assert.AreEqual(_count, LocalizationEditorSettings.GetStringTableCollections().Count);
+            Assert.AreEqual("Hello", DialogueTables.GetSourceText(((LineNode) _asset.Nodes[1]).Text));
         }
         #endregion
 

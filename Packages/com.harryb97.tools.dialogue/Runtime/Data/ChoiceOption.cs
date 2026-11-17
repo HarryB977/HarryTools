@@ -23,13 +23,13 @@ namespace HarryTools.Dialogue {
     public sealed class ChoiceOption {
         // ==================== VARIABLES ===================
         #region Private Variables
-        [SerializeField] private string id = "";
+        [SerializeField, HideInInspector] private string id = "";
         [SerializeField, DialogueText] private LocalizedString text = new LocalizedString();
         [Tooltip("Note for the translators, written to the string table"), SerializeField, TextArea] private string translatorNote = "";
         [SerializeField] private List<ChoiceTag> tags = new List<ChoiceTag>();
         [Tooltip("The option is shown only when these conditions pass"), SerializeField] private ConditionList visible = new ConditionList();
         [Tooltip("The option can be chosen only when these conditions pass"), SerializeField] private ConditionList available = new ConditionList();
-        [Tooltip("Shown when the option is visible but not available"), SerializeField, DialogueText(".locked")] private LocalizedString lockedReason = new LocalizedString();
+        [Tooltip("Shown when the option is visible but not available"), SerializeField, DialogueText(LockedSuffix)] private LocalizedString lockedReason = new LocalizedString();
         [SerializeField] private bool isDefault;
         [SerializeField] private AfterChosen afterChosen = AfterChosen.Nothing;
         [SerializeField] private ActionList onChosen = new ActionList();
@@ -37,6 +37,9 @@ namespace HarryTools.Dialogue {
         #endregion
 
         #region Public Variables
+        /// <summary> Appended to the option id to form the table key of <see cref="LockedReason"/> </summary>
+        internal const string LockedSuffix = ".locked";
+
         public string Id {
             get => id;
             internal set => id = value;

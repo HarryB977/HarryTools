@@ -101,6 +101,48 @@ namespace HarryTools.Dialogue.Editor {
             return true;
         }
 
+        /// <summary> Moves every dialogue text that points outside the dialogue's own collection into it, under the dialogue's own keys, copying the value of every locale. Used after duplicating an asset. Creates the collection only when there is text to move </summary>
+        internal static void AdoptTexts(DialogueAsset _asset) {
+            if (_asset == null) return;
+            List<(LocalizedString Target, string Key)> _texts = Texts(_asset);
+            StringTableCollection _own = Linked(_asset);
+            bool _changed = false;
+
+            for (int _i = 0; _i < _texts.Count; _i++) {
+                LocalizedString _target = _texts[_i].Target;
+                if (_target == null || _target.IsEmpty || string.IsNullOrEmpty(_texts[_i].Key)) continue;
+                StringTableCollection _source = LocalizationEditorSettings.GetStringTableCollection(_target.TableReference);
+                if (_source == null || _source.SharedData == null) continue;
+                SharedTableData.SharedTableEntry _sourceEntry = _source.SharedData.GetEntryFromReference(_target.TableEntryReference);
+                if (_sourceEntry == null) continue;
+                if (_own != null && _source == _own && _sourceEntry.Key == _texts[_i].Key) continue;
+
+                if (_own == null) _own = EnsureCollection(_asset);
+                if (_own == null) return;
+
+                SharedTableData.SharedTableEntry _entry = _own.SharedData.GetEntry(_texts[_i].Key) ?? _own.SharedData.AddKey(_texts[_i].Key);
+                IReadOnlyList<StringTable> _tables = _source.StringTables;
+                for (int _t = 0; _t < _tables.Count; _t++) {
+                    string _value = _tables[_t] != null ? _tables[_t].GetEntry(_sourceEntry.Id)?.Value : null;
+                    if (_value == null) continue;
+                    StringTable _destination = _own.GetTable(_tables[_t].LocaleIdentifier) as StringTable;
+                    if (_destination == null) _destination = _own.AddNewTable(_tables[_t].LocaleIdentifier) as StringTable;
+                    if (_destination == null) continue;
+                    _destination.AddEntry(_entry.Id, _value);
+                    EditorUtility.SetDirty(_destination);
+                }
+
+                _target.TableReference = _own.SharedData.TableCollectionNameGuid;
+                _target.TableEntryReference = _entry.Id;
+                _changed = true;
+            }
+
+            if (!_changed) return;
+            EditorUtility.SetDirty(_own.SharedData);
+            EditorUtility.SetDirty(_asset);
+            AssetDatabase.SaveAssets();
+        }
+
         /// <summary> The text of an entry in the table of the given locale. Null when the collection, entry or table is missing </summary>
         internal static string GetText(TableReference _table, TableEntryReference _entry, LocaleIdentifier _locale) {
             if (_table.ReferenceType == TableReference.Type.Empty || _entry.ReferenceType == TableEntryReference.Type.Empty) return null;
@@ -151,6 +193,27 @@ namespace HarryTools.Dialogue.Editor {
         private static StringTableCollection Linked(DialogueAsset _asset) {
             if (string.IsNullOrEmpty(_asset.TableCollectionGuid) || !Guid.TryParse(_asset.TableCollectionGuid, out Guid _guid)) return null;
             return LocalizationEditorSettings.GetStringTableCollection(_guid);
+        }
+
+        /// <summary> Every dialogue text of the asset with the key it belongs under </summary>
+        private static List<(LocalizedString, string)> Texts(DialogueAsset _asset) {
+            List<(LocalizedString, string)> _texts = new List<(LocalizedString, string)>();
+            for (int _i = 0; _i < _asset.Nodes.Count; _i++) {
+                switch (_asset.Nodes[_i]) {
+                    case LineNode _line:
+                        _texts.Add((_line.Text, _line.Id));
+                        break;
+                    case ChoiceNode _choice:
+                        for (int _o = 0; _o < _choice.Options.Count; _o++) {
+                            ChoiceOption _option = _choice.Options[_o];
+                            if (_option == null) continue;
+                            _texts.Add((_option.Text, _option.Id));
+                            _texts.Add((_option.LockedReason, _option.Id + ChoiceOption.LockedSuffix));
+                        }
+                        break;
+                }
+            }
+            return _texts;
         }
 
         private static string UniqueName(string _assetName) {

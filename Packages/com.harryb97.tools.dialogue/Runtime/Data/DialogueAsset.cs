@@ -172,6 +172,39 @@ namespace HarryTools.Dialogue {
                 }
             }
         }
+
+        /// <summary> Gives every node, option and output a new id and points the outputs at the new node ids. Used when the asset is duplicated </summary>
+        internal void RegenerateIds() {
+            Dictionary<string, string> _nodeIds = new Dictionary<string, string>();
+            HashSet<string> _used = new HashSet<string>();
+
+            for (int _i = 0; _i < nodes.Count; _i++) {
+                if (nodes[_i] == null) continue;
+                string _new = NewUnused(_used);
+                if (!string.IsNullOrEmpty(nodes[_i].Id)) _nodeIds[nodes[_i].Id] = _new;
+                nodes[_i].Id = _new;
+            }
+
+            for (int _i = 0; _i < nodes.Count; _i++) {
+                if (!(nodes[_i] is ChoiceNode _choice)) continue;
+                for (int _o = 0; _o < _choice.Options.Count; _o++) {
+                    if (_choice.Options[_o] != null) _choice.Options[_o].Id = NewUnused(_used);
+                }
+            }
+
+            for (int _i = 0; _i < nodes.Count; _i++) {
+                if (nodes[_i] == null) continue;
+                outputBuffer.Clear();
+                nodes[_i].CollectOutputs(outputBuffer);
+                for (int _o = 0; _o < outputBuffer.Count; _o++) {
+                    NodeOutput _output = outputBuffer[_o];
+                    if (_output == null) continue;
+                    _output.Id = NewUnused(_used);
+                    // A target outside this asset no longer exists, so it ends the dialogue as before
+                    if (_output.IsConnected) _output.Target = _nodeIds.TryGetValue(_output.Target, out string _target) ? _target : "";
+                }
+            }
+        }
         #endregion
 
         // ==================== PRIVATE ====================
