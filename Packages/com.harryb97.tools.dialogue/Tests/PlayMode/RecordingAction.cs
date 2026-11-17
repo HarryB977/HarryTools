@@ -16,6 +16,7 @@ namespace HarryTools.Dialogue.Tests
 
         public static readonly List<string> Log = new List<string>();
         public static GameObject LastSelf;
+        public static GameObject LastTarget;
 
         [SerializeField] private string tag;
         [SerializeField] private int frames;
@@ -35,6 +36,7 @@ namespace HarryTools.Dialogue.Tests
         public async UniTask Run(LogicContext _context, CancellationToken _token)
         {
             LastSelf = _context.Self;
+            LastTarget = _context.Target;
             Log.Add(tag);
             if (disableSelf && _context.Self != null) _context.Self.SetActive(false);
             for (int _i = 0; _i < frames; _i++) await UniTask.Yield(PlayerLoopTiming.Update, _token);

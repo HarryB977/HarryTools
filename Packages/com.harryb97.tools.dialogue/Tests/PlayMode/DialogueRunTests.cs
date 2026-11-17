@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using HarryTools.Actions;
 using HarryTools.Conditions;
+using HarryTools.TextEffects;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
@@ -245,6 +246,47 @@ namespace HarryTools.Dialogue.Tests {
             Assert.AreEqual(RunState.Ended, _run.State);
             CollectionAssert.AreEqual(new[] { EndReason.Completed }, endReasons);
         }
+
+        [Test]
+        public void Headless_RunsTextEvents_InOrder() {
+            Dialogue.ChannelResolver = _ => null;
+            DialogueAsset _asset = SingleLine("a", out LineNode _line);
+            _line.OverrideAdvance = true;
+            _line.Advance = AdvanceMode.Input;
+            _line.Events = new TextEventTable(new List<TextEventEntry> {
+                new TextEventEntry("first", new ActionList(new RecordingAction("first")), true),
+                new TextEventEntry("second", new ActionList(new RecordingAction("second")), false)
+            });
+            _line.OnEnd.Actions = new ActionList(new RecordingAction("end"));
+            Dialogue.LineTextResolver = _ => "<event=second>one <event=unknown>two <event=first>three<event=second>";
+            GameObject _origin = new GameObject("HeadlessOrigin");
+
+            try {
+                DialogueRun _run = Dialogue.Start(_asset, new DialogueStartOptions { Origin = _origin });
+                Tick();
+                Assert.AreSame(_line, _run.Current);
+                CollectionAssert.IsEmpty(RecordingAction.Log, "The events run when the line ends");
+
+                // Played to its end: every event of the text, in text order, before the end actions
+                _run.Advance();
+                Tick();
+                CollectionAssert.AreEqual(new[] {
+                    "second", "second:done", "first", "first:done", "second", "second:done", "end", "end:done"
+                }, RecordingAction.Log);
+                Assert.IsNull(RecordingAction.LastSelf);
+                Assert.AreSame(_origin, RecordingAction.LastTarget);
+
+                // Skipped: only the events that run when skipped
+                RecordingAction.Log.Clear();
+                _run = Dialogue.Start(_asset);
+                Tick();
+                _run.Skip();
+                CollectionAssert.AreEqual(new[] { "first", "first:done", "end", "end:done" }, RecordingAction.Log);
+                CollectionAssert.AreEqual(new[] { EndReason.Completed, EndReason.Skipped }, endReasons);
+            } finally {
+                Object.DestroyImmediate(_origin);
+            }
+        }
         #endregion
 
         // ==================== NODES ====================
@@ -447,6 +489,55 @@ namespace HarryTools.Dialogue.Tests {
             Assert.IsTrue(channel.Last.Released);
             Assert.IsFalse(RecordingAction.Log.Contains("present:b"));
             LogAssert.NoUnexpectedReceived();
+        }
+
+        [Test]
+        public void EndedHandlerThrows_MainSlotFreed() {
+            DialogueAsset _asset = SingleLine("a", out LineNode _line);
+            DialogueRun _run = null;
+            // Stopped from its own line, so the run raises LineEnded as it ends
+            _line.OnStart.Actions = new ActionList(new CallbackAction(() => _run.Stop()));
+            _run = Dialogue.Start(_asset);
+            _run.LineEnded += (_, _) => throw new System.InvalidOperationException("line ended handler failure");
+            int _runEnded = 0;
+            _run.Ended += (_, _) => _runEnded++;
+
+            LogAssert.Expect(LogType.Error, new Regex("line ended handler failure"));
+            Tick();
+
+            Assert.AreEqual(RunState.Ended, _run.State);
+            Assert.AreEqual(1, _runEnded, "Ended is still raised");
+            CollectionAssert.AreEqual(new[] { EndReason.Stopped }, endReasons);
+            Assert.IsNull(Dialogue.Main);
+            CollectionAssert.DoesNotContain(Dialogue.Active, _run);
+
+            // An Ended handler that throws on a direct Stop: the caller gets the exception and the slot is free
+            DialogueRun _second = Dialogue.Start(SingleLine("b", out _));
+            Assert.IsNotNull(_second);
+            Tick();
+            _second.Ended += (_, _) => throw new System.InvalidOperationException("ended handler failure");
+            Assert.Throws<System.InvalidOperationException>(() => _second.Stop());
+            Assert.IsNull(Dialogue.Main);
+            CollectionAssert.IsEmpty(Dialogue.Active);
+            Assert.IsNotNull(Dialogue.Start(SingleLine("c", out _)));
+        }
+
+        [Test]
+        public void Active_IsSnapshot_StopWhileIterating() {
+            DialogueRun _main = Dialogue.Start(SingleLine("main", out _));
+            DialogueRun _ambient = Dialogue.Start(SingleLine("ambient", out _), new DialogueStartOptions { IsMain = false });
+            Tick();
+            IReadOnlyList<DialogueRun> _before = Dialogue.Active;
+            CollectionAssert.AreEqual(new[] { _main, _ambient }, _before);
+            Assert.IsFalse(_before is IList<DialogueRun> _list && !_list.IsReadOnly, "Active cannot be changed through a cast");
+
+            Assert.DoesNotThrow(() => {
+                foreach (DialogueRun _run in Dialogue.Active) _run.Stop();
+            });
+            Assert.AreEqual(RunState.Ended, _main.State);
+            Assert.AreEqual(RunState.Ended, _ambient.State);
+            CollectionAssert.IsEmpty(Dialogue.Active);
+            Assert.AreEqual(2, _before.Count, "A copy taken earlier does not change");
         }
 
         [Test]

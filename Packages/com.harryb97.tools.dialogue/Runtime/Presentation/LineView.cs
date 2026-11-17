@@ -66,7 +66,7 @@ namespace HarryTools.Dialogue {
             ReadPrefabVoice();
             text.DefaultVoice = _character != null && _character.TypingVoice != null ? _character.TypingVoice : prefabVoice;
             if (eventForwarder == null) eventForwarder = new EventForwarder(eventQueue);
-            eventForwarder.Source = _line.Line.Events;
+            eventForwarder.Bind(_line);
             text.SetEventProvider(eventForwarder);
             text.SetEventContext(_line.ActorObject);
             text.TimeMode = ToTimeMode(_line.Time);
@@ -112,15 +112,18 @@ namespace HarryTools.Dialogue {
             if (text.isActiveAndEnabled) text.SetText(string.Empty, false);
         }
 
-        /// <summary> The text clock that matches the run's clock </summary>
         /// <summary> When true, lines bound with <see cref="Dialogue.LineTextResolver"/> stay preparing and never get their text </summary>
         [HarryTools.DomainReload.ClearOnReload] internal static bool HoldTextForTests;
+
+        /// <summary> Event tags of the bound line's text the typing has passed, fired or not. Still readable once the view is destroyed </summary>
+        internal int EventsPassed => eventForwarder != null ? eventForwarder.Passed : 0;
 
         /// <summary> While set, the text events that fire are handed to it instead of the view's queue. Used to put the events of a skipped line in the run's skip queue </summary>
         internal void RedirectEvents(Action<ActionList, LogicContext> _sink) {
             if (eventForwarder != null) eventForwarder.Sink = _sink;
         }
 
+        /// <summary> The text clock that matches the run's clock </summary>
         internal static TimeMode ToTimeMode(DialogueTime _time) {
             switch (_time) {
                 case DialogueTime.Scaled: return TimeMode.Scaled;
@@ -177,22 +180,34 @@ namespace HarryTools.Dialogue {
 
         // ==================== EVENTS ====================
         #region Events
-        /// <summary> Hands the line's text events to the EffectText as actions that only queue the real ones in the view's queue. The EffectText still decides which events fire and whether skipped ones run </summary>
+        /// <summary> Hands the line's text events to the EffectText as actions that only queue the real ones in the view's queue, with the context of the line's other actions. The EffectText still decides which events fire and whether skipped ones run </summary>
         private sealed class EventForwarder : ITextEventProvider {
             private readonly TextEventQueue queue;
             private readonly Dictionary<ActionList, ActionList> forwarders = new Dictionary<ActionList, ActionList>();
+            private ITextEventProvider source;
+            private LinePresentation line;
 
-            public ITextEventProvider Source;
             public Action<ActionList, LogicContext> Sink;
+
+            /// <summary> Event tags passed since the line was bound. The EffectText asks for every tag it passes, fired or skipped </summary>
+            public int Passed { get; private set; }
 
             public EventForwarder(TextEventQueue _queue) {
                 queue = _queue;
             }
 
+            public void Bind(LinePresentation _line) {
+                line = _line;
+                source = _line.Line.Events;
+                Passed = 0;
+            }
+
             public bool TryGetEvent(string _name, out ActionList _actions, out bool _runWhenSkipped) {
                 _actions = null;
                 _runWhenSkipped = false;
-                if (Source == null || !Source.TryGetEvent(_name, out ActionList _inner, out _runWhenSkipped) || _inner == null) return false;
+                if (line == null) return false;
+                Passed++;
+                if (source == null || !source.TryGetEvent(_name, out ActionList _inner, out _runWhenSkipped) || _inner == null) return false;
                 if (!forwarders.TryGetValue(_inner, out _actions)) {
                     _actions = new ActionList(new EnqueueAction(this, _inner));
                     forwarders.Add(_inner, _actions);
@@ -200,14 +215,18 @@ namespace HarryTools.Dialogue {
                 return true;
             }
 
+            /// <summary> Self is the line's actor, or none, and Target the run's origin, as for the line's other actions </summary>
             public void Enqueue(ActionList _actions, LogicContext _context) {
+                if (line != null) _context = new LogicContext(line.ActorObject, line.Run.Options.Origin);
                 if (Sink != null) Sink(_actions, _context);
                 else queue.Enqueue(_actions, _context);
             }
 
             public void Clear() {
-                Source = null;
+                line = null;
+                source = null;
                 Sink = null;
+                Passed = 0;
                 forwarders.Clear();
             }
         }

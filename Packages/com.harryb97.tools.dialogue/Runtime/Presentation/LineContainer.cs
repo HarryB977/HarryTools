@@ -9,7 +9,7 @@ using UnityEngine;
 using Logger = HarryTools.LoggerTool.Logger;
 
 namespace HarryTools.Dialogue {
-    /// <summary> Shows dialogue lines with pooled <see cref="LineView"/>s under <see cref="LineParent"/>: how many stay on screen, how long and how they advance. It only orders the views as siblings and notifies them; layout and animation belong to the views. A line stays on screen until a new line needs its place, the run skips it or the run ends </summary>
+    /// <summary> Shows dialogue lines with pooled <see cref="LineView"/>s under <see cref="LineParent"/>: how many stay on screen, how long and how they advance. It only orders the views as siblings and notifies them; layout and animation belong to the views. A line stays on screen until a new line needs its place, its run skips or its run ends </summary>
     [AddComponentMenu("HarryTools/Dialogue/Line Container")]
     public class LineContainer : MonoBehaviour, ILineChannel {
         // ==================== VARIABLES ===================
@@ -171,6 +171,7 @@ namespace HarryTools.Dialogue {
             if (isMain) Register(mains, this, true, "main");
             if (isDefaultAmbient) Register(defaultAmbients, this, true, "default ambient");
             Dialogue.Ended += OnRunEnded;
+            Dialogue.RunSkipped += OnRunSkipped;
 
             // A choice offered before this container became the main one
             ChoicePrompt _open = Dialogue.Main != null ? Dialogue.Main.CurrentChoice : null;
@@ -182,6 +183,7 @@ namespace HarryTools.Dialogue {
             mains.Remove(this);
             defaultAmbients.Remove(this);
             Dialogue.Ended -= OnRunEnded;
+            Dialogue.RunSkipped -= OnRunSkipped;
 
             for (int _i = 0; _i < handles.Count; _i++) handles[_i].Detach();
             stale.AddRange(visible);
@@ -293,6 +295,15 @@ namespace HarryTools.Dialogue {
 
         /// <summary> The lines of a run that ended leave the screen </summary>
         private void OnRunEnded(DialogueRun _run, EndReason _reason) {
+            RemoveLinesOf(_run);
+        }
+
+        /// <summary> The lines of a run that starts skipping leave the screen </summary>
+        private void OnRunSkipped(DialogueRun _run) {
+            RemoveLinesOf(_run);
+        }
+
+        private void RemoveLinesOf(DialogueRun _run) {
             for (int _i = handles.Count - 1; _i >= 0; _i--) {
                 if (_i < handles.Count && handles[_i].Run == _run) RemoveAt(_i);
             }
@@ -327,7 +338,7 @@ namespace HarryTools.Dialogue {
         // ==================== HANDLE ====================
         #region Handle
         /// <summary> One line of the container. Once its view is gone it goes on as a line without view </summary>
-        private sealed class LineHandle : ILineHandle {
+        private sealed class LineHandle : ILineHandle, IViewlessLineHandle {
             private readonly LineContainer container;
             private readonly LineView view;
             private readonly LinePresentation presentation;
@@ -352,6 +363,17 @@ namespace HarryTools.Dialogue {
 
             public DialogueRun Run => presentation.Run;
             public LineView View => view;
+
+            public int UnfiredEventsFrom {
+                get {
+                    if (fallback is IViewlessLineHandle _fallback) return _fallback.UnfiredEventsFrom;
+                    // Without a view, or a text in it, nothing fires the events that were not passed yet
+                    return view == null || view.Text == null ? EventsPassed : -1;
+                }
+            }
+
+            // Read through the managed reference, so it works once the view is destroyed
+            private int EventsPassed => ReferenceEquals(view, null) ? 0 : view.EventsPassed;
 
             // Input also ends an automatic line that would never end on its own
             private bool AcceptsInput => advance != AdvanceMode.Auto || lifetime.Mode == LineLifetimeMode.UntilNext;
@@ -496,7 +518,7 @@ namespace HarryTools.Dialogue {
                 if (fallback != null || finished || released) return;
 
                 LinePresentation _resolved = new LinePresentation(Run, presentation.Line, presentation.Actor, lifetime, advance, presentation.Time);
-                fallback = HeadlessLineChannel.Instance.Present(_resolved);
+                fallback = HeadlessLineChannel.Instance.Present(_resolved, EventsPassed);
                 if (paused) fallback.SetPaused(true);
             }
 

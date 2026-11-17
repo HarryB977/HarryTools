@@ -49,6 +49,9 @@ namespace HarryTools.Dialogue {
         // Self of the current line's actions
         private DialogueActor lineActor;
         private RunState stateBeforePause;
+        // The run stays paused while either is set: a Pause call, or the ambient policy of the main run
+        private bool pausedByCall;
+        private bool heldByMain;
         private bool warnedAmbientChoice;
 
         // Requests made while the run is ticking are applied once the current step is done
@@ -59,9 +62,9 @@ namespace HarryTools.Dialogue {
         private bool skipRequested;
         private ChoiceOption choiceRequested;
 
-        // Runs, in order and one after the other, what a skip passes over
-        private TextEventQueue skipQueue;
-        private ParsedText skipParsed;
+        // Runs, in order and one after the other, what a skip passes over and the text events of lines without view
+        private TextEventQueue eventQueue;
+        private ParsedText eventsParsed;
         #endregion
 
         #region Public Variables
@@ -134,22 +137,16 @@ namespace HarryTools.Dialogue {
 
         /// <summary> Freezes the run, its timers and its line. Actions already running are not paused </summary>
         public void Pause() {
-            if (State == RunState.Ended || State == RunState.Paused) return;
-            if (ticking) {
-                pauseRequested = true;
-                return;
-            }
-            ApplyPause();
+            if (State == RunState.Ended) return;
+            pausedByCall = true;
+            UpdatePause();
         }
 
+        /// <summary> Undoes <see cref="Pause"/>. A run held by the main run's ambient policy stays paused until the main run ends </summary>
         public void Resume() {
-            if (ticking) {
-                pauseRequested = false;
-                return;
-            }
-            if (State != RunState.Paused) return;
-            State = stateBeforePause;
-            lineHandle?.SetPaused(false);
+            if (State == RunState.Ended) return;
+            pausedByCall = false;
+            UpdatePause();
         }
 
         /// <summary> Moves on without showing lines, running what they would have run, up to the next choice or the end. Ignored when the dialogue cannot be skipped </summary>
@@ -383,6 +380,9 @@ namespace HarryTools.Dialogue {
 
         private void EndLine() {
             LineNode _line = (LineNode)Current;
+            // No view fired these text events: they run from the line's text, in order
+            int _unfired = UnfiredEventsFrom(lineHandle);
+            if (_unfired >= 0) EnqueueTextEvents(_line, false, _unfired);
             ReleaseLine();
             awaited = RunActions(_line.OnEnd.Actions, SelfOf(lineActor));
             phase = Phase.EndActions;
@@ -496,9 +496,15 @@ namespace HarryTools.Dialogue {
 
         // ==================== SKIP ====================
         #region Skip
-        /// <summary> Leaves the current node the way a skip does. The visible line is skipped and released; actions being awaited keep running unawaited </summary>
+        /// <summary> Leaves the current node the way a skip does and clears this run's lines from the screen. The visible line is skipped and released; actions being awaited keep running unawaited </summary>
         private void BeginSkip() {
             IsSkipping = true;
+            LeaveNodeSkipping();
+            // The lines of this run still on screen leave, whatever the node the skip started in
+            Dialogue.RunSkipped?.Invoke(this);
+        }
+
+        private void LeaveNodeSkipping() {
             switch (phase) {
                 case Phase.DelayBefore:
                     // The line has not started yet: it is skipped whole
@@ -511,16 +517,18 @@ namespace HarryTools.Dialogue {
                     if (awaited != null && awaited.IsRunning) Enqueue(new ActionList(new WaitForHandle(awaited)), null);
                     awaited = null;
                     EnqueueSkipped(_line.OnStart);
-                    EnqueueTextEvents(_line);
+                    EnqueueTextEvents(_line, true);
                     EnqueueSkipped(_line.OnEnd);
                     GoTo(_line.Next);
                     break;
                 }
 
                 case Phase.Showing: {
-                    // The line fires its own skipped text events as it is skipped
+                    // A line with view fires its own skipped text events as it is skipped; for one without view the run queues them
                     LineNode _line = (LineNode)Current;
+                    int _unfired = UnfiredEventsFrom(lineHandle);
                     lineHandle.Skip();
+                    if (_unfired >= 0) EnqueueTextEvents(_line, true, _unfired);
                     ReleaseLine();
                     EnqueueSkipped(_line.OnEnd);
                     GoTo(_line.Next);
@@ -550,7 +558,7 @@ namespace HarryTools.Dialogue {
                     lineActor = ResolveActor(_line);
                     EnqueueSkipped(_line.Before);
                     EnqueueSkipped(_line.OnStart);
-                    EnqueueTextEvents(_line);
+                    EnqueueTextEvents(_line, true);
                     EnqueueSkipped(_line.OnEnd);
                     GoTo(_line.Next);
                     break;
@@ -575,30 +583,38 @@ namespace HarryTools.Dialogue {
             if (_actions != null && _actions.RunWhenSkipped) Enqueue(_actions.Actions, SelfOf(lineActor));
         }
 
-        /// <summary> Queues the events of the line's markup, in text order, from its current text. When the localized text is not available at once, a placeholder keeps their place in the queue and runs them once it arrives </summary>
-        private void EnqueueTextEvents(LineNode _line) {
+        /// <summary> Queues the events of the line's markup, in text order, from its current text. A skipped line only queues the events that run when skipped. When the localized text is not available at once, a placeholder keeps their place in the queue and runs them once it arrives </summary>
+        /// <param name="_from"> Index, among the event tags of the text, of the first one to queue </param>
+        private void EnqueueTextEvents(LineNode _line, bool _skipped, int _from = 0) {
             TextEventTable _table = _line.Events;
             if (_table == null || _table.Entries.Count == 0) return;
             string _text = Dialogue.ResolveLineText(_line);
             if (_text == null && Dialogue.LineTextResolver == null && _line.Text != null && !_line.Text.IsEmpty) {
-                Enqueue(new ActionList(new LocalizedTextEvents(_line.Text, _table)), SelfOf(lineActor));
+                Enqueue(new ActionList(new LocalizedTextEvents(_line.Text, _table, _skipped, _from)), SelfOf(lineActor));
                 return;
             }
             if (string.IsNullOrEmpty(_text)) return;
 
-            if (skipParsed == null) skipParsed = new ParsedText();
-            TextParser.Parse(_text, TextEffectsSettings.Current, skipParsed);
-            List<TextCommand> _commands = skipParsed.Commands;
+            if (eventsParsed == null) eventsParsed = new ParsedText();
+            TextParser.Parse(_text, TextEffectsSettings.Current, eventsParsed);
+            List<TextCommand> _commands = eventsParsed.Commands;
+            int _ordinal = 0;
             for (int _i = 0; _i < _commands.Count; _i++) {
                 if (_commands[_i].Type != TextCommandType.Event) continue;
+                if (_ordinal++ < _from) continue;
                 if (!_table.TryGetEvent(_commands[_i].Name, out ActionList _actions, out bool _runWhenSkipped)) continue;
-                if (_runWhenSkipped) Enqueue(_actions, SelfOf(lineActor));
+                if (!_skipped || _runWhenSkipped) Enqueue(_actions, SelfOf(lineActor));
             }
         }
 
         /// <summary> Called by a line channel skipping a line whose text it has not shown yet: its text events join the skip queue </summary>
         internal void EnqueueTextEventsForSkip(LineNode _line) {
-            if (IsSkipping) EnqueueTextEvents(_line);
+            if (IsSkipping) EnqueueTextEvents(_line, true);
+        }
+
+        /// <summary> Index of the first text event that no view fired for the handle's line, or -1 when a view fires them </summary>
+        private static int UnfiredEventsFrom(ILineHandle _handle) {
+            return _handle is IViewlessLineHandle _viewless ? _viewless.UnfiredEventsFrom : -1;
         }
 
         /// <summary> Called by a line channel for a skipped event of the line it is revealing: it joins the skip queue, in order with the rest of the skip </summary>
@@ -606,14 +622,18 @@ namespace HarryTools.Dialogue {
             Enqueue(_actions, _self);
         }
 
-        /// <summary> Waits for the localized text, then runs the skippable events of its markup one after the other </summary>
+        /// <summary> Waits for the localized text, then runs the events of its markup one after the other. A skipped line only runs the events that run when skipped </summary>
         private sealed class LocalizedTextEvents : IAction {
             private readonly LocalizedString text;
             private readonly TextEventTable table;
+            private readonly bool skipped;
+            private readonly int from;
 
-            public LocalizedTextEvents(LocalizedString _text, TextEventTable _table) {
+            public LocalizedTextEvents(LocalizedString _text, TextEventTable _table, bool _skipped, int _from) {
                 text = _text;
                 table = _table;
+                skipped = _skipped;
+                from = _from;
             }
 
             public async UniTask Run(LogicContext _context, CancellationToken _token) {
@@ -629,10 +649,12 @@ namespace HarryTools.Dialogue {
                 ParsedText _parsed = new ParsedText();
                 TextParser.Parse(_operation.Result, TextEffectsSettings.Current, _parsed);
                 List<TextCommand> _commands = _parsed.Commands;
+                int _ordinal = 0;
                 for (int _i = 0; _i < _commands.Count; _i++) {
                     if (_commands[_i].Type != TextCommandType.Event) continue;
+                    if (_ordinal++ < from) continue;
                     if (!table.TryGetEvent(_commands[_i].Name, out ActionList _actions, out bool _runWhenSkipped)) continue;
-                    if (_runWhenSkipped && _actions != null) await _actions.RunAsync(_context, _token);
+                    if ((!skipped || _runWhenSkipped) && _actions != null) await _actions.RunAsync(_context, _token);
                 }
             }
         }
@@ -653,8 +675,8 @@ namespace HarryTools.Dialogue {
         /// <summary> Queued actions run one after the other without holding the run </summary>
         private void Enqueue(ActionList _actions, GameObject _self) {
             if (_actions == null || _actions.IsEmpty) return;
-            if (skipQueue == null) skipQueue = new TextEventQueue();
-            skipQueue.Enqueue(_actions, Context(_self));
+            if (eventQueue == null) eventQueue = new TextEventQueue();
+            eventQueue.Enqueue(_actions, Context(_self));
         }
         #endregion
 
@@ -693,7 +715,37 @@ namespace HarryTools.Dialogue {
             GoTo(_frame.Jump.Next);
         }
 
+        /// <summary> Pauses an ambient run while the main run plays. Independent of <see cref="Pause"/> and <see cref="Resume"/> </summary>
+        internal void HoldForMain() {
+            if (State == RunState.Ended) return;
+            heldByMain = true;
+            UpdatePause();
+        }
+
+        /// <summary> Called as the main run ends </summary>
+        internal void ReleaseHoldForMain() {
+            if (State == RunState.Ended) return;
+            heldByMain = false;
+            UpdatePause();
+        }
+
+        /// <summary> Pauses or resumes the run as its two pause reasons ask, at once or after the current step when the run is ticking </summary>
+        private void UpdatePause() {
+            bool _paused = pausedByCall || heldByMain;
+            if (ticking) {
+                pauseRequested = _paused;
+                return;
+            }
+            if (_paused) {
+                ApplyPause();
+            } else if (State == RunState.Paused) {
+                State = stateBeforePause;
+                lineHandle?.SetPaused(false);
+            }
+        }
+
         private void ApplyPause() {
+            if (State == RunState.Paused || State == RunState.Ended) return;
             stateBeforePause = State;
             State = RunState.Paused;
             lineHandle?.SetPaused(true);
@@ -709,17 +761,24 @@ namespace HarryTools.Dialogue {
             skipRequested = false;
             calls.Clear();
 
-            // The skip queue is left running: what it holds was already happening when the run ended
+            // The event queue is left running: what it holds was already happening when the run ended
 
             if (awaited != null && awaited.IsRunning) awaited.Cancel();
             awaited = null;
-            ReleaseLine();
-            CloseChoice();
 
+            // Unregistered before any handler runs, so one that throws cannot keep the run, or the main slot, taken
             Dialogue.Unregister(this);
             DialogueHistory.OnRunEnded(this);
-            Ended?.Invoke(this, _reason);
-            Dialogue.RaiseEnded(this, _reason);
+            try {
+                ReleaseLine();
+            } finally {
+                try {
+                    CloseChoice();
+                } finally {
+                    Ended?.Invoke(this, _reason);
+                    Dialogue.RaiseEnded(this, _reason);
+                }
+            }
         }
 
         private ActionHandle RunActions(ActionList _actions, GameObject _self) {

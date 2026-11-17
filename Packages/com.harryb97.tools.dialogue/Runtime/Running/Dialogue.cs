@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using HarryTools.DomainReload;
 using UnityEngine.Localization;
 using Logger = HarryTools.LoggerTool.Logger;
@@ -12,6 +13,8 @@ namespace HarryTools.Dialogue {
         internal const string LogCategory = "Dialogue";
 
         [ClearOnReload(AssignNewInstance = true)] private static List<DialogueRun> active = new List<DialogueRun>();
+        // Copy of active handed out by Active, rebuilt after the list changes
+        [ClearOnReload] private static ReadOnlyCollection<DialogueRun> activeSnapshot;
         [ClearOnReload(AssignNewInstance = true)] private static List<DialogueRun> tickBuffer = new List<DialogueRun>();
         [ClearOnReload] private static DialogueRun main;
         // Ambient runs paused by the main run's start, resumed when it ends
@@ -29,8 +32,8 @@ namespace HarryTools.Dialogue {
         /// <summary> The main dialogue running, or null </summary>
         public static DialogueRun Main => main;
 
-        /// <summary> Every dialogue running, main and ambient </summary>
-        public static IReadOnlyList<DialogueRun> Active => active;
+        /// <summary> Every dialogue running, main and ambient. A copy: it does not change when runs start or end, so the runs can be stopped while iterating it </summary>
+        public static IReadOnlyList<DialogueRun> Active => activeSnapshot ?? (activeSnapshot = new ReadOnlyCollection<DialogueRun>(active.ToArray()));
         #endregion
 
         #region Internal Variables
@@ -48,6 +51,9 @@ namespace HarryTools.Dialogue {
 
         /// <summary> Raised for the choice view when an offered choice closes: answered, timed out or its run ended </summary>
         [ClearOnReload] internal static Action<ChoicePrompt> ChoiceHidden;
+
+        /// <summary> Raised for the line containers when a run starts skipping, so its lines leave the screen </summary>
+        [ClearOnReload] internal static Action<DialogueRun> RunSkipped;
         #endregion
 
         // ==================== EVENTS ====================
@@ -106,6 +112,7 @@ namespace HarryTools.Dialogue {
 
             DialogueRun _run = new DialogueRun(_asset, _options);
             active.Add(_run);
+            activeSnapshot = null;
             if (_run.IsMain) {
                 main = _run;
                 ApplyAmbientPolicies(_run);
@@ -168,9 +175,9 @@ namespace HarryTools.Dialogue {
             return _channel ?? HeadlessLineChannel.Instance;
         }
 
-        /// <summary> Called by a run as it ends, before its Ended events, so their handlers can start another main dialogue </summary>
+        /// <summary> Called by a run as it ends, before any of its end events, so their handlers can start another main dialogue and a handler that throws leaves no stale run </summary>
         internal static void Unregister(DialogueRun _run) {
-            active.Remove(_run);
+            if (active.Remove(_run)) activeSnapshot = null;
             pausedForMain.Remove(_run);
             if (main != _run) return;
             main = null;
@@ -186,6 +193,7 @@ namespace HarryTools.Dialogue {
         /// <summary> Drops every run without ending it, the handlers, the resolver, the choice view hooks and the driver </summary>
         internal static void ClearForTests() {
             active.Clear();
+            activeSnapshot = null;
             tickBuffer.Clear();
             main = null;
             pausedForMain.Clear();
@@ -199,6 +207,7 @@ namespace HarryTools.Dialogue {
             LineTextResolver = null;
             ChoiceShown = null;
             ChoiceHidden = null;
+            RunSkipped = null;
             ManualTick = false;
             LineRouter.ClearForTests();
             DialogueHistory.ClearForTests();
@@ -218,9 +227,8 @@ namespace HarryTools.Dialogue {
                 AmbientPolicy _policy = _main.Options.AmbientPolicy ?? AssetPolicy(_run.Asset);
                 switch (_policy) {
                     case AmbientPolicy.Pause:
-                        // A run paused by hand is left to whoever paused it
-                        if (_run.State == RunState.Paused) break;
-                        _run.Pause();
+                        // Kept apart from a pause by hand: Resume does not lift it, and the end of the main run does not lift a pause by hand
+                        _run.HoldForMain();
                         pausedForMain.Add(_run);
                         break;
 
@@ -240,7 +248,7 @@ namespace HarryTools.Dialogue {
             if (pausedForMain.Count == 0) return;
             DialogueRun[] _runs = pausedForMain.ToArray();
             pausedForMain.Clear();
-            for (int _i = 0; _i < _runs.Length; _i++) _runs[_i].Resume();
+            for (int _i = 0; _i < _runs.Length; _i++) _runs[_i].ReleaseHoldForMain();
         }
 
         /// <summary> A run that threw while ticking is stopped so the others keep going </summary>

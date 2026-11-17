@@ -175,6 +175,15 @@ namespace HarryTools.Dialogue.Tests {
         }
 
         private static EffectText TextOf(LineContainer _container, int _index) => _container.Visible[_index].Text;
+
+        private static TextEventTable Events(params TextEventEntry[] _entries) {
+            return new TextEventTable(new List<TextEventEntry>(_entries));
+        }
+
+        /// <summary> An event that records "{name}" and "{name}:done" </summary>
+        private static TextEventEntry Event(string _name, bool _runWhenSkipped = true) {
+            return new TextEventEntry(_name, new ActionList(new RecordingAction(_name)), _runWhenSkipped);
+        }
         #endregion
 
         // ==================== TESTS ====================
@@ -386,6 +395,131 @@ namespace HarryTools.Dialogue.Tests {
             yield return Frames(3);
             CollectionAssert.AreEqual(new[] { "x", "x:done" }, RecordingAction.Log);
             Assert.AreSame(_actorObject, RecordingAction.LastSelf);
+        }
+
+        [UnityTest]
+        public IEnumerator TextEvents_ActorAsSelf_OriginAsTarget() {
+            LineContainer _container = BuildContainer(1, AdvanceMode.Input);
+            DialogueCharacter _character = Track(ScriptableObject.CreateInstance<DialogueCharacter>());
+            GameObject _actorObject = Track(new GameObject("Actor"));
+            _actorObject.AddComponent<DialogueActor>().Character = _character;
+            GameObject _origin = Track(new GameObject("Origin"));
+
+            DialogueAsset _asset = Lines(out LineNode[] _lines, "a<event=x>b", "c<event=y>d");
+            _lines[0].Character = _character;
+            _lines[0].Events = Events(Event("x"));
+            _lines[1].Events = Events(Event("y"));
+            yield return null;
+
+            DialogueRun _run = StartMain(_asset, new DialogueStartOptions { Origin = _origin });
+            _run.Advance();
+            yield return Frames(3);
+            CollectionAssert.AreEqual(new[] { "x", "x:done" }, RecordingAction.Log);
+            Assert.AreSame(_actorObject, RecordingAction.LastSelf);
+            Assert.AreSame(_origin, RecordingAction.LastTarget);
+
+            _run.Advance();
+            Tick();
+            Assert.AreSame(_lines[1], _container.Visible[0].Current.Line);
+            RecordingAction.LastTarget = null;
+            _run.Advance();
+            yield return Frames(3);
+            CollectionAssert.AreEqual(new[] { "x", "x:done", "y", "y:done" }, RecordingAction.Log);
+            Assert.IsNull(RecordingAction.LastSelf, "Without an actor Self is empty");
+            Assert.AreSame(_origin, RecordingAction.LastTarget);
+        }
+
+        [UnityTest]
+        public IEnumerator DetachedLine_Skip_RunsTextEvents() {
+            LineContainer _container = BuildContainer(1, AdvanceMode.Input);
+            DialogueAsset _asset = Lines(out LineNode[] _lines, "a<event=x>b<event=n>c<event=y>d");
+            _lines[0].Events = Events(Event("x"), Event("n", false), Event("y"));
+            _lines[0].OnEnd.Actions = new ActionList(new RecordingAction("end"));
+            // Nothing is typed, so no event fires before the container goes
+            LineView.HoldTextForTests = true;
+            yield return null;
+
+            DialogueRun _run = StartMain(_asset);
+            Assert.AreEqual(1, _container.Visible.Count);
+            Object.Destroy(_container.gameObject);
+            yield return null;
+
+            _run.Skip();
+            yield return Frames(3);
+            CollectionAssert.AreEqual(new[] { "x", "x:done", "y", "y:done", "end", "end:done" }, RecordingAction.Log);
+            CollectionAssert.AreEqual(new[] { EndReason.Skipped }, endReasons);
+        }
+
+        [UnityTest]
+        public IEnumerator DetachedLine_Finish_RunsTextEventsNotFiredYet() {
+            LineContainer _container = BuildContainer(1, AdvanceMode.Input);
+            DialogueAsset _asset = Lines(out LineNode[] _lines, "a<event=x>b<waitinput>c<event=y>d");
+            _lines[0].Events = Events(Event("x"), Event("y", false));
+            yield return null;
+
+            DialogueRun _run = StartMain(_asset);
+            _run.Advance();
+            Assert.AreEqual(EffectTextState.WaitingInput, TextOf(_container, 0).State);
+            yield return Frames(2);
+            CollectionAssert.AreEqual(new[] { "x", "x:done" }, RecordingAction.Log);
+
+            Object.Destroy(_container.gameObject);
+            yield return null;
+
+            // Played to its end without view: the events after the ones the view fired
+            _run.Advance();
+            Tick();
+            yield return Frames(2);
+            CollectionAssert.AreEqual(new[] { "x", "x:done", "y", "y:done" }, RecordingAction.Log);
+            CollectionAssert.AreEqual(new[] { EndReason.Completed }, endReasons);
+        }
+
+        [UnityTest]
+        public IEnumerator Skip_ClearsRunLines_FromAnyPhase() {
+            LineContainer _container = BuildContainer(3, AdvanceMode.Input);
+            LineContainer _ambientContainer = BuildContainer(3, AdvanceMode.Input, null, false);
+            _ambientContainer.IsDefaultAmbient = true;
+            yield return null;
+
+            string[] _phases = { "typing", "delay after", "end actions" };
+            for (int _p = 0; _p < _phases.Length; _p++) {
+                string _phase = _phases[_p];
+                DialogueAsset _asset = Lines(out LineNode[] _lines, "first line", "second line");
+                ChoiceNode _choice = _asset.AddNode<ChoiceNode>();
+                _choice.Options.Add(new ChoiceOption());
+                _asset.EnsureIds();
+                _lines[1].Next.Target = _choice.Id;
+                _lines[1].DelayAfter = 10f;
+                _lines[1].OnEnd.Actions = new ActionList(new RecordingAction("end", _phase == "end actions" ? 3 : 0));
+
+                DialogueRun _run = StartMain(_asset);
+                DialogueRun _ambient = Dialogue.Start(Lines(out _, "ambient line"), new DialogueStartOptions { IsMain = false });
+                Tick();
+                Assert.AreEqual(1, _ambientContainer.Visible.Count, _phase);
+
+                // The first line ends and stays on screen; the second one types
+                _run.Advance();
+                _run.Advance();
+                Tick();
+                if (_phase != "typing") {
+                    _run.Advance();
+                    _run.Advance();
+                    Tick();
+                }
+                Assert.AreEqual(2, _container.Visible.Count, _phase);
+
+                int _visibleAtChoice = -1;
+                _run.ChoicePresented += (_, _) => _visibleAtChoice = _container.Visible.Count;
+                _run.Skip();
+                Assert.AreEqual(RunState.WaitingChoice, _run.State, _phase);
+                Assert.AreEqual(0, _visibleAtChoice, _phase);
+                Assert.AreEqual(0, _container.Visible.Count, _phase);
+                Assert.AreEqual(1, _ambientContainer.Visible.Count, _phase + ": the lines of other runs stay");
+
+                _run.Stop();
+                _ambient.Stop();
+                yield return Frames(5);
+            }
         }
 
         [UnityTest]

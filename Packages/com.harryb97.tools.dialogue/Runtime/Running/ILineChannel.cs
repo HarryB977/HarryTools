@@ -22,4 +22,10 @@ namespace HarryTools.Dialogue {
         /// <summary> The run no longer needs the line. Called once, finished or not </summary>
         void Release();
     }
+
+    /// <summary> A line handle that may go on without view. The run fires, from the line's text, the text events no view fired </summary>
+    internal interface IViewlessLineHandle {
+        /// <summary> Index, among the event tags of the line's text, of the first one no view fired. -1 while a view fires them </summary>
+        int UnfiredEventsFrom { get; }
+    }
 }

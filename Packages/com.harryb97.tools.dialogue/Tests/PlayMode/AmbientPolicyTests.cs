@@ -132,6 +132,47 @@ namespace HarryTools.Dialogue.Tests {
         }
 
         [Test]
+        public void ResumeAll_DuringMain_KeepsPolicyPausedAmbients() {
+            DialogueRun _ambient = StartAmbient("ambient", AmbientPolicy.Pause);
+            DialogueRun _pausedByHand = StartAmbient("byHand", AmbientPolicy.Pause);
+            Tick();
+            _pausedByHand.Pause();
+
+            DialogueRun _main = Dialogue.Start(SingleLine("main"));
+            Tick();
+            Assert.AreEqual(RunState.Paused, _ambient.State);
+
+            Dialogue.PauseAll();
+            Assert.AreEqual(RunState.Paused, _main.State);
+            Dialogue.ResumeAll();
+            Assert.AreEqual(RunState.Running, _main.State);
+            Assert.AreEqual(RunState.Paused, _ambient.State);
+            Assert.IsTrue(HandleOf(_ambient).Paused);
+            // Its pause by hand is lifted, the main run's policy is not
+            Assert.AreEqual(RunState.Paused, _pausedByHand.State);
+
+            // Resume on the run itself does not lift the policy either
+            _ambient.Resume();
+            HandleOf(_ambient).Advance();
+            Tick();
+            Assert.AreEqual(RunState.Paused, _ambient.State);
+            Assert.IsTrue(HandleOf(_ambient).Paused);
+
+            // Paused by hand during the main run: the end of the main run lifts only the policy
+            _ambient.Pause();
+            _main.Stop();
+            Assert.AreEqual(RunState.Paused, _ambient.State);
+            Assert.AreEqual(RunState.Running, _pausedByHand.State);
+            Assert.IsFalse(HandleOf(_pausedByHand).Paused);
+
+            _ambient.Resume();
+            Assert.AreEqual(RunState.Running, _ambient.State);
+            Assert.IsFalse(HandleOf(_ambient).Paused);
+            Tick();
+            Assert.AreEqual(EndReason.Completed, ended[_ambient]);
+        }
+
+        [Test]
         public void AmbientPolicy_Precedence_Options_Asset_Settings() {
             settings.DefaultAmbientPolicy = AmbientPolicy.Silence;
             DialogueRun _fromAsset = StartAmbient("asset", AmbientPolicy.Pause);
