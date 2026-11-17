@@ -1,0 +1,29 @@
+{
+    "name": "HarryTools.Dialogue.Tests.EditMode",
+    "rootNamespace": "HarryTools.Dialogue.Tests",
+    "references": [
+        "GUID:17b027ea9e831ba4cb32cfe19d079d57",
+        "GUID:14e9e448efede1e4299b5283245b61f1",
+        "GUID:76383890d5b860d438cd9a729219bf9d",
+        "GUID:f51ebe6a0ceec4240a699833d6309b23",
+        "GUID:6055be8ebefd69e48b49212b09b47b2f",
+        "GUID:29de7d2b7e640ec46a8c18880806d777",
+        "GUID:976ab130102fdc04c9bbc3159f83ad15",
+        "GUID:eec0964c48f6f4e40bc3ec2257ccf8c5",
+        "UnityEngine.TestRunner",
+        "UnityEditor.TestRunner"
+    ],
+    "includePlatforms": [ "Editor" ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "nunit.framework.dll"
+    ],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
