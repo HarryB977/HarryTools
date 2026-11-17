@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
+using Cysharp.Threading.Tasks;
 using HarryTools.Actions;
 using HarryTools.Conditions;
 using HarryTools.TextEffects;
@@ -97,9 +99,6 @@ namespace HarryTools.Dialogue {
         #region Internal Variables
         internal DialogueStartOptions Options { get; }
 
-        /// <summary> What this run does, as an ambient run, when a main dialogue starts </summary>
-        internal AmbientPolicy AmbientPolicy { get; }
-
         /// <summary> Seconds this run has ticked on its own clock. Frozen while paused </summary>
         internal float Clock => clock;
         #endregion
@@ -116,7 +115,6 @@ namespace HarryTools.Dialogue {
             Options = _options;
             IsMain = _options.IsMain;
             Time = _options.Time ?? (_asset.OverrideTime ? _asset.Time : DialogueSettings.Current.DefaultTime);
-            AmbientPolicy = _options.AmbientPolicy ?? (_asset.OverrideAmbientPolicy ? _asset.AmbientPolicy : DialogueSettings.Current.DefaultAmbientPolicy);
             MoveTo(_asset.Start);
         }
 
@@ -466,7 +464,9 @@ namespace HarryTools.Dialogue {
             DialogueMemory.MarkChosen(CurrentAsset, _option.Id);
             ChoiceMade?.Invoke(this, _option);
             Dialogue.RaiseChoiceMade(this, _option);
-            RunActions(_option.OnChosen, null);
+            // While skipping, an option answered on its own keeps its place among the queued actions
+            if (IsSkipping) Enqueue(_option.OnChosen, null);
+            else RunActions(_option.OnChosen, null);
             GoTo(_option.Next);
         }
 
@@ -503,6 +503,8 @@ namespace HarryTools.Dialogue {
 
                 case Phase.BeforeActions: {
                     LineNode _line = (LineNode)Current;
+                    // The rest of the line waits in the queue for the before actions already running
+                    if (awaited != null && awaited.IsRunning) Enqueue(new ActionList(new WaitForHandle(awaited)), null);
                     awaited = null;
                     EnqueueSkipped(_line.OnStart);
                     EnqueueTextEvents(_line);
@@ -583,6 +585,19 @@ namespace HarryTools.Dialogue {
                 if (_commands[_i].Type != TextCommandType.Event) continue;
                 if (!_table.TryGetEvent(_commands[_i].Name, out ActionList _actions, out bool _runWhenSkipped)) continue;
                 if (_runWhenSkipped) Enqueue(_actions, lineActor);
+            }
+        }
+
+        /// <summary> Finishes when the handle is no longer running </summary>
+        private sealed class WaitForHandle : IAction {
+            private readonly ActionHandle handle;
+
+            public WaitForHandle(ActionHandle _handle) {
+                handle = _handle;
+            }
+
+            public async UniTask Run(LogicContext _context, CancellationToken _token) {
+                while (handle.IsRunning) await UniTask.Yield(PlayerLoopTiming.Update, _token);
             }
         }
 

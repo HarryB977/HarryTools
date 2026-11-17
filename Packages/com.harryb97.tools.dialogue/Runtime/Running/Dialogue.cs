@@ -195,6 +195,7 @@ namespace HarryTools.Dialogue {
             choicePresentedHandlers = null;
             choiceMadeHandlers = null;
             ChannelResolver = null;
+            LineTextResolver = null;
             ChoiceShown = null;
             ChoiceHidden = null;
             ManualTick = false;
@@ -204,13 +205,14 @@ namespace HarryTools.Dialogue {
 
         // ==================== PRIVATE ====================
         #region Private Methods
-        /// <summary> Each ambient run applies its own policy as a main run starts </summary>
+        /// <summary> Applies the ambient policy to every ambient run as a main run starts: the main run's option, else the ambient asset's override, else the settings </summary>
         private static void ApplyAmbientPolicies(DialogueRun _main) {
             DialogueRun[] _runs = active.ToArray();
             for (int _i = 0; _i < _runs.Length; _i++) {
                 DialogueRun _run = _runs[_i];
                 if (_run == _main || _run.IsMain || _run.State == RunState.Ended) continue;
-                switch (_run.AmbientPolicy) {
+                AmbientPolicy _policy = _main.Options.AmbientPolicy ?? AssetPolicy(_run.Asset);
+                switch (_policy) {
                     case AmbientPolicy.Pause:
                         // A run paused by hand is left to whoever paused it
                         if (_run.State == RunState.Paused) break;
@@ -223,6 +225,11 @@ namespace HarryTools.Dialogue {
                         break;
                 }
             }
+        }
+
+        private static AmbientPolicy AssetPolicy(DialogueAsset _asset) {
+            if (_asset != null && _asset.OverrideAmbientPolicy) return _asset.AmbientPolicy;
+            return DialogueSettings.Current.DefaultAmbientPolicy;
         }
 
         private static void ResumePausedForMain() {

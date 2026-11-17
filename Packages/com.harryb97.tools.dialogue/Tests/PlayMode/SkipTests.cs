@@ -270,6 +270,10 @@ namespace HarryTools.Dialogue.Tests {
             yield return FramesUntil(() => RecordingAction.Log.Contains("bEnd:done"), 60);
             List<string> _log = RecordingAction.Log;
             CollectionAssert.Contains(_log, "aBefore:done");
+            // The rest of the line waits for the before actions that were already running
+            Assert.Less(_log.IndexOf("aBefore:done"), _log.IndexOf("aStart"));
+            Assert.Less(_log.IndexOf("aStart:done"), _log.IndexOf("aEnd"));
+            Assert.Less(_log.IndexOf("aEnd:done"), _log.IndexOf("node"));
             Assert.Less(_log.IndexOf("node:done"), _log.IndexOf("bBefore"));
             Assert.Less(_log.IndexOf("bBefore:done"), _log.IndexOf("bStart"));
             Assert.Less(_log.IndexOf("bStart:done"), _log.IndexOf("bEnd"));

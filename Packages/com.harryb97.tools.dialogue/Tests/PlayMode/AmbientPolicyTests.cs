@@ -51,13 +51,14 @@ namespace HarryTools.Dialogue.Tests {
             return _asset;
         }
 
-        private DialogueRun StartAmbient(string _label, AmbientPolicy? _option = null, AmbientPolicy? _assetPolicy = null) {
+        /// <summary> An ambient run whose asset overrides the ambient policy when one is given </summary>
+        private DialogueRun StartAmbient(string _label, AmbientPolicy? _assetPolicy = null) {
             DialogueAsset _asset = SingleLine(_label);
             if (_assetPolicy.HasValue) {
                 _asset.OverrideAmbientPolicy = true;
                 _asset.AmbientPolicy = _assetPolicy.Value;
             }
-            return Dialogue.Start(_asset, new DialogueStartOptions { IsMain = false, AmbientPolicy = _option });
+            return Dialogue.Start(_asset, new DialogueStartOptions { IsMain = false });
         }
 
         private FakeLineHandle HandleOf(DialogueRun _run) {
@@ -133,20 +134,37 @@ namespace HarryTools.Dialogue.Tests {
         [Test]
         public void AmbientPolicy_Precedence_Options_Asset_Settings() {
             settings.DefaultAmbientPolicy = AmbientPolicy.Silence;
-            DialogueRun _fromOptions = StartAmbient("options", AmbientPolicy.Continue, AmbientPolicy.Pause);
-            DialogueRun _fromAsset = StartAmbient("asset", null, AmbientPolicy.Pause);
+            DialogueRun _fromAsset = StartAmbient("asset", AmbientPolicy.Pause);
             DialogueRun _fromSettings = StartAmbient("settings");
-            DialogueRun _notOverridden = StartAmbient("notOverridden");
-            _notOverridden.Asset.AmbientPolicy = AmbientPolicy.Pause;
+            // Without the override flag the asset's policy is not used
+            DialogueAsset _notOverriddenAsset = SingleLine("notOverridden");
+            _notOverriddenAsset.AmbientPolicy = AmbientPolicy.Pause;
+            DialogueRun _notOverridden = Dialogue.Start(_notOverriddenAsset, new DialogueStartOptions { IsMain = false });
             Tick();
 
-            Dialogue.Start(SingleLine("main"), new DialogueStartOptions { AmbientPolicy = AmbientPolicy.Continue });
-
-            Assert.AreEqual(RunState.Running, _fromOptions.State);
+            // No option on the main call: asset override, then settings
+            DialogueRun _main = Dialogue.Start(SingleLine("main"));
             Assert.AreEqual(RunState.Paused, _fromAsset.State);
             Assert.AreEqual(RunState.Ended, _fromSettings.State);
             Assert.AreEqual(EndReason.Stopped, ended[_fromSettings]);
             Assert.AreEqual(RunState.Ended, _notOverridden.State);
+            _main.Stop();
+            Assert.AreEqual(RunState.Running, _fromAsset.State);
+
+            // The main call's option wins over the asset override and the settings
+            DialogueRun _silenceAsset = StartAmbient("silenceAsset", AmbientPolicy.Silence);
+            DialogueRun _defaults = StartAmbient("defaults");
+            Tick();
+            _main = Dialogue.Start(SingleLine("continueMain"), new DialogueStartOptions { AmbientPolicy = AmbientPolicy.Continue });
+            Assert.AreEqual(RunState.Running, _fromAsset.State);
+            Assert.AreEqual(RunState.Running, _silenceAsset.State);
+            Assert.AreEqual(RunState.Running, _defaults.State);
+            _main.Stop();
+
+            Dialogue.Start(SingleLine("pauseMain"), new DialogueStartOptions { AmbientPolicy = AmbientPolicy.Pause });
+            Assert.AreEqual(RunState.Paused, _fromAsset.State);
+            Assert.AreEqual(RunState.Paused, _silenceAsset.State);
+            Assert.AreEqual(RunState.Paused, _defaults.State);
         }
         #endregion
     }
