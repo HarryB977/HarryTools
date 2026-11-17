@@ -1,6 +1,6 @@
 {
   "name": "com.harryb97.tools.texteffects",
-  "version": "1.0.0-beta.1",
+  "version": "1.0.0-beta.2",
   "displayName": "HarryTools Text Effects",
   "description": "Typewriter y efectos de texto para TextMeshPro: marcado en el propio texto, presets de efectos, pausas, eventos y voces de tecleo.",
   "unity": "6000.0",

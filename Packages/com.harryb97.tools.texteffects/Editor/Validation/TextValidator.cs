@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace HarryTools.TextEffects.Editor {
     /// <summary> Checks the markup of a text, alone or compared across locales. Works on plain strings, with no dependency on Localization </summary>
-    internal static class TextValidator {
+    public static class TextValidator {
         // ==================== VARIABLES ===================
         #region Private Variables
         private const string VoicePrefix = "Voice '";
@@ -15,7 +15,7 @@ namespace HarryTools.TextEffects.Editor {
         // ==================== METHODS ====================
         #region Public Methods
         /// <summary> Adds the problems of one text: parser issues, unknown voices, events missing from the table and tags that look like misspelled presets. A null '_eventExists' skips the event check </summary>
-        internal static void ValidateText(string _text, ITagLookup _lookup, Func<string, bool> _eventExists, List<TextIssue> _into) {
+        public static void ValidateText(string _text, ITagLookup _lookup, Func<string, bool> _eventExists, List<TextIssue> _into) {
             ParsedText parsed = TextParser.Parse(_text, _lookup);
             for (int i = 0; i < parsed.Issues.Count; i++) {
                 TextIssue issue = parsed.Issues[i];
@@ -43,7 +43,7 @@ namespace HarryTools.TextEffects.Editor {
         }
 
         /// <summary> Adds the problems of every locale, plus the differences of each one against the base locale. Empty texts are not compared. A null '_eventExists' skips the event check </summary>
-        internal static void ValidateLocales(string _baseLocale, IReadOnlyDictionary<string, string> _textByLocale, ITagLookup _lookup, List<LocaleIssue> _into, Func<string, bool> _eventExists = null) {
+        public static void ValidateLocales(string _baseLocale, IReadOnlyDictionary<string, string> _textByLocale, ITagLookup _lookup, List<LocaleIssue> _into, Func<string, bool> _eventExists = null) {
             if (_textByLocale == null) return;
 
             List<TextIssue> issues = new List<TextIssue>();

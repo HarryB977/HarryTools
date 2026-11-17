@@ -67,6 +67,12 @@ namespace HarryTools.TextEffects {
         public event Action WaitingInput;
         public event Action TypingCompleted;
         public event Action Hidden;
+
+        /// <summary> Time mode used by Update. Can be changed at any moment </summary>
+        public TimeMode TimeMode { get => timeMode; set => timeMode = value; }
+
+        /// <summary> True while Pause is in effect. The component stays enabled and the event queue keeps running </summary>
+        public bool IsPaused => paused;
         #endregion
 
         #region Internal Variables
@@ -91,7 +97,6 @@ namespace HarryTools.TextEffects {
 #endif
         internal bool ShowOnEnable { get => showOnEnable; set => showOnEnable = value; }
         internal string PlainText { get => plainText; set => plainText = value; }
-        internal TimeMode TimeMode { get => timeMode; set => timeMode = value; }
         internal float CharactersPerSecond { get => charactersPerSecond; set => charactersPerSecond = value; }
         internal TextEventTable Events { get => events; set => events = value; }
         internal HideMode HideMode { get => hideMode; set => hideMode = value; }
@@ -106,6 +111,8 @@ namespace HarryTools.TextEffects {
         private readonly List<TextIssue> loadIssues = new List<TextIssue>();
         private TMP_Text tmpText;
         private ITextEventProvider externalProvider;
+        private bool paused;
+        private GameObject eventSelf;
         private int[] sourceIndices = Array.Empty<int>();
         private TypingVoice currentVoice;
         private bool unknownVoiceWarned;
@@ -210,6 +217,17 @@ namespace HarryTools.TextEffects {
             Hidden?.Invoke();
         }
 
+        /// <summary> Freezes typing, pauses, effects and hiding. Does not disable the component nor pause the event queue </summary>
+        public void Pause() => paused = true;
+
+        /// <summary> Continues after Pause </summary>
+        public void Resume() => paused = false;
+
+        /// <summary> Sets the object used as 'Self' by the actions of the text events. Null goes back to this component </summary>
+        public void SetEventContext(GameObject _self) {
+            eventSelf = _self;
+        }
+
         /// <summary> Replaces the event table with another source. Null goes back to the component's own table </summary>
         public void SetEventProvider(ITextEventProvider _provider) {
             externalProvider = _provider;
@@ -219,7 +237,7 @@ namespace HarryTools.TextEffects {
         #region Internal Methods
         /// <summary> Advances the text by '_dt' seconds. Update calls it in play mode and the editor preview calls it too </summary>
         internal void Tick(float _dt) {
-            if (State == EffectTextState.Hidden) return;
+            if (paused || State == EffectTextState.Hidden) return;
 
             animationTime += _dt;
             if (State == EffectTextState.Typing && !awaitingLocalized) RunTypewriter(TypewriterCall.Tick, _dt);
@@ -352,7 +370,7 @@ namespace HarryTools.TextEffects {
             if (!_provider.TryGetEvent(_name, out ActionList _actions, out bool _runWhenSkipped)) return;
             if (_actions == null) return;
             if (_skipped && !_runWhenSkipped) return;
-            Queue.Enqueue(_actions, LogicContext.From(this));
+            Queue.Enqueue(_actions, eventSelf != null ? LogicContext.From(this).WithSelf(eventSelf) : LogicContext.From(this));
         }
 
         void ITypewriterListener.OnVoiceChanged(string _voiceName) {

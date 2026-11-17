@@ -79,6 +79,9 @@ Mientras el asset `TextEffectsSettings` existe, el registro se mantiene solo: ca
 | `HideImmediate()` | Oculta al instante. |
 | `DefaultVoice` | Voz por defecto, también asignable por código. |
 | `SetEventProvider(ITextEventProvider)` | Sustituye la tabla de eventos del componente por otra fuente. `null` vuelve a la tabla propia. |
+| `TimeMode` | Tiempo que usa `Update` (`Default`, `Scaled` o `Unscaled`). Se puede cambiar en cualquier momento. |
+| `Pause()` / `Resume()` / `IsPaused` | En pausa no avanza nada: ni la escritura, ni las pausas del texto, ni los efectos, ni la desaparición. El componente no se desactiva y la cola de eventos no se pausa. |
+| `SetEventContext(GameObject)` | Objeto que reciben como `Self` las acciones de los eventos de texto. `null` vuelve al propio `EffectText`. |
 | `State` | `Hidden`, `Typing`, `WaitingInput`, `Complete` o `Hiding`. |
 | `Text` | Texto actual, con las marcas. |
 | Eventos C# | `CharacterShown` (`CharacterShownArgs`: índice, carácter, voz activa y si se mostró por `Skip`), `EventReached` (nombre del evento), `WaitingInput`, `TypingCompleted`, `Hidden`. |
@@ -203,6 +206,8 @@ En el inspector del componente, siempre visible y actualizada al editar:
 - Preset desconocido: solo se detecta cuando la marca parece nuestra, es decir, lleva parámetros (`x=y`) o se cierra con `</>` o `</nombre>`; una marca desconocida sin parámetros ni cierre se deja a TextMeshPro sin avisar.
 - `<event>` sin entrada en la tabla del componente.
 - Entre idiomas (modo *Localized*): comparado con el idioma base del proyecto, cada traducción debe tener los mismos `<event>` y `<waitinput>` (mismo número y nombres), y es un **error** si no. Que falten o sobren pausas o presets es un **aviso**.
+
+Las comprobaciones están disponibles por código en la clase pública `TextValidator` (ensamblado de editor): `ValidateText` valida un texto y `ValidateLocales` compara los textos de varios idiomas.
 
 El menú **Tools > HarryTools > Text Effects > Validate String Tables** valida todas las String Table Collections del proyecto (sintaxis, presets, voces y paridad entre idiomas) y escribe el resultado en la consola. No comprueba los nombres de eventos contra ninguna tabla, porque dependen de quién use la cadena. Requiere `com.unity.localization`.
 

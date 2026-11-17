@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.0-beta.2] - 2026-11-17
+### Añadido
+- `EffectText.TimeMode` pasa a ser público y se puede cambiar en cualquier momento; `Update` usa siempre el valor actual.
+- `EffectText.Pause()`, `Resume()` e `IsPaused`: en pausa el typewriter, las pausas del texto, los efectos y la desaparición no avanzan. El componente sigue activo y la cola de eventos no se pausa.
+- `EffectText.SetEventContext(GameObject)`: objeto que reciben como `Self` las acciones de los eventos de texto. `null` vuelve al propio componente.
+- `TextValidator` (`ValidateText` y `ValidateLocales`) pasa a ser público para poder validar textos desde otros paquetes de editor.
+
 ## [1.0.0-beta.1] - 2026-11-16
 ### Añadido
 - Componente `EffectText` para `TMP_Text` (UGUI y 3D): typewriter con velocidad base, tiempo escalado o sin escalar, mostrar al activarse, `SetText`, `Show`, `Skip`, `Continue`, `Hide` y `HideImmediate`, estado consultable y los eventos `CharacterShown`, `EventReached`, `WaitingInput`, `TypingCompleted` y `Hidden`.
