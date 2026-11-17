@@ -51,9 +51,22 @@ namespace HarryTools.Dialogue {
             get => time;
             internal set => time = value;
         }
-        public bool OverrideAmbientPolicy => overrideAmbientPolicy;
-        public AmbientPolicy AmbientPolicy => ambientPolicy;
-        public bool AllowSkip => allowSkip;
+
+        public bool OverrideAmbientPolicy {
+            get => overrideAmbientPolicy;
+            internal set => overrideAmbientPolicy = value;
+        }
+
+        /// <summary> What this dialogue does when it runs as ambient and a main dialogue starts </summary>
+        public AmbientPolicy AmbientPolicy {
+            get => ambientPolicy;
+            internal set => ambientPolicy = value;
+        }
+
+        public bool AllowSkip {
+            get => allowSkip;
+            internal set => allowSkip = value;
+        }
         #endregion
 
         // ==================== UNITY ====================

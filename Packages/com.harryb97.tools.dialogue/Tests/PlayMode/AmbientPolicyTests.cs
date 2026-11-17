@@ -1,0 +1,153 @@
+using System.Collections.Generic;
+using NUnit.Framework;
+using UnityEngine;
+
+namespace HarryTools.Dialogue.Tests {
+    public class AmbientPolicyTests {
+        // ==================== SETUP ====================
+        #region Setup
+        private readonly List<DialogueAsset> assets = new List<DialogueAsset>();
+        private readonly Dictionary<DialogueRun, EndReason> ended = new Dictionary<DialogueRun, EndReason>();
+        private DialogueSettings settings;
+        private FakeLineChannel channel;
+
+        [SetUp]
+        public void SetUp() {
+            RecordingAction.Log.Clear();
+            DialogueMemory.ClearForTests();
+            settings = ScriptableObject.CreateInstance<DialogueSettings>();
+            DialogueSettings.UseForTests(settings);
+            Dialogue.ManualTick = true;
+            channel = new FakeLineChannel();
+            Dialogue.ChannelResolver = _ => channel;
+            ended.Clear();
+            Dialogue.Ended += OnEnded;
+        }
+
+        [TearDown]
+        public void TearDown() {
+            Dialogue.Ended -= OnEnded;
+            Dialogue.StopAll();
+            Dialogue.ClearForTests();
+            DialogueSettings.ClearForTests();
+            DialogueMemory.ClearForTests();
+            for (int _i = 0; _i < assets.Count; _i++) Object.DestroyImmediate(assets[_i]);
+            assets.Clear();
+            Object.DestroyImmediate(settings);
+        }
+
+        private void OnEnded(DialogueRun _run, EndReason _reason) => ended[_run] = _reason;
+        #endregion
+
+        // ==================== HELPERS ====================
+        #region Helpers
+        /// <summary> Start → one line </summary>
+        private DialogueAsset SingleLine(string _label) {
+            DialogueAsset _asset = ScriptableObject.CreateInstance<DialogueAsset>();
+            assets.Add(_asset);
+            LineNode _line = _asset.AddNode<LineNode>();
+            _line.WriterNote = _label;
+            _asset.Start.Next.Target = _line.Id;
+            return _asset;
+        }
+
+        private DialogueRun StartAmbient(string _label, AmbientPolicy? _option = null, AmbientPolicy? _assetPolicy = null) {
+            DialogueAsset _asset = SingleLine(_label);
+            if (_assetPolicy.HasValue) {
+                _asset.OverrideAmbientPolicy = true;
+                _asset.AmbientPolicy = _assetPolicy.Value;
+            }
+            return Dialogue.Start(_asset, new DialogueStartOptions { IsMain = false, AmbientPolicy = _option });
+        }
+
+        private FakeLineHandle HandleOf(DialogueRun _run) {
+            for (int _i = channel.Handles.Count - 1; _i >= 0; _i--) {
+                if (channel.Handles[_i].Presentation.Run == _run) return channel.Handles[_i];
+            }
+            return null;
+        }
+
+        private static void Tick(float _dt = 0f) => Dialogue.TickAll(_dt, _dt);
+        #endregion
+
+        // ==================== TESTS ====================
+        #region Tests
+        [Test]
+        public void Ambient_Continue_Pause_Silence() {
+            DialogueRun _continue = StartAmbient("continue", AmbientPolicy.Continue);
+            DialogueRun _pause = StartAmbient("pause", AmbientPolicy.Pause);
+            DialogueRun _silence = StartAmbient("silence", AmbientPolicy.Silence);
+            Tick();
+
+            DialogueRun _main = Dialogue.Start(SingleLine("main"));
+            Assert.IsNotNull(_main);
+
+            Assert.AreEqual(RunState.Running, _continue.State);
+            Assert.IsFalse(HandleOf(_continue).Paused);
+            Assert.AreEqual(RunState.Paused, _pause.State);
+            Assert.IsTrue(HandleOf(_pause).Paused);
+            Assert.AreEqual(RunState.Ended, _silence.State);
+            Assert.AreEqual(EndReason.Stopped, ended[_silence]);
+            Assert.IsTrue(HandleOf(_silence).Released);
+            CollectionAssert.DoesNotContain(Dialogue.Active, _silence);
+
+            // A paused ambient run does not move while the main one plays
+            HandleOf(_pause).Advance();
+            HandleOf(_continue).Advance();
+            Tick();
+            Assert.AreEqual(RunState.Paused, _pause.State);
+            Assert.AreEqual(RunState.Ended, _continue.State);
+            Assert.AreEqual(EndReason.Completed, ended[_continue]);
+        }
+
+        [Test]
+        public void Ambient_PauseResumesWhenMainEnds() {
+            DialogueRun _pause = StartAmbient("pause", AmbientPolicy.Pause);
+            DialogueRun _pausedByHand = StartAmbient("byHand", AmbientPolicy.Pause);
+            Tick();
+            _pausedByHand.Pause();
+
+            DialogueRun _main = Dialogue.Start(SingleLine("main"));
+            Assert.AreEqual(RunState.Paused, _pause.State);
+
+            _main.Stop();
+            Assert.AreEqual(RunState.Running, _pause.State);
+            Assert.IsFalse(HandleOf(_pause).Paused);
+            // Paused before the main dialogue started: stays paused
+            Assert.AreEqual(RunState.Paused, _pausedByHand.State);
+
+            // Again, with a main dialogue that completes
+            DialogueRun _second = Dialogue.Start(SingleLine("second"));
+            Assert.AreEqual(RunState.Paused, _pause.State);
+            Tick();
+            HandleOf(_second).Advance();
+            Tick();
+            Assert.AreEqual(EndReason.Completed, ended[_second]);
+            Assert.AreEqual(RunState.Running, _pause.State);
+
+            HandleOf(_pause).Advance();
+            Tick();
+            Assert.AreEqual(EndReason.Completed, ended[_pause]);
+        }
+
+        [Test]
+        public void AmbientPolicy_Precedence_Options_Asset_Settings() {
+            settings.DefaultAmbientPolicy = AmbientPolicy.Silence;
+            DialogueRun _fromOptions = StartAmbient("options", AmbientPolicy.Continue, AmbientPolicy.Pause);
+            DialogueRun _fromAsset = StartAmbient("asset", null, AmbientPolicy.Pause);
+            DialogueRun _fromSettings = StartAmbient("settings");
+            DialogueRun _notOverridden = StartAmbient("notOverridden");
+            _notOverridden.Asset.AmbientPolicy = AmbientPolicy.Pause;
+            Tick();
+
+            Dialogue.Start(SingleLine("main"), new DialogueStartOptions { AmbientPolicy = AmbientPolicy.Continue });
+
+            Assert.AreEqual(RunState.Running, _fromOptions.State);
+            Assert.AreEqual(RunState.Paused, _fromAsset.State);
+            Assert.AreEqual(RunState.Ended, _fromSettings.State);
+            Assert.AreEqual(EndReason.Stopped, ended[_fromSettings]);
+            Assert.AreEqual(RunState.Ended, _notOverridden.State);
+        }
+        #endregion
+    }
+}

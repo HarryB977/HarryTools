@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using HarryTools.DomainReload;
+using UnityEngine.Localization;
 using Logger = HarryTools.LoggerTool.Logger;
 
 namespace HarryTools.Dialogue {
@@ -13,6 +14,8 @@ namespace HarryTools.Dialogue {
         [ClearOnReload(AssignNewInstance = true)] private static List<DialogueRun> active = new List<DialogueRun>();
         [ClearOnReload(AssignNewInstance = true)] private static List<DialogueRun> tickBuffer = new List<DialogueRun>();
         [ClearOnReload] private static DialogueRun main;
+        // Ambient runs paused by the main run's start, resumed when it ends
+        [ClearOnReload(AssignNewInstance = true)] private static List<DialogueRun> pausedForMain = new List<DialogueRun>();
 
         [ClearOnReload] private static Action<DialogueRun> startedHandlers;
         [ClearOnReload] private static Action<DialogueRun, EndReason> endedHandlers;
@@ -33,6 +36,9 @@ namespace HarryTools.Dialogue {
         #region Internal Variables
         /// <summary> Picks the channel that shows a line. Null, or a null result, uses the channel without view </summary>
         [ClearOnReload] internal static Func<LinePresentation, ILineChannel> ChannelResolver;
+
+        /// <summary> Gives the text of a line. Null reads its localized string </summary>
+        [ClearOnReload] internal static Func<LineNode, string> LineTextResolver;
 
         /// <summary> When true, nothing ticks the dialogues except <see cref="TickAll"/> </summary>
         [ClearOnReload] internal static bool ManualTick;
@@ -100,7 +106,10 @@ namespace HarryTools.Dialogue {
 
             DialogueRun _run = new DialogueRun(_asset, _options);
             active.Add(_run);
-            if (_run.IsMain) main = _run;
+            if (_run.IsMain) {
+                main = _run;
+                ApplyAmbientPolicies(_run);
+            }
 
             DialogueDriver.Ensure();
             DialogueMemory.MarkPlayed(_asset);
@@ -130,8 +139,28 @@ namespace HarryTools.Dialogue {
         internal static void TickAll(float _scaledDt, float _unscaledDt) {
             tickBuffer.Clear();
             tickBuffer.AddRange(active);
-            for (int _i = 0; _i < tickBuffer.Count; _i++) tickBuffer[_i].Tick(_scaledDt, _unscaledDt);
+            for (int _i = 0; _i < tickBuffer.Count; _i++) {
+                DialogueRun _run = tickBuffer[_i];
+                try {
+                    _run.Tick(_scaledDt, _unscaledDt);
+                } catch (Exception _exception) {
+                    StopAfterError(_run, _exception);
+                }
+            }
             tickBuffer.Clear();
+        }
+
+        /// <summary> Text of the line in the current locale, or null when it is not set or cannot be resolved </summary>
+        internal static string ResolveLineText(LineNode _line) {
+            if (_line == null) return null;
+            if (LineTextResolver != null) return LineTextResolver(_line);
+            LocalizedString _text = _line.Text;
+            if (_text == null || _text.IsEmpty) return null;
+            try {
+                return _text.GetLocalizedString();
+            } catch (Exception) {
+                return null;
+            }
         }
 
         internal static ILineChannel ResolveChannel(LinePresentation _line) {
@@ -141,7 +170,10 @@ namespace HarryTools.Dialogue {
         /// <summary> Called by a run as it ends, before its Ended events, so their handlers can start another main dialogue </summary>
         internal static void Unregister(DialogueRun _run) {
             active.Remove(_run);
-            if (main == _run) main = null;
+            pausedForMain.Remove(_run);
+            if (main != _run) return;
+            main = null;
+            ResumePausedForMain();
         }
 
         internal static void RaiseEnded(DialogueRun _run, EndReason _reason) => endedHandlers?.Invoke(_run, _reason);
@@ -155,6 +187,7 @@ namespace HarryTools.Dialogue {
             active.Clear();
             tickBuffer.Clear();
             main = null;
+            pausedForMain.Clear();
             startedHandlers = null;
             endedHandlers = null;
             lineStartedHandlers = null;
@@ -166,6 +199,48 @@ namespace HarryTools.Dialogue {
             ChoiceHidden = null;
             ManualTick = false;
             DialogueDriver.DestroyInstance();
+        }
+        #endregion
+
+        // ==================== PRIVATE ====================
+        #region Private Methods
+        /// <summary> Each ambient run applies its own policy as a main run starts </summary>
+        private static void ApplyAmbientPolicies(DialogueRun _main) {
+            DialogueRun[] _runs = active.ToArray();
+            for (int _i = 0; _i < _runs.Length; _i++) {
+                DialogueRun _run = _runs[_i];
+                if (_run == _main || _run.IsMain || _run.State == RunState.Ended) continue;
+                switch (_run.AmbientPolicy) {
+                    case AmbientPolicy.Pause:
+                        // A run paused by hand is left to whoever paused it
+                        if (_run.State == RunState.Paused) break;
+                        _run.Pause();
+                        pausedForMain.Add(_run);
+                        break;
+
+                    case AmbientPolicy.Silence:
+                        _run.Stop();
+                        break;
+                }
+            }
+        }
+
+        private static void ResumePausedForMain() {
+            if (pausedForMain.Count == 0) return;
+            DialogueRun[] _runs = pausedForMain.ToArray();
+            pausedForMain.Clear();
+            for (int _i = 0; _i < _runs.Length; _i++) _runs[_i].Resume();
+        }
+
+        /// <summary> A run that threw while ticking is stopped so the others keep going </summary>
+        private static void StopAfterError(DialogueRun _run, Exception _exception) {
+            string _name = _run.Asset != null ? _run.Asset.name : "(missing)";
+            Logger.LogError(LogCategory, $"Dialogue '{_name}' failed and was stopped: {_exception}");
+            try {
+                _run.Stop();
+            } catch (Exception _stopException) {
+                Logger.LogError(LogCategory, $"Dialogue '{_name}' failed while stopping: {_stopException}");
+            }
         }
         #endregion
     }

@@ -8,7 +8,7 @@ namespace HarryTools.Dialogue {
         /// <summary> Main dialogues can offer choices and only one runs at a time. Ambient ones have no limit </summary>
         public bool IsMain { get; set; } = true;
 
-        /// <summary> What ambient dialogues do while this one plays, when it is a main dialogue </summary>
+        /// <summary> What this dialogue does, when it runs as ambient, as a main dialogue starts </summary>
         public AmbientPolicy? AmbientPolicy { get; set; }
 
         /// <summary> Clock of this run </summary>

@@ -21,7 +21,11 @@ namespace HarryTools.Dialogue {
         }
 
         public DialogueTime DefaultTime => defaultTime;
-        public AmbientPolicy DefaultAmbientPolicy => defaultAmbientPolicy;
+        public AmbientPolicy DefaultAmbientPolicy {
+            get => defaultAmbientPolicy;
+            internal set => defaultAmbientPolicy = value;
+        }
+
         public LineLifetime DefaultLifetime => defaultLifetime;
         public AdvanceMode DefaultAdvance => defaultAdvance;
         public bool HistoryEnabled => historyEnabled;

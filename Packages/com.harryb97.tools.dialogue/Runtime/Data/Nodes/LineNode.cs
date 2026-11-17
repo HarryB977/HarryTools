@@ -58,7 +58,11 @@ namespace HarryTools.Dialogue {
         public SkippableActions Before => before;
         public SkippableActions OnStart => onStart;
         public SkippableActions OnEnd => onEnd;
-        public TextEventTable Events => events;
+
+        public TextEventTable Events {
+            get => events;
+            internal set => events = value;
+        }
 
         public bool OverrideLifetime {
             get => overrideLifetime;

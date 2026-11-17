@@ -1,6 +1,3 @@
-using System;
-using UnityEngine.Localization;
-
 namespace HarryTools.Dialogue {
     /// <summary> Shows nothing: a line lasts its lifetime, or until advanced when it waits for the next line </summary>
     internal sealed class HeadlessLineChannel : ILineChannel {
@@ -17,14 +14,7 @@ namespace HarryTools.Dialogue {
 
         /// <summary> Length of the localized text, or 0 when it is not set or cannot be resolved </summary>
         internal static int TextLength(LineNode _line) {
-            LocalizedString _text = _line?.Text;
-            if (_text == null || _text.IsEmpty) return 0;
-            try {
-                string _value = _text.GetLocalizedString();
-                return _value?.Length ?? 0;
-            } catch (Exception) {
-                return 0;
-            }
+            return Dialogue.ResolveLineText(_line)?.Length ?? 0;
         }
         #endregion
 

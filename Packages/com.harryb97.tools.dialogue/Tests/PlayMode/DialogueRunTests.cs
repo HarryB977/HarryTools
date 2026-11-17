@@ -377,6 +377,29 @@ namespace HarryTools.Dialogue.Tests {
         // ==================== CONTROL ====================
         #region Control
         [Test]
+        public void TickAll_ExceptionInOneRun_OthersContinue() {
+            DialogueRun _broken = Dialogue.Start(SingleLine("broken", out _), new DialogueStartOptions { IsMain = false });
+            DialogueRun _healthy = Dialogue.Start(SingleLine("healthy", out _), new DialogueStartOptions { IsMain = false });
+            Dialogue.ChannelResolver = _line => {
+                if (_line.Run == _broken) throw new System.InvalidOperationException("channel failure");
+                return channel;
+            };
+
+            LogAssert.Expect(LogType.Error, new Regex("channel failure"));
+            Tick();
+
+            Assert.AreEqual(RunState.Ended, _broken.State);
+            CollectionAssert.AreEqual(new[] { EndReason.Stopped }, endReasons);
+            Assert.AreEqual(RunState.Running, _healthy.State);
+            CollectionAssert.AreEqual(new[] { "present:healthy" }, RecordingAction.Log);
+
+            channel.Last.Advance();
+            Tick();
+            Assert.AreEqual(RunState.Ended, _healthy.State);
+            CollectionAssert.AreEqual(new[] { EndReason.Stopped, EndReason.Completed }, endReasons);
+        }
+
+        [Test]
         public void Stop_EndsWithStopped_ReleasesLine() {
             DialogueAsset _asset = SingleLine("a", out _);
             DialogueRun _run = Dialogue.Start(_asset);

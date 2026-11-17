@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using HarryTools.Actions;
 using HarryTools.Conditions;
+using HarryTools.TextEffects;
 using UnityEngine;
 using Logger = HarryTools.LoggerTool.Logger;
 
@@ -51,7 +52,12 @@ namespace HarryTools.Dialogue {
         private bool stopRequested;
         private bool advanceRequested;
         private bool pauseRequested;
+        private bool skipRequested;
         private ChoiceOption choiceRequested;
+
+        // Runs, in order and one after the other, what a skip passes over
+        private TextEventQueue skipQueue;
+        private ParsedText skipParsed;
         #endregion
 
         #region Public Variables
@@ -69,6 +75,12 @@ namespace HarryTools.Dialogue {
 
         public DialogueTime Time { get; }
 
+        /// <summary> The player may skip this dialogue </summary>
+        public bool CanSkip => Asset.AllowSkip;
+
+        /// <summary> True while the run moves through the graph without showing lines </summary>
+        public bool IsSkipping { get; private set; }
+
         /// <summary> The choice waiting for an answer, or null </summary>
         public ChoicePrompt CurrentChoice { get; private set; }
 
@@ -84,6 +96,9 @@ namespace HarryTools.Dialogue {
 
         #region Internal Variables
         internal DialogueStartOptions Options { get; }
+
+        /// <summary> What this run does, as an ambient run, when a main dialogue starts </summary>
+        internal AmbientPolicy AmbientPolicy { get; }
 
         /// <summary> Seconds this run has ticked on its own clock. Frozen while paused </summary>
         internal float Clock => clock;
@@ -101,6 +116,7 @@ namespace HarryTools.Dialogue {
             Options = _options;
             IsMain = _options.IsMain;
             Time = _options.Time ?? (_asset.OverrideTime ? _asset.Time : DialogueSettings.Current.DefaultTime);
+            AmbientPolicy = _options.AmbientPolicy ?? (_asset.OverrideAmbientPolicy ? _asset.AmbientPolicy : DialogueSettings.Current.DefaultAmbientPolicy);
             MoveTo(_asset.Start);
         }
 
@@ -136,6 +152,14 @@ namespace HarryTools.Dialogue {
             lineHandle?.SetPaused(false);
         }
 
+        /// <summary> Moves on without showing lines, running what they would have run, up to the next choice or the end. Ignored when the dialogue cannot be skipped </summary>
+        public void Skip() {
+            if (!CanSkip || State != RunState.Running || IsSkipping) return;
+            skipRequested = true;
+            if (ticking) return;
+            RunSteps();
+        }
+
         /// <summary> Ends the run with <see cref="EndReason.Stopped"/> </summary>
         public void Stop() {
             if (State == RunState.Ended) return;
@@ -153,9 +177,14 @@ namespace HarryTools.Dialogue {
         internal void Tick(float _scaledDt, float _unscaledDt) {
             if (ticking || !IsActive) return;
             clock += Time == DialogueTime.Scaled ? _scaledDt : _unscaledDt;
+            RunSteps();
+        }
 
+        /// <summary> Applies pending requests, then steps until the run has to wait </summary>
+        private void RunSteps() {
             ticking = true;
             try {
+                if (ApplyRequests()) return;
                 for (int _steps = 0; ; _steps++) {
                     if (_steps >= MaxStepsPerTick) {
                         Logger.LogWarning(Dialogue.LogCategory, $"Dialogue '{CurrentAsset.name}' crossed {MaxStepsPerTick} nodes in one frame without waiting. Stopped to avoid an endless loop.");
@@ -163,7 +192,9 @@ namespace HarryTools.Dialogue {
                         break;
                     }
                     bool _moved = Step();
-                    if (ApplyRequests() || !_moved || !IsActive) break;
+                    if (ApplyRequests() || !IsActive) break;
+                    // A skip requested during the step has moved the run on already
+                    if (!_moved && !IsSkipping) break;
                 }
             } finally {
                 ticking = false;
@@ -174,6 +205,11 @@ namespace HarryTools.Dialogue {
         /// <returns> True when the run must stop moving this tick </returns>
         private bool ApplyRequests() {
             if (State == RunState.Ended) return true;
+            if (skipRequested) {
+                skipRequested = false;
+                if (State == RunState.Running && !IsSkipping) BeginSkip();
+                if (State == RunState.Ended) return true;
+            }
             if (stopRequested) {
                 Finish(EndReason.Stopped);
                 return true;
@@ -195,7 +231,8 @@ namespace HarryTools.Dialogue {
         private bool Step() {
             switch (phase) {
                 case Phase.Enter:
-                    Enter(Current);
+                    if (IsSkipping) SkipThrough(Current);
+                    else Enter(Current);
                     return true;
 
                 case Phase.DelayBefore:
@@ -408,7 +445,8 @@ namespace HarryTools.Dialogue {
             } finally {
                 ticking = false;
             }
-            ApplyRequests();
+            if (skipRequested) RunSteps();
+            else ApplyRequests();
         }
 
         private void TimeOut() {
@@ -452,6 +490,110 @@ namespace HarryTools.Dialogue {
         }
         #endregion
 
+        // ==================== SKIP ====================
+        #region Skip
+        /// <summary> Leaves the current node the way a skip does. The visible line is skipped and released; actions being awaited keep running unawaited </summary>
+        private void BeginSkip() {
+            IsSkipping = true;
+            switch (phase) {
+                case Phase.DelayBefore:
+                    // The line has not started yet: it is skipped whole
+                    phase = Phase.Enter;
+                    break;
+
+                case Phase.BeforeActions: {
+                    LineNode _line = (LineNode)Current;
+                    awaited = null;
+                    EnqueueSkipped(_line.OnStart);
+                    EnqueueTextEvents(_line);
+                    EnqueueSkipped(_line.OnEnd);
+                    GoTo(_line.Next);
+                    break;
+                }
+
+                case Phase.Showing: {
+                    // The line fires its own skipped text events as it is skipped
+                    LineNode _line = (LineNode)Current;
+                    lineHandle.Skip();
+                    ReleaseLine();
+                    EnqueueSkipped(_line.OnEnd);
+                    GoTo(_line.Next);
+                    break;
+                }
+
+                case Phase.EndActions:
+                    awaited = null;
+                    GoTo(((LineNode)Current).Next);
+                    break;
+
+                case Phase.DelayAfter:
+                    GoTo(((LineNode)Current).Next);
+                    break;
+
+                case Phase.WaitActions:
+                    awaited = null;
+                    GoTo(((ActionsNode)Current).Next);
+                    break;
+            }
+        }
+
+        /// <summary> Crosses the node without showing or waiting. Lines and actions nodes queue their actions; a choice offered to the player ends the skip </summary>
+        private void SkipThrough(DialogueNode _node) {
+            switch (_node) {
+                case LineNode _line:
+                    lineActor = null;
+                    EnqueueSkipped(_line.Before);
+                    EnqueueSkipped(_line.OnStart);
+                    EnqueueTextEvents(_line);
+                    EnqueueSkipped(_line.OnEnd);
+                    GoTo(_line.Next);
+                    break;
+
+                case ActionsNode _actions:
+                    if (_actions.RunWhenSkipped) Enqueue(_actions.Actions, null);
+                    GoTo(_actions.Next);
+                    break;
+
+                case ChoiceNode _choice:
+                    Offer(_choice);
+                    if (State == RunState.WaitingChoice) IsSkipping = false;
+                    break;
+
+                default:
+                    Enter(_node);
+                    break;
+            }
+        }
+
+        private void EnqueueSkipped(SkippableActions _actions) {
+            if (_actions != null && _actions.RunWhenSkipped) Enqueue(_actions.Actions, lineActor);
+        }
+
+        /// <summary> Queues the events of the line's markup, in text order, from its current text </summary>
+        private void EnqueueTextEvents(LineNode _line) {
+            TextEventTable _table = _line.Events;
+            if (_table == null || _table.Entries.Count == 0) return;
+            string _text = Dialogue.ResolveLineText(_line);
+            if (string.IsNullOrEmpty(_text)) return;
+
+            if (skipParsed == null) skipParsed = new ParsedText();
+            TextParser.Parse(_text, TextEffectsSettings.Current, skipParsed);
+            List<TextCommand> _commands = skipParsed.Commands;
+            for (int _i = 0; _i < _commands.Count; _i++) {
+                if (_commands[_i].Type != TextCommandType.Event) continue;
+                if (!_table.TryGetEvent(_commands[_i].Name, out ActionList _actions, out bool _runWhenSkipped)) continue;
+                if (_runWhenSkipped) Enqueue(_actions, lineActor);
+            }
+        }
+
+        /// <summary> Queued actions run one after the other without holding the run </summary>
+        private void Enqueue(ActionList _actions, GameObject _self) {
+            if (_actions == null || _actions.IsEmpty) return;
+            if (skipQueue == null) skipQueue = new TextEventQueue();
+            skipQueue.Enqueue(_actions, Context(_self));
+        }
+        #endregion
+
         // ==================== FLOW ====================
         #region Flow
         private void MoveTo(DialogueNode _node) {
@@ -478,7 +620,7 @@ namespace HarryTools.Dialogue {
         /// <summary> Returns to the last called jump node, or completes the run </summary>
         private void EndOrReturn() {
             if (calls.Count == 0) {
-                Finish(EndReason.Completed);
+                Finish(IsSkipping ? EndReason.Skipped : EndReason.Completed);
                 return;
             }
 
@@ -496,10 +638,14 @@ namespace HarryTools.Dialogue {
         private void Finish(EndReason _reason) {
             if (State == RunState.Ended) return;
             State = RunState.Ended;
+            IsSkipping = false;
             stopRequested = false;
             advanceRequested = false;
             pauseRequested = false;
+            skipRequested = false;
             calls.Clear();
+
+            // The skip queue is left running: what it holds was already happening when the run ended
 
             if (awaited != null && awaited.IsRunning) awaited.Cancel();
             awaited = null;
