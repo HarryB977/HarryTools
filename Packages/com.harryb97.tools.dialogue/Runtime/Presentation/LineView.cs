@@ -72,7 +72,9 @@ namespace HarryTools.Dialogue {
             text.TimeMode = ToTimeMode(_line.Time);
 
             if (Dialogue.LineTextResolver != null) {
-                text.SetText(Dialogue.LineTextResolver(_line.Line) ?? string.Empty);
+                // Tests may keep the line preparing, as a localized text that has not arrived yet
+                if (HoldTextForTests) IsPreparing = true;
+                else text.SetText(Dialogue.LineTextResolver(_line.Line) ?? string.Empty);
                 return;
             }
             IsPreparing = true;
@@ -111,6 +113,14 @@ namespace HarryTools.Dialogue {
         }
 
         /// <summary> The text clock that matches the run's clock </summary>
+        /// <summary> When true, lines bound with <see cref="Dialogue.LineTextResolver"/> stay preparing and never get their text </summary>
+        [HarryTools.DomainReload.ClearOnReload] internal static bool HoldTextForTests;
+
+        /// <summary> While set, the text events that fire are handed to it instead of the view's queue. Used to put the events of a skipped line in the run's skip queue </summary>
+        internal void RedirectEvents(Action<ActionList, LogicContext> _sink) {
+            if (eventForwarder != null) eventForwarder.Sink = _sink;
+        }
+
         internal static TimeMode ToTimeMode(DialogueTime _time) {
             switch (_time) {
                 case DialogueTime.Scaled: return TimeMode.Scaled;
@@ -173,6 +183,7 @@ namespace HarryTools.Dialogue {
             private readonly Dictionary<ActionList, ActionList> forwarders = new Dictionary<ActionList, ActionList>();
 
             public ITextEventProvider Source;
+            public Action<ActionList, LogicContext> Sink;
 
             public EventForwarder(TextEventQueue _queue) {
                 queue = _queue;
@@ -183,29 +194,35 @@ namespace HarryTools.Dialogue {
                 _runWhenSkipped = false;
                 if (Source == null || !Source.TryGetEvent(_name, out ActionList _inner, out _runWhenSkipped) || _inner == null) return false;
                 if (!forwarders.TryGetValue(_inner, out _actions)) {
-                    _actions = new ActionList(new EnqueueAction(queue, _inner));
+                    _actions = new ActionList(new EnqueueAction(this, _inner));
                     forwarders.Add(_inner, _actions);
                 }
                 return true;
             }
 
+            public void Enqueue(ActionList _actions, LogicContext _context) {
+                if (Sink != null) Sink(_actions, _context);
+                else queue.Enqueue(_actions, _context);
+            }
+
             public void Clear() {
                 Source = null;
+                Sink = null;
                 forwarders.Clear();
             }
         }
 
         private sealed class EnqueueAction : IAction {
-            private readonly TextEventQueue queue;
+            private readonly EventForwarder forwarder;
             private readonly ActionList actions;
 
-            public EnqueueAction(TextEventQueue _queue, ActionList _actions) {
-                queue = _queue;
+            public EnqueueAction(EventForwarder _forwarder, ActionList _actions) {
+                forwarder = _forwarder;
                 actions = _actions;
             }
 
             public UniTask Run(LogicContext _context, CancellationToken _token) {
-                queue.Enqueue(actions, _context);
+                forwarder.Enqueue(actions, _context);
                 return UniTask.CompletedTask;
             }
         }

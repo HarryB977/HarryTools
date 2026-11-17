@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using HarryTools.Actions;
+using HarryTools.Conditions;
 using HarryTools.DomainReload;
 using HarryTools.TextEffects;
 using TMPro;
@@ -420,15 +422,39 @@ namespace HarryTools.Dialogue {
                 finished = true;
 
                 EffectText _text = Text;
-                if (_text != null) {
-                    // Each pass reveals up to the next waitinput; the cap guards against a text that never completes
-                    for (int _pass = 0; _pass < 1000; _pass++) {
-                        if (_text.State == EffectTextState.WaitingInput) _text.Continue();
-                        else if (_text.State == EffectTextState.Typing) _text.Skip();
-                        else break;
+                if (view != null && view.IsPreparing) {
+                    // The text never arrived, so its events cannot fire from it: the run queues them from the line
+                    Run.EnqueueTextEventsForSkip(presentation.Line);
+                } else if (_text != null) {
+                    // During a run skip the events join the run's skip queue, in order with what the skip queues next
+                    if (Run.IsSkipping) view.RedirectEvents(OnSkippedEvent);
+                    try {
+                        RevealAll(_text);
+                    } finally {
+                        view.RedirectEvents(null);
                     }
                 }
                 if (onScreen) container.Remove(this);
+            }
+
+            /// <summary> Reveals up to each waitinput and continues until the text is complete. Stops when a pass changes nothing, as when the text defers the calls </summary>
+            private static void RevealAll(EffectText _text) {
+                for (int _pass = 0; _pass < 1000; _pass++) {
+                    EffectTextState _before = _text.State;
+                    if (_before == EffectTextState.WaitingInput) {
+                        _text.Continue();
+                        if (_text.State == EffectTextState.WaitingInput) return;
+                    } else if (_before == EffectTextState.Typing) {
+                        _text.Skip();
+                        if (_text.State == EffectTextState.Typing) return;
+                    } else {
+                        return;
+                    }
+                }
+            }
+
+            private void OnSkippedEvent(ActionList _actions, LogicContext _context) {
+                Run.EnqueueForSkip(_actions, _context.Self);
             }
 
             public void SetPaused(bool _paused) {

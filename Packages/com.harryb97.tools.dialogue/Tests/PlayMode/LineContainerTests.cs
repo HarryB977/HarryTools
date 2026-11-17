@@ -411,6 +411,49 @@ namespace HarryTools.Dialogue.Tests {
         }
 
         [UnityTest]
+        public IEnumerator Skip_WhilePreparing_StillFiresTextEvents() {
+            LineContainer _container = BuildContainer(1, AdvanceMode.Input);
+            DialogueAsset _asset = Lines(out LineNode[] _lines, "a<event=x>b<event=n>c");
+            _lines[0].Events = new TextEventTable(new List<TextEventEntry> {
+                new TextEventEntry("x", new ActionList(new RecordingAction("x", 2)), true),
+                new TextEventEntry("n", new ActionList(new RecordingAction("n")), false)
+            });
+            _lines[0].OnEnd.Actions = new ActionList(new RecordingAction("end"));
+            LineView.HoldTextForTests = true;
+            yield return null;
+
+            DialogueRun _run = StartMain(_asset);
+            Assert.IsTrue(_container.Visible[0].IsPreparing);
+            _run.Skip();
+            Assert.AreEqual(0, _container.Visible.Count);
+
+            yield return Frames(8);
+            CollectionAssert.AreEqual(new[] { "x", "x:done", "end", "end:done" }, RecordingAction.Log);
+        }
+
+        [UnityTest]
+        public IEnumerator Skip_PresentedLineEvents_RunBeforeOnEndInOrder() {
+            LineContainer _container = BuildContainer(1, AdvanceMode.Input);
+            DialogueAsset _asset = Lines(out LineNode[] _lines, "a<event=x>b<waitinput>c<event=n>d<event=y>e", "next");
+            _lines[0].Events = new TextEventTable(new List<TextEventEntry> {
+                new TextEventEntry("x", new ActionList(new RecordingAction("x", 3)), true),
+                new TextEventEntry("y", new ActionList(new RecordingAction("y", 2)), true),
+                new TextEventEntry("n", new ActionList(new RecordingAction("n")), false)
+            });
+            _lines[0].OnEnd.Actions = new ActionList(new RecordingAction("end"));
+            _lines[1].Before.Actions = new ActionList(new RecordingAction("next"));
+            yield return null;
+
+            DialogueRun _run = StartMain(_asset);
+            Assert.AreEqual(1, _container.Visible.Count);
+            _run.Skip();
+
+            yield return Frames(15);
+            CollectionAssert.AreEqual(new[] { "x", "x:done", "y", "y:done", "end", "end:done", "next", "next:done" }, RecordingAction.Log);
+            CollectionAssert.AreEqual(new[] { EndReason.Skipped }, endReasons);
+        }
+
+        [UnityTest]
         public IEnumerator Pause_PausesEffectText() {
             LineContainer _container = BuildContainer(1, AdvanceMode.Input);
             DialogueAsset _asset = Lines(out _, "abcdefghijklmnopqrstuvwxyz");

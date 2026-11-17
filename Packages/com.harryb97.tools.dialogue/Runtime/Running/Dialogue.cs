@@ -201,6 +201,7 @@ namespace HarryTools.Dialogue {
             ChoiceHidden = null;
             ManualTick = false;
             LineRouter.ClearForTests();
+            LineView.HoldTextForTests = false;
             DialogueDriver.DestroyInstance();
         }
         #endregion

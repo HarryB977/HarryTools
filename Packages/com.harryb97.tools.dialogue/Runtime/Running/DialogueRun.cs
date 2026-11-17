@@ -6,6 +6,8 @@ using HarryTools.Actions;
 using HarryTools.Conditions;
 using HarryTools.TextEffects;
 using UnityEngine;
+using UnityEngine.Localization;
+using UnityEngine.ResourceManagement.AsyncOperations;
 using Logger = HarryTools.LoggerTool.Logger;
 
 namespace HarryTools.Dialogue {
@@ -571,11 +573,15 @@ namespace HarryTools.Dialogue {
             if (_actions != null && _actions.RunWhenSkipped) Enqueue(_actions.Actions, SelfOf(lineActor));
         }
 
-        /// <summary> Queues the events of the line's markup, in text order, from its current text </summary>
+        /// <summary> Queues the events of the line's markup, in text order, from its current text. When the localized text is not available at once, a placeholder keeps their place in the queue and runs them once it arrives </summary>
         private void EnqueueTextEvents(LineNode _line) {
             TextEventTable _table = _line.Events;
             if (_table == null || _table.Entries.Count == 0) return;
             string _text = Dialogue.ResolveLineText(_line);
+            if (_text == null && Dialogue.LineTextResolver == null && _line.Text != null && !_line.Text.IsEmpty) {
+                Enqueue(new ActionList(new LocalizedTextEvents(_line.Text, _table)), SelfOf(lineActor));
+                return;
+            }
             if (string.IsNullOrEmpty(_text)) return;
 
             if (skipParsed == null) skipParsed = new ParsedText();
@@ -585,6 +591,47 @@ namespace HarryTools.Dialogue {
                 if (_commands[_i].Type != TextCommandType.Event) continue;
                 if (!_table.TryGetEvent(_commands[_i].Name, out ActionList _actions, out bool _runWhenSkipped)) continue;
                 if (_runWhenSkipped) Enqueue(_actions, SelfOf(lineActor));
+            }
+        }
+
+        /// <summary> Called by a line channel skipping a line whose text it has not shown yet: its text events join the skip queue </summary>
+        internal void EnqueueTextEventsForSkip(LineNode _line) {
+            if (IsSkipping) EnqueueTextEvents(_line);
+        }
+
+        /// <summary> Called by a line channel for a skipped event of the line it is revealing: it joins the skip queue, in order with the rest of the skip </summary>
+        internal void EnqueueForSkip(ActionList _actions, GameObject _self) {
+            Enqueue(_actions, _self);
+        }
+
+        /// <summary> Waits for the localized text, then runs the skippable events of its markup one after the other </summary>
+        private sealed class LocalizedTextEvents : IAction {
+            private readonly LocalizedString text;
+            private readonly TextEventTable table;
+
+            public LocalizedTextEvents(LocalizedString _text, TextEventTable _table) {
+                text = _text;
+                table = _table;
+            }
+
+            public async UniTask Run(LogicContext _context, CancellationToken _token) {
+                AsyncOperationHandle<string> _operation;
+                try {
+                    _operation = text.GetLocalizedStringAsync();
+                } catch (Exception) {
+                    return;
+                }
+                while (!_operation.IsDone) await UniTask.Yield(PlayerLoopTiming.Update, _token);
+                if (_operation.Status != AsyncOperationStatus.Succeeded || string.IsNullOrEmpty(_operation.Result)) return;
+
+                ParsedText _parsed = new ParsedText();
+                TextParser.Parse(_operation.Result, TextEffectsSettings.Current, _parsed);
+                List<TextCommand> _commands = _parsed.Commands;
+                for (int _i = 0; _i < _commands.Count; _i++) {
+                    if (_commands[_i].Type != TextCommandType.Event) continue;
+                    if (!table.TryGetEvent(_commands[_i].Name, out ActionList _actions, out bool _runWhenSkipped)) continue;
+                    if (_runWhenSkipped && _actions != null) await _actions.RunAsync(_context, _token);
+                }
             }
         }
 
