@@ -196,10 +196,10 @@ namespace HarryTools.Dialogue.Tests {
         }
 
         [Test]
-        public void Settings_NoAsset_Defaults() {
-            DialogueSettings _settings = DialogueSettings.Current;
+        public void Settings_NewInstance_Defaults() {
+            // A fresh instance, so the project's own settings asset does not change the result
+            DialogueSettings _settings = ScriptableObject.CreateInstance<DialogueSettings>();
 
-            Assert.IsNotNull(_settings);
             Assert.AreEqual(DialogueTime.Unscaled, _settings.DefaultTime);
             Assert.AreEqual(AmbientPolicy.Continue, _settings.DefaultAmbientPolicy);
             Assert.AreEqual(LineLifetimeMode.ByTextLength, _settings.DefaultLifetime.Mode);
@@ -209,6 +209,7 @@ namespace HarryTools.Dialogue.Tests {
             Assert.AreEqual(HistoryClear.OnConversationEnd, _settings.HistoryClear);
             Assert.AreEqual("Assets/Localization/Dialogue", _settings.TablesFolder);
             Assert.AreEqual("", _settings.SourceLocaleCode);
+            Object.DestroyImmediate(_settings);
         }
 
         [Test]
