@@ -42,8 +42,16 @@ namespace HarryTools.Dialogue {
             get => historyClear;
             internal set => historyClear = value;
         }
-        public string TablesFolder => tablesFolder;
-        public string SourceLocaleCode => sourceLocaleCode;
+
+        public string TablesFolder {
+            get => tablesFolder;
+            internal set => tablesFolder = value;
+        }
+
+        public string SourceLocaleCode {
+            get => sourceLocaleCode;
+            internal set => sourceLocaleCode = value;
+        }
         #endregion
 
         #region Private Variables

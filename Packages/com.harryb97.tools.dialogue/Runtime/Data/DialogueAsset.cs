@@ -8,6 +8,8 @@ namespace HarryTools.Dialogue {
         // ==================== VARIABLES ===================
         #region Private Variables
         [SerializeField, HideInInspector] private string assetId = "";
+        // GUID of the string table collection that holds this dialogue's text, written by the editor
+        [SerializeField, HideInInspector] private string tableCollectionGuid = "";
         [SerializeReference] private List<DialogueNode> nodes = new List<DialogueNode>();
 
         [Tooltip("Use this dialogue's own clock instead of the project default"), SerializeField] private bool overrideTime;
@@ -100,6 +102,12 @@ namespace HarryTools.Dialogue {
 
         internal void SetAssetId(string _id) {
             assetId = _id;
+        }
+
+        /// <summary> GUID of the string table collection linked to this dialogue. Empty until the first text is written </summary>
+        internal string TableCollectionGuid {
+            get => tableCollectionGuid;
+            set => tableCollectionGuid = value;
         }
 
         internal void SetAssetIdForTests(string _id) {

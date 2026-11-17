@@ -11,7 +11,7 @@ namespace HarryTools.Dialogue {
         // ==================== VARIABLES ===================
         #region Private Variables
         [SerializeField] private DialogueCharacter character;
-        [SerializeField] private LocalizedString text = new LocalizedString();
+        [SerializeField, DialogueText] private LocalizedString text = new LocalizedString();
         [Tooltip("Note for the translators, written to the string table"), SerializeField, TextArea] private string translatorNote = "";
         [Tooltip("Note for the writers, never shown or exported"), SerializeField, TextArea] private string writerNote = "";
         [Tooltip("Seconds to wait before the line starts"), SerializeField, Min(0f)] private float delayBefore;
