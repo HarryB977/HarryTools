@@ -28,9 +28,20 @@ namespace HarryTools.Dialogue {
 
         public LineLifetime DefaultLifetime => defaultLifetime;
         public AdvanceMode DefaultAdvance => defaultAdvance;
-        public bool HistoryEnabled => historyEnabled;
-        public int HistoryMax => historyMax;
-        public HistoryClear HistoryClear => historyClear;
+        public bool HistoryEnabled {
+            get => historyEnabled;
+            internal set => historyEnabled = value;
+        }
+
+        public int HistoryMax {
+            get => historyMax;
+            internal set => historyMax = value;
+        }
+
+        public HistoryClear HistoryClear {
+            get => historyClear;
+            internal set => historyClear = value;
+        }
         public string TablesFolder => tablesFolder;
         public string SourceLocaleCode => sourceLocaleCode;
         #endregion

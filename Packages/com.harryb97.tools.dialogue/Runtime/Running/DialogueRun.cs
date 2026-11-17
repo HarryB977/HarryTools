@@ -377,6 +377,7 @@ namespace HarryTools.Dialogue {
 
             LineStarted?.Invoke(this, _line);
             Dialogue.RaiseLineStarted(this, _line);
+            DialogueHistory.RecordLine(this, _line);
             RunActions(_line.OnStart.Actions, SelfOf(lineActor));
         }
 
@@ -464,6 +465,7 @@ namespace HarryTools.Dialogue {
         private void TakeOption(ChoiceOption _option) {
             CloseChoice();
             DialogueMemory.MarkChosen(CurrentAsset, _option.Id);
+            DialogueHistory.RecordChoice(this, _option);
             ChoiceMade?.Invoke(this, _option);
             Dialogue.RaiseChoiceMade(this, _option);
             // While skipping, an option answered on its own keeps its place among the queued actions
@@ -715,6 +717,7 @@ namespace HarryTools.Dialogue {
             CloseChoice();
 
             Dialogue.Unregister(this);
+            DialogueHistory.OnRunEnded(this);
             Ended?.Invoke(this, _reason);
             Dialogue.RaiseEnded(this, _reason);
         }
