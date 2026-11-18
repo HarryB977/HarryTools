@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.0.0-beta.2] - Sin publicar
+### Añadido
+- Ventana del graph (**Window > HarryTools > Dialogue Graph**, doble clic en el asset o **Open Graph** en el Inspector) para crear, conectar y editar todos los nodos, con deshacer y sin botón de guardar.
+- Creación rápida de nodos con Espacio o clic derecho, y al soltar una conexión en un hueco vacío. Texto de líneas y respuestas editable directamente en el lienzo, que se guarda al perder el foco, y panel lateral con las propiedades del nodo o los ajustes del diálogo.
+- Grupos con título y color (Ctrl+G, sacar con Shift o **Remove from Group**) y notas, guardados en el asset. Ajuste a cuadrícula, minimapa, alinear y distribuir, **Auto Layout** (se ejecuta solo una vez en los diálogos cuyos nodos están todos en el origen), copiar, pegar y duplicar con IDs nuevos.
+- Buscador de nodos (Ctrl+F) por texto, personaje, nota de guion y tipo.
+- Validación en la ventana con lista de avisos y notas informativas, marcas en los nodos y **Revalidate all**, que también detecta los diálogos lanzados como ambientales desde `DialogueLauncher` de escenas abiertas y prefabs.
+- Depuración en Play: nodo activo iluminado, conexiones recorridas marcadas, selector de conversación y **Follow**, que cambia de diálogo con los saltos. El lienzo y el panel son de solo lectura en Play.
+- Eventos `Dialogue.NodeEntered` y `DialogueRun.NodeEntered`, lanzados al entrar en cada nodo.
+- Aviso en consola, una vez por diálogo y sesión, cuando una conversación ambiental llega a una decisión.
+
+### Cambiado
+- El Inspector del `DialogueAsset` deja de ser el editor de nodos: muestra los ajustes del diálogo, un resumen y **Open Graph**.
+
 ## [1.0.0-beta.1] - Sin publicar
 ### Añadido
 - `DialogueAsset` con nodos de inicio, línea, decisión, rama, acciones, salto a otro diálogo (continuar o entrar y volver) y fin, conectados por IDs estables. Ajustes por diálogo: tiempo propio, política de ambientales propia y permitir saltar.

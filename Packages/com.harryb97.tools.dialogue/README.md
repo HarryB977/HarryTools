@@ -3,6 +3,7 @@
 Diálogos con decisiones, ramas, memoria persistente y presentación configurable sobre UGUI.
 
 - Diálogos como assets (`DialogueAsset`) con nodos de inicio, línea, decisión, rama, acciones, salto a otro diálogo y fin.
+- Ventana de graph para escribirlos y depurarlos: texto directamente en el lienzo, grupos con color, notas, buscador, avisos de validación y seguimiento del nodo activo en Play.
 - Un servicio estático (`Dialogue`) que ejecuta conversaciones **principales** (una a la vez, con decisiones) y **ambientales** (sin límite).
 - Decisiones con temporizador opcional, salida "sin respuesta", etiquetas, condiciones de visibilidad y disponibilidad, y estado "ya elegida" que se guarda en la partida.
 - Reglas de presentación comunes (`LineContainer`): cuántas líneas caben, cuánto duran y cómo avanzan. Las vistas (`LineView`, `ChoiceView`) son componentes base que cada proyecto configura o hereda; el paquete no trae una interfaz montada.
@@ -21,13 +22,13 @@ Diálogos con decisiones, ramas, memoria persistente y presentación configurabl
 2. Instala el paquete desde [OpenUPM](https://openupm.com/packages/com.harryb97.tools.dialogue/). La CLI añade también UniTask y los paquetes `com.harryb97.*` de los que depende:
 
    ```sh
-   openupm add com.harryb97.tools.dialogue@1.0.0-beta.1
+   openupm add com.harryb97.tools.dialogue@1.0.0-beta.2
    ```
 
 Para instalarlo por URL de git hay que añadir también sus dependencias, porque Unity no las resuelve en ese caso. UniTask (`com.cysharp.unitask`) se instala desde OpenUPM:
 
 ```json
-"com.harryb97.tools.dialogue": "https://github.com/HarryB977/HarryTools.git?path=/Packages/com.harryb97.tools.dialogue#dialogue/1.0.0-beta.1",
+"com.harryb97.tools.dialogue": "https://github.com/HarryB977/HarryTools.git?path=/Packages/com.harryb97.tools.dialogue#dialogue/1.0.0-beta.2",
 "com.harryb97.tools.texteffects": "https://github.com/HarryB977/HarryTools.git?path=/Packages/com.harryb97.tools.texteffects#texteffects/1.0.0-beta.2",
 "com.harryb97.tools.actions": "https://github.com/HarryB977/HarryTools.git?path=/Packages/com.harryb97.tools.actions#actions/2.0.0-beta.1",
 "com.harryb97.tools.conditions": "https://github.com/HarryB977/HarryTools.git?path=/Packages/com.harryb97.tools.conditions#conditions/2.0.0-beta.1",
@@ -46,7 +47,7 @@ Requiere Unity 6000.0 o superior, `com.unity.ugui` 2.0.0 (TextMeshPro) y `com.un
 
 1. Abre **Project Settings > HarryTools > Dialogue** (o **Tools > HarryTools > Dialogue > Open Settings**). La primera vez que se abre la página (fuera de Play) se crea el asset `DialogueSettings` en `Assets/HarryTools/Dialogue/Resources/`. Este asset va en git y en la build. Sin él se usan los valores por defecto sin avisar.
 2. Comprueba que el proyecto tiene **Localization Settings** con al menos un idioma: el texto de los diálogos vive en String Tables.
-3. Crea los personajes con **Create > HarryTools > Dialogue > Character** y los diálogos con **Create > HarryTools > Dialogue > Dialogue**.
+3. Crea los personajes con **Create > HarryTools > Dialogue > Character** y los diálogos con **Create > HarryTools > Dialogue > Dialogue**. Un diálogo se edita en la ventana del graph (ver abajo): doble clic sobre el asset.
 4. Monta en la escena al menos un `LineContainer` principal con un prefab de `LineView` y, si hay decisiones, una `ChoiceView`.
 5. Lanza el diálogo desde un `DialogueLauncher`, desde la acción **Start Dialogue** o desde código con `Dialogue.Start`.
 
@@ -82,7 +83,62 @@ Una salida sin conectar termina el diálogo; dentro de un salto *Call And Return
 
 Orden de una línea: delay antes → acciones *Before* (el diálogo las espera) → se muestra la línea y se lanzan las acciones *On Start* (sin esperarlas) → escritura con sus eventos → vida → acciones *On End* (el diálogo las espera) → delay después.
 
-En este bloque los nodos se editan en el **Inspector** del `DialogueAsset`: ajustes del diálogo, un desplegable por nodo, **Add node** y **Remove**. Las salidas se conectan eligiendo el nodo de destino en una lista. Los IDs y las posiciones los gestiona la herramienta y no se muestran.
+Los nodos se editan en la ventana del graph (ver **Ventana del graph**). Los IDs de nodos, salidas y respuestas los gestiona la herramienta y no se muestran.
+
+## Ventana del graph
+
+### Abrir
+
+- **Doble clic** sobre un `DialogueAsset`.
+- Botón **Open Graph** del Inspector del asset, que además muestra los ajustes del diálogo y un resumen (número de nodos y avisos).
+- Menú **Window > HarryTools > Dialogue Graph**, y el campo de asset de la barra para cambiar de diálogo.
+
+La ventana muestra un diálogo a la vez. Los cambios se escriben en el asset al momento, con deshacer de Unity; no hay botón de guardar. Posiciones, grupos y notas viajan con el asset y el runtime no los usa. La barra tiene el campo de asset, **Snap to Grid**, **Mini Map**, el número de avisos y el buscador. En Play aparecen además el selector de conversación y **Follow**.
+
+### Crear y conectar
+
+- **Espacio** o clic derecho sobre el lienzo abre el buscador de tipos de nodo (**Create Node**).
+- Arrastrar una conexión desde una salida y soltarla en un hueco vacío abre ese mismo buscador: el nodo creado queda conectado a la salida.
+- Una salida admite una sola conexión; una entrada admite varias. Los ciclos están permitidos.
+- Borrar un nodo desconecta las salidas que lo apuntaban. El nodo Start no se puede borrar ni duplicar.
+- La salida *No Answer* de una decisión y *Otherwise* de una rama están siempre visibles.
+- **Auto Layout** (clic derecho) coloca los nodos por niveles de izquierda a derecha. Se ejecuta solo, una vez, al abrir un diálogo cuyos nodos están todos en el origen (por ejemplo, uno creado por código o con la versión anterior).
+- Doble clic en un nodo Jump abre el diálogo destino.
+
+### Texto en el lienzo y panel lateral
+
+- Las líneas muestran el personaje y un campo de texto multilínea; las decisiones, el texto de cada respuesta junto a su salida. Se escribe en el idioma de origen y el texto se guarda en la tabla al perder el foco el campo. Escape descarta el cambio.
+- Los nodos muestran indicadores de lo que llevan (acciones, eventos, delays, vida y avance propios, temporizador, resumen de cada caso, destino y modo del salto).
+- El **panel lateral** (a la derecha) muestra las propiedades del nodo seleccionado con los mismos campos y selectores que el resto de herramientas, y los ajustes del diálogo (reloj, política de ambientales, permitir saltar) cuando no hay selección. Desde él se añaden, quitan y reordenan las respuestas de una decisión y los casos de una rama; sus salidas se rehacen solas.
+
+### Grupos y notas
+
+- **Ctrl+G** (o **Create Group** en el menú contextual) agrupa los nodos seleccionados. El grupo tiene título editable y color (menú **Color** del grupo y selector de color), y se mueve con sus nodos.
+- Para sacar un nodo de un grupo, arrástralo fuera con **Shift** pulsado o usa **Remove from Group**. Un grupo que se queda sin nodos desaparece.
+- **Create Note** añade una nota de texto libre con tamaño ajustable.
+
+### Alinear, copiar y buscar
+
+- Con varios nodos seleccionados, el menú contextual ofrece alinear y distribuir.
+- **Copiar, pegar y duplicar** generan IDs nuevos para nodos, salidas y respuestas. Se conservan las conexiones entre los nodos copiados y se quitan las que salían de la selección. Los textos se copian a entradas nuevas de la tabla. Pegar funciona entre ventanas y entre diálogos a través del portapapeles del sistema.
+- **Ctrl+F** o el campo de búsqueda de la barra busca por texto de línea o respuesta (idioma de origen), personaje, nota de guion y tipo de nodo. Elegir un resultado centra la vista en el nodo y lo selecciona.
+
+### Validación
+
+La lista de la parte inferior se actualiza al abrir el diálogo y tras cada cambio. Solo informa: no bloquea Play ni builds. Hacer clic en una entrada selecciona y centra su nodo, y los nodos con avisos llevan una marca con el mensaje como tooltip. Hay dos niveles:
+
+- **Avisos:** diálogo sin Start o con Start sin conectar, nodos inalcanzables desde Start, salidas que apuntan a un nodo borrado, personaje o diálogo destino de un Jump ausente, línea o respuesta sin texto en el idioma de origen, entradas de tabla que faltan, marcas de texto desconocidas o eventos sin entrada en la tabla de eventos de la línea, temporizador con *ChooseSelected* sin respuesta por defecto, y decisión en un diálogo lanzado como ambiental.
+- **Notas informativas:** salidas sin conectar (terminan el diálogo). *No Answer* solo se señala cuando el temporizador usa esa regla.
+
+**Revalidate all** valida todos los diálogos del proyecto, vuelve a buscar los diálogos lanzados como ambientales y muestra un resumen. Esa detección solo mira los `DialogueLauncher` ambientales de las escenas abiertas y de los prefabs del proyecto que lanzan el diálogo directamente: no sigue Jumps, ni la acción **Start Dialogue**, ni el código. Para esos casos, el runtime escribe un aviso en consola, una vez por diálogo y sesión, cuando una conversación ambiental llega a una decisión (que se responde sola con la respuesta de respaldo).
+
+### Depuración en Play
+
+- En Play la ventana sigue las conversaciones en marcha: el nodo actual se ilumina y las conexiones recorridas en esa conversación quedan marcadas. Al terminar, la marca se mantiene hasta la siguiente conversación o hasta salir de Play.
+- El selector de la barra lista las conversaciones activas (la principal primero) y permite elegir cuál se sigue. Por defecto se sigue la principal. Una ventana sin diálogo abierto muestra el de la conversación que empiece.
+- Con **Follow** activado, la vista se centra sola en el nodo activo y cambia al diálogo al que salta la conversación (y vuelve al regresar de un Jump *Call And Return*). También cambia a una conversación principal de otro diálogo. Mover la vista a mano desactiva **Follow** hasta volver a pulsarlo.
+- En Play el lienzo y el panel lateral son de solo lectura: no se crean, borran, conectan ni mueven nodos.
+- Para integraciones propias, `Dialogue.NodeEntered` y `DialogueRun.NodeEntered` avisan de cada nodo en el que entra una conversación.
 
 ## Ejecución
 
@@ -100,7 +156,7 @@ En este bloque los nodos se editan en el **Inspector** del `DialogueAsset`: ajus
 
 **Actor de cada línea:** el asignado en `Actors`; si no hay, el `DialogueActor` activo de ese personaje más cercano al origen (o el primero registrado si no hay origen); si no hay ninguno, la línea va sin actor. El objeto del actor es el `Self` de las acciones y eventos de la línea; sin actor, `Self` va vacío. Los eventos del texto reciben el mismo contexto que las demás acciones de la línea, se ejecuten al escribirse, al saltarse o sin vista. Las condiciones de ramas y decisiones y las acciones de los nodos *Actions* se evalúan con `Self` vacío.
 
-**Eventos:** `Started`, `Ended` (con `EndReason`: `Completed`, `Stopped` o `Skipped`), `LineStarted`, `LineEnded`, `ChoicePresented` y `ChoiceMade` en `Dialogue`, y los mismos (salvo `Started`) en cada `DialogueRun`. `ChoiceMade` no se lanza cuando se toma la salida *No Answer*.
+**Eventos:** `Started`, `Ended` (con `EndReason`: `Completed`, `Stopped` o `Skipped`), `NodeEntered` (cada nodo en el que entra la conversación), `LineStarted`, `LineEnded`, `ChoicePresented` y `ChoiceMade` en `Dialogue`, y los mismos (salvo `Started`) en cada `DialogueRun`. `ChoiceMade` no se lanza cuando se toma la salida *No Answer*.
 
 **Control:** `DialogueRun.Advance()` es el input del jugador sobre la línea actual (ver contenedores). `Dialogue.Main` es la principal en marcha, `Dialogue.Active` todas (una copia: se pueden detener mientras se recorre), y `Dialogue.PauseAll`, `ResumeAll` y `StopAll` actúan sobre todas.
 
@@ -150,7 +206,7 @@ Si todas las respuestas visibles están bloqueadas o no hay ninguna visible, se 
 
 La decisión abierta es `DialogueRun.CurrentChoice` (`ChoicePrompt`): `Options` (las visibles, con `Available`, `Seen` e `IsDefault`), `SelectedIndex`, `HasTimer`, `Remaining01` (de 1 a 0) y el evento `Changed` al cambiar la selección. Control: `MoveSelection(delta)` (solo por las disponibles, dando la vuelta), `Select(index)`, `Confirm()` y `Choose(index)`. Las respuestas bloqueadas no se pueden seleccionar ni elegir. El estado de las respuestas se calcula al abrir la decisión.
 
-Las decisiones son de las conversaciones principales. En una ambiental se toma la respuesta de respaldo al momento y se avisa en consola.
+Las decisiones son de las conversaciones principales. En una ambiental se toma la respuesta de respaldo al momento y se avisa en consola, una vez por diálogo y sesión.
 
 ## Memoria y guardado
 
@@ -252,7 +308,7 @@ Las condiciones y acciones de `flags` (y cualquier otra) funcionan dentro de los
 
 ## Localización
 
-El texto de las líneas, las respuestas y los motivos de bloqueo se escribe en el inspector del diálogo en el **idioma de origen** (el de Settings; vacío usa el idioma del proyecto) y se guarda en String Tables de Unity Localization:
+El texto de las líneas, las respuestas y los motivos de bloqueo se escribe en la ventana del graph (en el lienzo o en el panel lateral) en el **idioma de origen** (el de Settings; vacío usa el idioma del proyecto) y se guarda en String Tables de Unity Localization:
 
 - Cada diálogo tiene **su propia String Table Collection**, creada al escribir el primer texto en la carpeta de Settings (**Tables Folder**, por defecto `Assets/Localization/Dialogue`), con el nombre `Dialogue_<nombre del asset>` y una tabla por idioma del proyecto. El diálogo la enlaza por GUID: renombrar el asset o la colección no rompe nada.
 - Las **claves** se generan a partir del ID estable del nodo o la respuesta (el motivo de bloqueo añade `.locked`). Nunca se escriben a mano.
@@ -275,11 +331,10 @@ Sin ningún idioma en el proyecto, el campo de texto muestra un aviso y no escri
 
 ## Límites de este bloque
 
-- Sin ventana de graph: los diálogos se editan en el Inspector.
-- Sin validador de diálogos (marcas, eventos, traducciones, nodos inalcanzables).
-- Localización mínima: sin comentarios de contexto para traductores, sin orden de las entradas por recorrido, sin borrado automático de entradas al quitar nodos y sin integración con Google Sheets. Las notas para traducción se guardan en el diálogo pero aún no salen a la tabla.
-- Sin voz por línea con el paquete `audio`; la vida `ByVoice` se comporta como `ByTextLength`.
-- Sin Sample con prefabs de interfaz.
+- Localización mínima: sin comentarios de contexto para traductores, sin orden de las entradas por recorrido, sin borrado automático de entradas al quitar nodos, sin avisos de textos sin traducir y sin integración con Google Sheets (bloque 3). Las notas para traducción se guardan en el diálogo pero aún no salen a la tabla.
+- Sin voz por línea con el paquete `audio`; la vida `ByVoice` se comporta como `ByTextLength` (bloque 4).
+- Sin Sample con prefabs de interfaz (bloque 4).
+- La estructura del graph no se edita en Play.
 
 ## Notas
 

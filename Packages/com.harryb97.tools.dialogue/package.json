@@ -1,6 +1,6 @@
 {
   "name": "com.harryb97.tools.dialogue",
-  "version": "1.0.0-beta.1",
+  "version": "1.0.0-beta.2",
   "displayName": "HarryTools Dialogue",
   "description": "Diálogos con decisiones, ramas, memoria persistente y presentación configurable sobre UGUI.",
   "unity": "6000.0",
