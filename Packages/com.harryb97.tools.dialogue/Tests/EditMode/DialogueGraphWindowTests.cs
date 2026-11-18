@@ -28,6 +28,7 @@ namespace HarryTools.Dialogue.Tests {
         private LocalizationSettings createdSettings;
         private DialogueSettings settings;
         private DialogueGraphWindow window;
+        private bool runsStarted;
         #endregion
 
         // ==================== SETUP ====================
@@ -79,6 +80,12 @@ namespace HarryTools.Dialogue.Tests {
         public void TearDown() {
             if (window != null) window.Close();
             window = null;
+            if (runsStarted) {
+                Dialogue.StopAll();
+                Dialogue.ClearForTests();
+                DialogueMemory.ClearForTests();
+                runsStarted = false;
+            }
 
             DialogueSettings.ClearForTests();
             Object.DestroyImmediate(settings);
@@ -874,6 +881,119 @@ namespace HarryTools.Dialogue.Tests {
 
         private static PropertyField FindBoundField(VisualElement _root, string _name) {
             return _root.Query<PropertyField>().Where(_field => _field.bindingPath != null && (_field.bindingPath == _name || _field.bindingPath.EndsWith("." + _name))).First();
+        }
+        #endregion
+
+        // ==================== PLAY MODE ====================
+        #region Play Mode
+        /// <summary> Runs dialogues by hand, their lines held until advanced; undone in <see cref="TearDown"/> </summary>
+        private FakeLineChannel StartRunning() {
+            runsStarted = true;
+            // Runs left by a Play session would keep the main slot taken
+            Dialogue.ClearForTests();
+            DialogueMemory.ClearForTests();
+            Dialogue.ManualTick = true;
+            FakeLineChannel _channel = new FakeLineChannel();
+            Dialogue.ChannelResolver = _ => _channel;
+            return _channel;
+        }
+
+        private static void TickRuns() => Dialogue.TickAll(0f, 0f);
+
+        private static LineNode FirstLine(DialogueAsset _asset) => _asset.Nodes.OfType<LineNode>().First();
+
+        [Test]
+        public void OpenDuringRun_HighlightsCurrent() {
+            DialogueAsset _asset = NewSample("OpenDuringRun");
+            FakeLineChannel _channel = StartRunning();
+            LineNode _line = FirstLine(_asset);
+            ChoiceNode _choice = _asset.Nodes.OfType<ChoiceNode>().First();
+            Dialogue.Start(_asset);
+            TickRuns();
+
+            window = DialogueGraphWindow.Open(_asset);
+            window.BeginPlayMode();
+
+            Assert.IsTrue(window.View.FindNodeView(_line.Id).ClassListContains("current"), "the node the run is on lights up at once");
+            Assert.IsFalse(window.View.FindNodeView(_choice.Id).ClassListContains("current"));
+
+            _channel.Last.Advance();
+            TickRuns();
+            Assert.IsFalse(window.View.FindNodeView(_line.Id).ClassListContains("current"));
+            Assert.IsTrue(window.View.FindNodeView(_choice.Id).ClassListContains("current"));
+            Assert.IsTrue(window.View.FindEdge(_line.Next.Id).ClassListContains("traversed"), "the output the run took");
+            Assert.IsFalse(window.View.FindEdge(_choice.Options[0].Next.Id).ClassListContains("traversed"));
+        }
+
+        [Test]
+        public void Window_ManualPan_DisablesFollow() {
+            DialogueAsset _asset = NewSample("ManualPan");
+            StartRunning();
+            window = DialogueGraphWindow.Open(_asset);
+            window.BeginPlayMode();
+            Assert.IsTrue(window.Follow, "follow is on when play starts");
+
+            Dialogue.Start(_asset);
+            TickRuns();
+            Assert.IsTrue(window.Follow, "the window framing the node itself keeps follow on");
+
+            // What the content dragger and zoomer do
+            window.View.UpdateViewTransform(new Vector3(123f, 45f, 0f), Vector3.one);
+            Assert.IsFalse(window.Follow);
+        }
+
+        [Test]
+        public void Window_Follow_ShowsTheRunDialogue() {
+            DialogueAsset _shown = NewSample("FollowShown");
+            DialogueAsset _other = NewSample("FollowOther");
+            StartRunning();
+            window = DialogueGraphWindow.Open(_shown);
+            window.BeginPlayMode();
+            window.Follow = false;
+
+            Dialogue.Start(_other);
+            TickRuns();
+            Assert.AreSame(_shown, window.Asset, "without follow the open dialogue stays");
+
+            window.Follow = true;
+            Assert.AreSame(_other, window.Asset, "with follow the window shows the followed run's dialogue");
+            Assert.IsTrue(window.View.FindNodeView(FirstLine(_other).Id).ClassListContains("current"));
+        }
+
+        [Test]
+        public void Window_PlayMode_IsReadOnly() {
+            DialogueAsset _asset = NewSample("ReadOnly");
+            window = DialogueGraphWindow.Open(_asset);
+            LineNode _line = FirstLine(_asset);
+
+            window.BeginPlayMode();
+            LineNodeView _view = (LineNodeView)window.View.FindNodeView(_line.Id);
+            Assert.IsTrue(_view.TextField.isReadOnly, "canvas text");
+            Assert.AreEqual((Capabilities)0, _view.capabilities & (Capabilities.Movable | Capabilities.Deletable));
+            Assert.IsTrue(_view.Outputs.All(_output => _output.Port.edgeConnector == null), "no new connections");
+            window.View.SelectAndFrame(_line.Id);
+            Assert.IsTrue(window.Panel.Query<PropertyField>().ToList().All(_field => !_field.enabledSelf), "panel fields");
+            int _count = _asset.Nodes.Count;
+            window.View.CreateNode(typeof(EndNode), Vector2.zero, null);
+            Assert.AreEqual(_count, _asset.Nodes.Count, "no nodes created");
+
+            window.EndPlayMode();
+            _view = (LineNodeView)window.View.FindNodeView(_line.Id);
+            Assert.IsFalse(_view.TextField.isReadOnly);
+            Assert.AreNotEqual((Capabilities)0, _view.capabilities & Capabilities.Movable);
+            Assert.IsTrue(window.Panel.Query<PropertyField>().ToList().Any(_field => _field.enabledSelf));
+        }
+
+        [Test]
+        public void Window_SourceTextWritten_SchedulesValidation() {
+            DialogueAsset _asset = NewSample("TextWritten");
+            window = DialogueGraphWindow.Open(_asset);
+            window.IssueList.ValidateNow();
+            Assert.IsFalse(window.IssueList.HasPending);
+
+            DialogueTables.NotifySourceTextWritten(_asset);
+
+            Assert.IsTrue(window.IssueList.HasPending);
         }
         #endregion
     }

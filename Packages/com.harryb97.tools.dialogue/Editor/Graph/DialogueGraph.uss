@@ -186,3 +186,16 @@
 .dialogue-issues__row--summary {
     -unity-font-style: bold;
 }
+
+.dialogue-node.current #node-border {
+    border-color: rgb(90, 200, 255);
+    border-width: 3px;
+}
+
+.dialogue-node.current #title-label {
+    color: rgb(255, 255, 255);
+}
+
+.edge.traversed {
+    --edge-width: 4;
+}

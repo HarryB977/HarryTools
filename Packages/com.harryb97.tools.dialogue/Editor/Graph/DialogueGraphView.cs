@@ -23,12 +23,18 @@ namespace HarryTools.Dialogue.Editor {
         private readonly Dictionary<string, DialogueNodeView> nodeViews = new Dictionary<string, DialogueNodeView>();
         private readonly Dictionary<string, DialogueGroupView> groupViews = new Dictionary<string, DialogueGroupView>();
         private readonly Dictionary<string, DialogueNoteView> noteViews = new Dictionary<string, DialogueNoteView>();
+        private readonly Dictionary<string, DialogueEdge> edgeViews = new Dictionary<string, DialogueEdge>();
         private readonly List<NodeOutput> outputBuffer = new List<NodeOutput>();
         private readonly EditorWindow window;
         private readonly EdgeListener edgeListener;
         private readonly MiniMap miniMap;
         private DialogueNodeSearch search;
         private bool restoringCamera;
+        // Set while the canvas moves the camera on its own, after a layout pass
+        private bool movingCamera;
+        // Counts the camera requests, so a delayed one gives way to a newer one
+        private int cameraRequest;
+        private bool readOnly;
         private bool rebuilding;
         // Last canvas point under the mouse, where pasted elements land
         private Vector2 pastePosition;
@@ -49,6 +55,19 @@ namespace HarryTools.Dialogue.Editor {
 
         /// <summary> Raised after the canvas was recreated from the asset </summary>
         internal event Action Rebuilt;
+
+        /// <summary> Raised when the camera moves other than by the canvas itself: by the user, or by a call to <see cref="Frame"/> </summary>
+        internal event Action CameraMoved;
+
+        /// <summary> Nothing on the canvas can be created, deleted, connected, moved or typed. Changing it rebuilds the canvas </summary>
+        internal bool ReadOnly {
+            get => readOnly;
+            set {
+                if (value == readOnly) return;
+                readOnly = value;
+                Rebuild();
+            }
+        }
 
         /// <summary> The id of the only selected node. Null when no node or more than one is selected </summary>
         internal string SelectedNodeId {
@@ -100,7 +119,13 @@ namespace HarryTools.Dialogue.Editor {
             // Requested by the graph view on the space bar
             nodeCreationRequest = _context => OpenSearch(_context.screenMousePosition, null);
             graphViewChanged = OnGraphViewChanged;
-            viewTransformChanged = _ => SaveCamera();
+            viewTransformChanged = _ => {
+                SaveCamera();
+                if (restoringCamera || movingCamera) return;
+                // A camera moved from outside wins over a delayed frame still waiting for the layout
+                cameraRequest++;
+                CameraMoved?.Invoke();
+            };
             serializeGraphElements = SerializeElements;
             canPasteSerializedData = CanPasteData;
             unserializeAndPaste = PasteData;
@@ -125,7 +150,7 @@ namespace HarryTools.Dialogue.Editor {
             Asset = _asset;
             hasPastePosition = false;
             // Dialogues made without the window have every node at the origin
-            if (DialogueGraphOps.NeedsAutoLayout(Asset)) {
+            if (!ReadOnly && DialogueGraphOps.NeedsAutoLayout(Asset)) {
                 Undo.IncrementCurrentGroup();
                 DialogueGraphOps.AutoLayout(Asset);
                 Undo.IncrementCurrentGroup();
@@ -185,6 +210,7 @@ namespace HarryTools.Dialogue.Editor {
             nodeViews.Clear();
             groupViews.Clear();
             noteViews.Clear();
+            edgeViews.Clear();
 
             if (Asset == null) return;
 
@@ -192,7 +218,9 @@ namespace HarryTools.Dialogue.Editor {
                 DialogueNode _node = Asset.Nodes[_i];
                 // A node whose class no longer exists deserializes as null; the validator reports it
                 if (_node == null || string.IsNullOrEmpty(_node.Id) || nodeViews.ContainsKey(_node.Id)) continue;
-                DialogueNodeView _view = DialogueNodeView.Create(Asset, _node, edgeListener);
+                // Ports without a listener cannot start connections
+                DialogueNodeView _view = DialogueNodeView.Create(Asset, _node, ReadOnly ? null : edgeListener);
+                if (ReadOnly) _view.MakeReadOnly();
                 nodeViews.Add(_node.Id, _view);
                 AddElement(_view);
             }
@@ -205,7 +233,10 @@ namespace HarryTools.Dialogue.Editor {
                     Port _port = _output != null && _output.IsConnected ? _view.FindOutputPort(_output.Id) : null;
                     if (_port == null) continue;
                     if (!nodeViews.TryGetValue(_output.Target, out DialogueNodeView _target) || _target.Input == null) continue;
-                    AddElement(_port.ConnectTo(_target.Input));
+                    DialogueEdge _edge = _port.ConnectTo<DialogueEdge>(_target.Input);
+                    if (ReadOnly) _edge.capabilities &= ~Capabilities.Deletable;
+                    edgeViews[_output.Id] = _edge;
+                    AddElement(_edge);
                 }
             }
 
@@ -213,6 +244,10 @@ namespace HarryTools.Dialogue.Editor {
                 DialogueGroup _group = Asset.Groups[_i];
                 if (_group == null || string.IsNullOrEmpty(_group.Id) || groupViews.ContainsKey(_group.Id)) continue;
                 DialogueGroupView _view = new DialogueGroupView(Asset, _group);
+                if (ReadOnly) {
+                    _view.capabilities &= ~(Capabilities.Movable | Capabilities.Deletable | Capabilities.Renamable);
+                    _view.ColorPicker.SetEnabled(false);
+                }
                 groupViews.Add(_group.Id, _view);
                 AddElement(_view);
                 for (int _n = 0; _n < _group.NodeIds.Count; _n++) {
@@ -224,6 +259,10 @@ namespace HarryTools.Dialogue.Editor {
                 DialogueNote _note = Asset.Notes[_i];
                 if (_note == null || string.IsNullOrEmpty(_note.Id) || noteViews.ContainsKey(_note.Id)) continue;
                 DialogueNoteView _view = new DialogueNoteView(Asset, _note);
+                if (ReadOnly) {
+                    _view.capabilities &= ~(Capabilities.Movable | Capabilities.Deletable | Capabilities.Resizable | Capabilities.Renamable);
+                    _view.Query<TextField>().ForEach(_field => _field.isReadOnly = true);
+                }
                 noteViews.Add(_note.Id, _view);
                 AddElement(_view);
             }
@@ -252,11 +291,41 @@ namespace HarryTools.Dialogue.Editor {
             return nodeViews.TryGetValue(_id, out DialogueNodeView _view) ? _view : null;
         }
 
-        /// <summary> Centers the camera on the node, keeping the zoom </summary>
+        /// <summary> The edge drawn for the connected output with the id. Null when it has none </summary>
+        internal DialogueEdge FindEdge(string _outputId) {
+            if (string.IsNullOrEmpty(_outputId)) return null;
+            return edgeViews.TryGetValue(_outputId, out DialogueEdge _edge) ? _edge : null;
+        }
+
+        /// <summary> Centers the camera on the node, keeping the zoom. A node not laid out yet is centered again once it has a size </summary>
         internal void Frame(string _nodeId) {
             DialogueNodeView _view = FindNodeView(_nodeId);
             if (_view == null) return;
 
+            CenterOn(_view);
+            // After centering, which counts as a camera move from outside
+            int _request = ++cameraRequest;
+            if (IsLaidOut(_view)) return;
+            bool _done = false;
+            schedule.Execute(() => {
+                if (_request != cameraRequest || _view.parent == null) {
+                    _done = true;
+                    return;
+                }
+                if (!IsLaidOut(_view)) return;
+                movingCamera = true;
+                try {
+                    CenterOn(_view);
+                } finally {
+                    movingCamera = false;
+                }
+                _done = true;
+            }).Every(FrameRetryMilliseconds).Until(() => _done);
+        }
+
+        private static bool IsLaidOut(VisualElement _element) => !float.IsNaN(_element.layout.width) && _element.layout.width > 0f;
+
+        private void CenterOn(DialogueNodeView _view) {
             Vector2 _size = new Vector2(float.IsNaN(_view.layout.width) ? 0f : _view.layout.width, float.IsNaN(_view.layout.height) ? 0f : _view.layout.height);
             Vector2 _center = _view.CanvasPosition + _size * 0.5f;
             float _scale = CameraScale;
@@ -269,7 +338,7 @@ namespace HarryTools.Dialogue.Editor {
         #region Edits
         /// <summary> Adds a node at the canvas position; when an output id is given, that output points to it </summary>
         internal DialogueNode CreateNode(Type _type, Vector2 _position, string _fromOutputId) {
-            if (Asset == null) return null;
+            if (Asset == null || ReadOnly) return null;
             if (SnapToGrid) _position = Snap(_position);
 
             DialogueNode _node = string.IsNullOrEmpty(_fromOutputId)
@@ -280,14 +349,14 @@ namespace HarryTools.Dialogue.Editor {
         }
 
         internal void Connect(string _outputId, string _targetNodeId) {
-            if (Asset == null) return;
+            if (Asset == null || ReadOnly) return;
             DialogueGraphOps.Connect(Asset, _outputId, _targetNodeId);
             Rebuild();
         }
 
         /// <summary> Opens the node type search at the screen position. The created node is connected to the output when one is given </summary>
         internal void OpenSearch(Vector2 _screenPosition, string _fromOutputId) {
-            if (Asset == null) return;
+            if (Asset == null || ReadOnly) return;
             if (search == null) {
                 search = ScriptableObject.CreateInstance<DialogueNodeSearch>();
                 search.hideFlags = HideFlags.HideAndDontSave;
@@ -319,7 +388,7 @@ namespace HarryTools.Dialogue.Editor {
 
         /// <summary> Lays every node out again by its distance from the start node </summary>
         internal void AutoLayout() {
-            if (Asset == null) return;
+            if (Asset == null || ReadOnly) return;
             DialogueGraphOps.AutoLayout(Asset);
             Rebuild();
             FrameAllWhenLaidOut();
@@ -341,7 +410,7 @@ namespace HarryTools.Dialogue.Editor {
         /// <summary> Puts the selected nodes in a new group, which is then selected </summary>
         internal void GroupSelection() {
             List<string> _ids = SelectedNodeIds();
-            if (Asset == null || _ids.Count == 0) return;
+            if (Asset == null || ReadOnly || _ids.Count == 0) return;
 
             DialogueGroup _group = DialogueGraphOps.CreateGroup(Asset, DefaultGroupTitle, _ids);
             Undo.SetCurrentGroupName("Create Group");
@@ -350,6 +419,7 @@ namespace HarryTools.Dialogue.Editor {
 
         /// <summary> Takes the selected nodes out of their groups </summary>
         internal void RemoveSelectionFromGroups() {
+            if (ReadOnly) return;
             List<DialogueNodeView> _nodes = SelectedNodes();
             foreach (DialogueGroupView _group in groupViews.Values.ToList()) {
                 List<GraphElement> _members = new List<GraphElement>();
@@ -364,7 +434,7 @@ namespace HarryTools.Dialogue.Editor {
 
         /// <summary> Adds a note at the canvas position, which is then selected </summary>
         internal DialogueNote CreateNote(Vector2 _position) {
-            if (Asset == null) return null;
+            if (Asset == null || ReadOnly) return null;
             if (SnapToGrid) _position = Snap(_position);
 
             DialogueNote _note = DialogueGraphOps.CreateNote(Asset, new Rect(_position, NoteSize));
@@ -374,7 +444,7 @@ namespace HarryTools.Dialogue.Editor {
         }
 
         private void OnGroupMembersChanged(Group _group) {
-            if (rebuilding || Asset == null || !(_group is DialogueGroupView _view)) return;
+            if (rebuilding || ReadOnly || Asset == null || !(_group is DialogueGroupView _view)) return;
 
             List<string> _ids = new List<string>();
             foreach (GraphElement _element in _view.containedElements) {
@@ -431,7 +501,7 @@ namespace HarryTools.Dialogue.Editor {
                 pasteCheckData = _data;
                 pasteCheckResult = DialogueClipboard.CanPaste(_data);
             }
-            return Asset != null && pasteCheckResult;
+            return Asset != null && !ReadOnly && pasteCheckResult;
         }
 
         private void PasteData(string _operation, string _data) {
@@ -485,7 +555,7 @@ namespace HarryTools.Dialogue.Editor {
         #region Arrange
         /// <summary> Aligns or distributes the selected nodes </summary>
         internal void ArrangeSelection(DialogueGraphOps.Arrangement _arrangement) {
-            if (Asset == null) return;
+            if (Asset == null || ReadOnly) return;
 
             Dictionary<string, Rect> _rects = new Dictionary<string, Rect>();
             List<DialogueNodeView> _nodes = SelectedNodes();
@@ -513,7 +583,7 @@ namespace HarryTools.Dialogue.Editor {
             RememberPastePosition(_panelPosition);
             Vector2 _canvas = pastePosition;
             Vector2 _screen = PanelToScreen(_panelPosition);
-            DropdownMenuAction.Status Available(bool _available) => _available ? DropdownMenuAction.Status.Normal : DropdownMenuAction.Status.Disabled;
+            DropdownMenuAction.Status Available(bool _available) => _available && !ReadOnly ? DropdownMenuAction.Status.Normal : DropdownMenuAction.Status.Disabled;
 
             _menu.AppendAction("Create Node", _ => OpenSearch(_screen, null), _ => Available(Asset != null));
             _menu.AppendSeparator();
@@ -548,7 +618,7 @@ namespace HarryTools.Dialogue.Editor {
 
         private void BuildSelectionMenu(DropdownMenu _menu) {
             List<DialogueNodeView> _nodes = SelectedNodes();
-            if (_nodes.Count == 0) return;
+            if (_nodes.Count == 0 || ReadOnly) return;
 
             _menu.AppendSeparator();
             _menu.AppendAction("Create Group", _ => GroupSelection());
@@ -679,6 +749,7 @@ namespace HarryTools.Dialogue.Editor {
 
         private GraphViewChange OnGraphViewChanged(GraphViewChange _change) {
             if (Asset == null) return _change;
+            if (ReadOnly) return BlockChange(_change);
 
             if (_change.movedElements != null && _change.movedElements.Count > 0) ApplyMoves(_change.movedElements);
 
@@ -696,6 +767,15 @@ namespace HarryTools.Dialogue.Editor {
 
             // The canvas is redrawn from the asset, so the graph view has nothing left to remove or connect itself
             if (_rebuild) Rebuild();
+            return _change;
+        }
+
+        /// <summary> Drops what the graph view was about to change; the canvas is drawn again from the asset if anything moved </summary>
+        private GraphViewChange BlockChange(GraphViewChange _change) {
+            bool _moved = _change.movedElements != null && _change.movedElements.Count > 0;
+            _change.elementsToRemove?.Clear();
+            _change.edgesToCreate?.Clear();
+            if (_moved) schedule.Execute(() => Rebuild());
             return _change;
         }
 
@@ -796,16 +876,22 @@ namespace HarryTools.Dialogue.Editor {
         /// <summary> Frames every element once the nodes have a size, known after the next layout pass </summary>
         private void FrameAllWhenLaidOut() {
             DialogueAsset _framed = Asset;
+            int _request = ++cameraRequest;
             bool _done = false;
             schedule.Execute(() => {
-                if (Asset == null || Asset != _framed) {
+                if (Asset == null || Asset != _framed || _request != cameraRequest) {
                     _done = true;
                     return;
                 }
                 foreach (DialogueNodeView _view in nodeViews.Values) {
                     if (float.IsNaN(_view.layout.width) || _view.layout.width <= 0f) return;
                 }
-                FrameAll();
+                movingCamera = true;
+                try {
+                    FrameAll();
+                } finally {
+                    movingCamera = false;
+                }
                 _done = true;
             }).Every(FrameRetryMilliseconds).Until(() => _done);
         }
@@ -838,7 +924,7 @@ namespace HarryTools.Dialogue.Editor {
         }
 
         private void ApplyDroppedEdge(Edge _edge) {
-            if (Asset == null) return;
+            if (Asset == null || ReadOnly) return;
             ApplyEdge(_edge);
             Rebuild();
         }

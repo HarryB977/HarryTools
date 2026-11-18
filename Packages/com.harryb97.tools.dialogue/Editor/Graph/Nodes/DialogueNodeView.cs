@@ -14,6 +14,7 @@ namespace HarryTools.Dialogue.Editor {
         private const string IndicatorsClass = "dialogue-node__indicators";
         private const string IndicatorClass = "dialogue-node__indicator";
         private const string WarningClass = "dialogue-node--warning";
+        private const string CurrentClass = "current";
         private const string TextUndo = "Edit Dialogue Text";
 
         private readonly List<(string OutputId, Port Port)> outputs = new List<(string OutputId, Port Port)>();
@@ -123,6 +124,18 @@ namespace HarryTools.Dialogue.Editor {
 
         /// <summary> Whether the node carries the warning mark </summary>
         internal bool HasWarningMark => ClassListContains(WarningClass);
+
+        /// <summary> Lights the node up as the one a running dialogue is on </summary>
+        internal void SetCurrent(bool _current) {
+            EnableInClassList(CurrentClass, _current);
+        }
+
+        /// <summary> Leaves the node to look at: it cannot be moved or deleted and its fields cannot be edited. Undone by building the view again </summary>
+        internal void MakeReadOnly() {
+            capabilities &= ~(Capabilities.Movable | Capabilities.Deletable);
+            this.Query<TextField>().ForEach(_field => _field.isReadOnly = true);
+            this.Query<UnityEditor.UIElements.ObjectField>().ForEach(_field => _field.SetEnabled(false));
+        }
 
         /// <summary> The node's data now has other outputs than the ports shown, so the graph has to be rebuilt </summary>
         internal bool OutputsChanged() {

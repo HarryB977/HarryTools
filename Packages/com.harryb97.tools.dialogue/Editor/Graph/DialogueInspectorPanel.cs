@@ -31,6 +31,7 @@ namespace HarryTools.Dialogue.Editor {
         private string signature;
         private SerializedObject serializedObject;
         private VisualElement content;
+        private bool readOnly;
         #endregion
 
         #region Public Variables
@@ -39,6 +40,18 @@ namespace HarryTools.Dialogue.Editor {
 
         /// <summary> Number of options of the choice or cases of the branch shown. Zero for other nodes </summary>
         internal int ItemCount => itemFoldouts.Count;
+
+        /// <summary> Fields and buttons are shown disabled. Changing it builds the fields again </summary>
+        internal bool ReadOnly {
+            get => readOnly;
+            set {
+                if (value == readOnly) return;
+                readOnly = value;
+                if (content == null) return;
+                signature = null;
+                Show(asset, NodeId);
+            }
+        }
 
         /// <summary> Raised with the node id after a field of the node changed </summary>
         internal event Action<string> NodeEdited;
@@ -113,6 +126,10 @@ namespace HarryTools.Dialogue.Editor {
 
             content.Bind(serializedObject);
             content.TrackSerializedObjectValue(serializedObject, _ => OnChanged());
+            if (!ReadOnly) return;
+            // Foldouts still open and close, so everything can be read
+            content.Query<PropertyField>().ForEach(_field => _field.SetEnabled(false));
+            content.Query<Button>().ForEach(_button => _button.SetEnabled(false));
         }
 
         /// <summary> What the panel shows: the node, its position in the asset and its options or cases. A change means the fields must be built again </summary>
@@ -155,8 +172,8 @@ namespace HarryTools.Dialogue.Editor {
             // The values only apply while their override is on
             void Sync() {
                 if (serializedObject == null) return;
-                _time.SetEnabled(serializedObject.FindProperty("overrideTime").boolValue);
-                _ambient.SetEnabled(serializedObject.FindProperty("overrideAmbientPolicy").boolValue);
+                _time.SetEnabled(!ReadOnly && serializedObject.FindProperty("overrideTime").boolValue);
+                _ambient.SetEnabled(!ReadOnly && serializedObject.FindProperty("overrideAmbientPolicy").boolValue);
             }
             _overrideTime.RegisterValueChangeCallback(_ => Sync());
             _overrideAmbient.RegisterValueChangeCallback(_ => Sync());
@@ -271,6 +288,7 @@ namespace HarryTools.Dialogue.Editor {
         #region Items
         /// <summary> Adds an option to the choice or a case to the branch shown </summary>
         internal void AddItem() {
+            if (ReadOnly) return;
             switch (asset != null ? asset.Find(NodeId) : null) {
                 case ChoiceNode _choice:
                     ChoiceOption _option = DialogueGraphOps.AddOption(asset, _choice);
@@ -287,6 +305,7 @@ namespace HarryTools.Dialogue.Editor {
         }
 
         internal void RemoveItem(int _index) {
+            if (ReadOnly) return;
             switch (asset != null ? asset.Find(NodeId) : null) {
                 case ChoiceNode _choice when _index >= 0 && _index < _choice.Options.Count && _choice.Options[_index] != null:
                     DialogueGraphOps.RemoveOption(asset, _choice, _choice.Options[_index].Id);
@@ -301,6 +320,7 @@ namespace HarryTools.Dialogue.Editor {
         }
 
         internal void MoveItem(int _from, int _to) {
+            if (ReadOnly) return;
             switch (asset != null ? asset.Find(NodeId) : null) {
                 case ChoiceNode _choice:
                     DialogueGraphOps.MoveOption(asset, _choice, _from, _to);
