@@ -518,6 +518,173 @@ namespace HarryTools.Dialogue.Tests {
             Assert.AreEqual(_canvas.y, _back.y, 0.01f);
         }
 
+        [Test]
+        public void Window_GroupFromSelection_SavedInAsset() {
+            DialogueAsset _asset = NewSample("Group");
+            window = DialogueGraphWindow.Open(_asset);
+            LineNode _line = _asset.Nodes.OfType<LineNode>().First();
+            ChoiceNode _choice = _asset.Nodes.OfType<ChoiceNode>().First();
+            window.View.AddToSelection(window.View.FindNodeView(_line.Id));
+            window.View.AddToSelection(window.View.FindNodeView(_choice.Id));
+
+            Undo.IncrementCurrentGroup();
+            window.View.GroupSelection();
+
+            Assert.AreEqual(1, _asset.Groups.Count);
+            DialogueGroup _group = _asset.Groups[0];
+            CollectionAssert.AreEquivalent(new[] { _line.Id, _choice.Id }, _group.NodeIds);
+            DialogueGroupView _groupView = window.View.FindGroupView(_group.Id);
+            Assert.IsNotNull(_groupView);
+            CollectionAssert.AreEquivalent(new GraphElement[] { window.View.FindNodeView(_line.Id), window.View.FindNodeView(_choice.Id) }, _groupView.containedElements);
+            CollectionAssert.Contains(window.View.selection, _groupView, "the new group is selected");
+
+            // Title and color are written to the asset
+            Undo.IncrementCurrentGroup();
+            _groupView.title = "Renamed";
+            _groupView.SetColor(DialogueGroupView.Palette[1].Color);
+            Assert.AreEqual("Renamed", _group.Title);
+            Assert.AreEqual(DialogueGroupView.Palette[1].Color, _group.Color);
+
+            // A node taken out of the group leaves it in the asset, and the rebuilt group keeps the rest
+            Undo.IncrementCurrentGroup();
+            _groupView.RemoveElement(window.View.FindNodeView(_choice.Id));
+            CollectionAssert.AreEqual(new[] { _line.Id }, _group.NodeIds);
+            window.View.Rebuild();
+            CollectionAssert.AreEquivalent(new GraphElement[] { window.View.FindNodeView(_line.Id) }, window.View.FindGroupView(_group.Id).containedElements);
+            Assert.AreEqual("Renamed", window.View.FindGroupView(_group.Id).title);
+
+            // A node dropped into the group joins it
+            Undo.IncrementCurrentGroup();
+            window.View.FindGroupView(_group.Id).AddElement(window.View.FindNodeView(_choice.Id));
+            CollectionAssert.AreEquivalent(new[] { _line.Id, _choice.Id }, _group.NodeIds);
+
+            Undo.PerformUndo();
+            Undo.PerformUndo();
+            Undo.PerformUndo();
+            Undo.PerformUndo();
+            Assert.AreEqual(0, _asset.Groups.Count);
+            Assert.AreEqual(0, window.View.graphElements.OfType<DialogueGroupView>().Count());
+        }
+
+        [Test]
+        public void Window_Note_CreateEditMove() {
+            DialogueAsset _asset = NewSample("Note");
+            window = DialogueGraphWindow.Open(_asset);
+
+            DialogueNote _note = window.View.CreateNote(new Vector2(100f, 50f));
+
+            Assert.AreEqual(1, _asset.Notes.Count);
+            Assert.AreEqual(new Vector2(100f, 50f), _note.Rect.position);
+            DialogueNoteView _view = window.View.FindNoteView(_note.Id);
+            Assert.IsNotNull(_view);
+
+            _view.contents = "Remember this";
+            using (StickyNoteChangeEvent _event = StickyNoteChangeEvent.GetPooled(_view, StickyNoteChange.Contents)) {
+                _view.SendEvent(_event);
+            }
+            Assert.AreEqual("Remember this", _note.Text);
+
+            _view.SetPosition(new Rect(300f, 20f, _note.Rect.width, _note.Rect.height));
+            window.View.graphViewChanged(new GraphViewChange { movedElements = new List<GraphElement> { _view } });
+            Assert.AreEqual(new Vector2(300f, 20f), _note.Rect.position);
+
+            window.View.Rebuild();
+            Assert.AreEqual("Remember this", window.View.FindNoteView(_note.Id).contents);
+        }
+
+        [Test]
+        public void Window_CopyPaste_CreatesNewNodes() {
+            string _clipboard = EditorGUIUtility.systemCopyBuffer;
+            try {
+                DialogueAsset _asset = NewSample("Copy");
+                DialogueAsset _other = NewAsset("PasteTarget");
+                window = DialogueGraphWindow.Open(_asset);
+                LineNode _line = _asset.Nodes.OfType<LineNode>().First();
+                ChoiceNode _choice = _asset.Nodes.OfType<ChoiceNode>().First();
+                window.View.AddToSelection(window.View.FindNodeView(_line.Id));
+                window.View.AddToSelection(window.View.FindNodeView(_choice.Id));
+
+                window.View.CopySelection();
+                Undo.IncrementCurrentGroup();
+                window.View.Paste();
+
+                Assert.AreEqual(7, _asset.Nodes.Count);
+                LineNode _newLine = _asset.Nodes.Skip(5).OfType<LineNode>().Single();
+                ChoiceNode _newChoice = _asset.Nodes.Skip(5).OfType<ChoiceNode>().Single();
+                Assert.AreNotEqual(_line.Id, _newLine.Id);
+                Assert.AreNotEqual(_line.Position, _newLine.Position, "pasted away from the original");
+                Assert.AreEqual(_newChoice.Id, _newLine.Next.Target, "link inside the copy kept");
+                Assert.IsFalse(_newChoice.Options[0].Next.IsConnected, "link to a node not copied cleared");
+                AssertViewMatchesAsset(window.View, _asset);
+                CollectionAssert.AreEquivalent(new[] { _newLine.Id, _newChoice.Id }, window.View.selection.OfType<DialogueNodeView>().Select(_view => _view.NodeId), "the pasted nodes are selected");
+
+                Undo.IncrementCurrentGroup();
+                window.View.DuplicateSelection();
+                Assert.AreEqual(9, _asset.Nodes.Count);
+                AssertViewMatchesAsset(window.View, _asset);
+
+                // Into another dialogue
+                window.SetAsset(_other);
+                Undo.IncrementCurrentGroup();
+                window.View.Paste();
+                Assert.AreEqual(3, _other.Nodes.Count);
+                Assert.AreEqual(9, _asset.Nodes.Count);
+                AssertViewMatchesAsset(window.View, _other);
+            } finally {
+                EditorGUIUtility.systemCopyBuffer = _clipboard;
+            }
+        }
+
+        [Test]
+        public void Window_OpenAllAtOrigin_LaysOutOnce() {
+            DialogueAsset _asset = NewAsset("Layout");
+            LineNode _line = (LineNode)DialogueGraphOps.CreateConnected(_asset, typeof(LineNode), Vector2.zero, _asset.Start.Next.Id);
+            DialogueNode _loose = DialogueGraphOps.CreateNode(_asset, typeof(EndNode), Vector2.zero);
+            Undo.ClearAll();
+
+            window = DialogueGraphWindow.Open(_asset);
+
+            Assert.AreEqual(new Vector2(350f, 0f), _line.Position);
+            Assert.AreEqual(new Vector2(700f, 0f), _loose.Position);
+            Assert.AreEqual(_line.Position, window.View.FindNodeView(_line.Id).CanvasPosition);
+
+            Undo.PerformUndo();
+            Assert.AreEqual(Vector2.zero, _line.Position);
+            Assert.AreEqual(Vector2.zero, window.View.FindNodeView(_line.Id).CanvasPosition);
+
+            // A dialogue already laid out is left as it is
+            DialogueAsset _placed = NewSample("Placed");
+            string _before = EditorJsonUtility.ToJson(_placed);
+            window.SetAsset(_placed);
+            Assert.AreEqual(_before, EditorJsonUtility.ToJson(_placed));
+        }
+
+        [Test]
+        public void Canvas_ContextMenu_CreateNodeFirst() {
+            DialogueAsset _asset = NewSample("Menu");
+            window = DialogueGraphWindow.Open(_asset);
+            DropdownMenu _menu = new DropdownMenu();
+
+            window.View.BuildCanvasMenu(_menu, Vector2.zero);
+
+            List<string> _names = _menu.MenuItems().OfType<DropdownMenuAction>().Select(_action => _action.name).ToList();
+            Assert.AreEqual("Create Node", _names[0]);
+            CollectionAssert.IsSubsetOf(new[] { "Paste", "Duplicate", "Auto Layout", "Create Group", "Create Note" }, _names);
+        }
+
+        [Test]
+        public void Window_Finder_PickFramesAndSelects() {
+            DialogueAsset _asset = NewSample("Finder");
+            window = DialogueGraphWindow.Open(_asset);
+            ChoiceNode _choice = _asset.Nodes.OfType<ChoiceNode>().First();
+
+            window.Finder.Search("choice");
+
+            Assert.AreEqual(1, window.Finder.Results.Count);
+            window.Finder.Pick(0);
+            CollectionAssert.AreEqual(new[] { _choice.Id }, window.View.selection.OfType<DialogueNodeView>().Select(_view => _view.NodeId));
+        }
+
         private static PropertyField FindBoundField(VisualElement _root, string _name) {
             return _root.Query<PropertyField>().Where(_field => _field.bindingPath != null && (_field.bindingPath == _name || _field.bindingPath.EndsWith("." + _name))).First();
         }

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEditor;
 using UnityEditor.Experimental.GraphView;
 using UnityEngine;
@@ -14,7 +15,14 @@ namespace HarryTools.Dialogue.Editor {
         private const float GridSize = 20f;
         private const long FrameRetryMilliseconds = 50;
 
+        private const string DefaultGroupTitle = "Group";
+        private const string DuplicateOperation = "Duplicate";
+        private static readonly Vector2 PasteOffset = new Vector2(40f, 40f);
+        private static readonly Vector2 NoteSize = new Vector2(200f, 100f);
+
         private readonly Dictionary<string, DialogueNodeView> nodeViews = new Dictionary<string, DialogueNodeView>();
+        private readonly Dictionary<string, DialogueGroupView> groupViews = new Dictionary<string, DialogueGroupView>();
+        private readonly Dictionary<string, DialogueNoteView> noteViews = new Dictionary<string, DialogueNoteView>();
         private readonly List<NodeOutput> outputBuffer = new List<NodeOutput>();
         private readonly EditorWindow window;
         private readonly EdgeListener edgeListener;
@@ -22,6 +30,12 @@ namespace HarryTools.Dialogue.Editor {
         private DialogueNodeSearch search;
         private bool restoringCamera;
         private bool rebuilding;
+        // Last canvas point under the mouse, where pasted elements land
+        private Vector2 pastePosition;
+        private bool hasPastePosition;
+        // Checking clipboard data parses it, so the last answer is kept
+        private string pasteCheckData;
+        private bool pasteCheckResult;
         #endregion
 
         #region Public Variables
@@ -84,6 +98,14 @@ namespace HarryTools.Dialogue.Editor {
             nodeCreationRequest = _context => OpenSearch(_context.screenMousePosition, null);
             graphViewChanged = OnGraphViewChanged;
             viewTransformChanged = _ => SaveCamera();
+            serializeGraphElements = SerializeElements;
+            canPasteSerializedData = CanPasteData;
+            unserializeAndPaste = PasteData;
+            elementsAddedToGroup = (_group, _) => OnGroupMembersChanged(_group);
+            elementsRemovedFromGroup = (_group, _) => OnGroupMembersChanged(_group);
+
+            RegisterCallback<KeyDownEvent>(OnKeyDown);
+            RegisterCallback<MouseMoveEvent>(_event => RememberPastePosition(_event.mousePosition));
 
             RegisterCallback<AttachToPanelEvent>(_ => DialogueTables.SourceTextWritten += OnSourceTextWritten);
             RegisterCallback<DetachFromPanelEvent>(_ => {
@@ -98,17 +120,29 @@ namespace HarryTools.Dialogue.Editor {
         /// <summary> Shows the asset, with the camera it had last time in this editor session. Null leaves the canvas empty </summary>
         internal void Load(DialogueAsset _asset) {
             Asset = _asset;
+            hasPastePosition = false;
+            // Dialogues made without the window have every node at the origin
+            if (DialogueGraphOps.NeedsAutoLayout(Asset)) {
+                Undo.IncrementCurrentGroup();
+                DialogueGraphOps.AutoLayout(Asset);
+                Undo.IncrementCurrentGroup();
+            }
             Rebuild();
             RestoreCamera();
         }
 
-        /// <summary> Recreates every node and edge from the asset, keeping the camera and the selected nodes </summary>
+        /// <summary> Recreates every node, edge, group and note from the asset, keeping the camera and the selection </summary>
         internal void Rebuild() {
             HashSet<string> _selected = new HashSet<string>();
             foreach (ISelectable _item in selection) {
-                if (_item is DialogueNodeView _view) _selected.Add(_view.NodeId);
+                string _id = ElementId(_item);
+                if (_id != null) _selected.Add(_id);
             }
+            RebuildSelecting(_selected);
+        }
 
+        /// <summary> Recreates the canvas from the asset and selects the elements with these ids </summary>
+        private void RebuildSelecting(HashSet<string> _selected) {
             rebuilding = true;
             try {
                 RebuildElements(_selected);
@@ -145,6 +179,8 @@ namespace HarryTools.Dialogue.Editor {
             ClearSelection();
             foreach (GraphElement _element in graphElements.ToList()) RemoveElement(_element);
             nodeViews.Clear();
+            groupViews.Clear();
+            noteViews.Clear();
 
             if (Asset == null) return;
 
@@ -169,8 +205,28 @@ namespace HarryTools.Dialogue.Editor {
                 }
             }
 
+            for (int _i = 0; _i < Asset.Groups.Count; _i++) {
+                DialogueGroup _group = Asset.Groups[_i];
+                if (_group == null || string.IsNullOrEmpty(_group.Id) || groupViews.ContainsKey(_group.Id)) continue;
+                DialogueGroupView _view = new DialogueGroupView(Asset, _group);
+                groupViews.Add(_group.Id, _view);
+                AddElement(_view);
+                for (int _n = 0; _n < _group.NodeIds.Count; _n++) {
+                    if (nodeViews.TryGetValue(_group.NodeIds[_n], out DialogueNodeView _member)) _view.AddElement(_member);
+                }
+            }
+
+            for (int _i = 0; _i < Asset.Notes.Count; _i++) {
+                DialogueNote _note = Asset.Notes[_i];
+                if (_note == null || string.IsNullOrEmpty(_note.Id) || noteViews.ContainsKey(_note.Id)) continue;
+                DialogueNoteView _view = new DialogueNoteView(Asset, _note);
+                noteViews.Add(_note.Id, _view);
+                AddElement(_view);
+            }
+
             foreach (string _id in _selected) {
-                if (nodeViews.TryGetValue(_id, out DialogueNodeView _view)) AddToSelection(_view);
+                GraphElement _element = FindElement(_id);
+                if (_element != null) AddToSelection(_element);
             }
         }
 
@@ -247,6 +303,292 @@ namespace HarryTools.Dialogue.Editor {
         private Vector2 PanelToScreen(Vector2 _panelPosition) {
             return window.rootVisualElement.WorldToLocal(_panelPosition) + window.position.position;
         }
+
+        /// <summary> Selects only the node and centers the camera on it </summary>
+        internal void SelectAndFrame(string _nodeId) {
+            DialogueNodeView _view = FindNodeView(_nodeId);
+            if (_view == null) return;
+            ClearSelection();
+            AddToSelection(_view);
+            Frame(_nodeId);
+        }
+
+        /// <summary> Lays every node out again by its distance from the start node </summary>
+        internal void AutoLayout() {
+            if (Asset == null) return;
+            DialogueGraphOps.AutoLayout(Asset);
+            Rebuild();
+            FrameAllWhenLaidOut();
+        }
+        #endregion
+
+        // ==================== GROUPS AND NOTES ====================
+        #region Groups and Notes
+        internal DialogueGroupView FindGroupView(string _id) {
+            if (string.IsNullOrEmpty(_id)) return null;
+            return groupViews.TryGetValue(_id, out DialogueGroupView _view) ? _view : null;
+        }
+
+        internal DialogueNoteView FindNoteView(string _id) {
+            if (string.IsNullOrEmpty(_id)) return null;
+            return noteViews.TryGetValue(_id, out DialogueNoteView _view) ? _view : null;
+        }
+
+        /// <summary> Puts the selected nodes in a new group, which is then selected </summary>
+        internal void GroupSelection() {
+            List<string> _ids = SelectedNodeIds();
+            if (Asset == null || _ids.Count == 0) return;
+
+            DialogueGroup _group = DialogueGraphOps.CreateGroup(Asset, DefaultGroupTitle, _ids);
+            Undo.SetCurrentGroupName("Create Group");
+            RebuildSelecting(new HashSet<string> { _group.Id });
+        }
+
+        /// <summary> Takes the selected nodes out of their groups </summary>
+        internal void RemoveSelectionFromGroups() {
+            List<DialogueNodeView> _nodes = SelectedNodes();
+            foreach (DialogueGroupView _group in groupViews.Values.ToList()) {
+                List<GraphElement> _members = new List<GraphElement>();
+                for (int _i = 0; _i < _nodes.Count; _i++) {
+                    if (_group.ContainsElement(_nodes[_i])) _members.Add(_nodes[_i]);
+                }
+                // Raises elementsRemovedFromGroup, which writes the asset
+                if (_members.Count > 0) _group.RemoveElements(_members);
+            }
+        }
+
+        /// <summary> Adds a note at the canvas position, which is then selected </summary>
+        internal DialogueNote CreateNote(Vector2 _position) {
+            if (Asset == null) return null;
+            if (SnapToGrid) _position = Snap(_position);
+
+            DialogueNote _note = DialogueGraphOps.CreateNote(Asset, new Rect(_position, NoteSize));
+            Undo.SetCurrentGroupName("Create Note");
+            RebuildSelecting(new HashSet<string> { _note.Id });
+            return _note;
+        }
+
+        private void OnGroupMembersChanged(Group _group) {
+            if (rebuilding || Asset == null || !(_group is DialogueGroupView _view)) return;
+
+            List<string> _ids = new List<string>();
+            foreach (GraphElement _element in _view.containedElements) {
+                if (_element is DialogueNodeView _node) _ids.Add(_node.NodeId);
+            }
+            if (_ids.Count > 0) {
+                DialogueGraphOps.SetGroupNodes(Asset, _view.GroupId, _ids);
+                return;
+            }
+
+            // A group is drawn around its nodes, so one left without nodes goes away. Rebuilt later: the graph view is still moving elements
+            DialogueGraphOps.Delete(Asset, new[] { _view.GroupId });
+            schedule.Execute(() => {
+                if (Asset != null) Rebuild();
+            });
+        }
+        #endregion
+
+        // ==================== CLIPBOARD ====================
+        #region Clipboard
+        /// <summary> Copies the selection to the system clipboard </summary>
+        internal void CopySelection() {
+            CopySelectionCallback();
+        }
+
+        /// <summary> Adds what the system clipboard holds under the mouse, or next to where it was copied from </summary>
+        internal void Paste() {
+            PasteCallback();
+        }
+
+        internal void DuplicateSelection() {
+            DuplicateSelectionCallback();
+        }
+
+        private string SerializeElements(IEnumerable<GraphElement> _elements) {
+            if (Asset == null) return "";
+            CommitPendingText();
+
+            HashSet<string> _ids = new HashSet<string>();
+            foreach (GraphElement _element in _elements) {
+                string _id = ElementId(_element);
+                if (_id != null) _ids.Add(_id);
+                // Copying a group copies its nodes
+                if (!(_element is DialogueGroupView _group)) continue;
+                foreach (GraphElement _member in _group.containedElements) {
+                    if (_member is DialogueNodeView _node) _ids.Add(_node.NodeId);
+                }
+            }
+            return DialogueClipboard.Copy(Asset, _ids);
+        }
+
+        private bool CanPasteData(string _data) {
+            if (_data != pasteCheckData) {
+                pasteCheckData = _data;
+                pasteCheckResult = DialogueClipboard.CanPaste(_data);
+            }
+            return Asset != null && pasteCheckResult;
+        }
+
+        private void PasteData(string _operation, string _data) {
+            if (Asset == null) return;
+            CommitPendingText();
+
+            IReadOnlyList<string> _ids = DialogueClipboard.Paste(Asset, _data, Vector2.zero);
+            if (_ids.Count == 0) return;
+
+            // Pasted elements land under the mouse; duplicates and pastes without a mouse position land next to the originals
+            bool _duplicate = _operation == DuplicateOperation;
+            Dictionary<string, Vector2> _positions = PastedPositions(_ids);
+            Vector2 _offset = PasteOffset;
+            if (!_duplicate && hasPastePosition && _positions.Count > 0) {
+                Vector2 _min = new Vector2(float.MaxValue, float.MaxValue);
+                foreach (Vector2 _position in _positions.Values) _min = Vector2.Min(_min, _position);
+                _offset = pastePosition - _min;
+            }
+            if (SnapToGrid) _offset = Snap(_offset);
+
+            List<string> _moved = _positions.Keys.ToList();
+            foreach (string _id in _moved) _positions[_id] += _offset;
+            DialogueGraphOps.Move(Asset, _positions);
+            Undo.SetCurrentGroupName(_duplicate ? "Duplicate" : "Paste");
+
+            RebuildSelecting(new HashSet<string>(_ids));
+        }
+
+        /// <summary> Current positions of the pasted nodes and notes </summary>
+        private Dictionary<string, Vector2> PastedPositions(IReadOnlyList<string> _ids) {
+            Dictionary<string, Vector2> _positions = new Dictionary<string, Vector2>();
+            HashSet<string> _pasted = new HashSet<string>(_ids);
+            for (int _i = 0; _i < Asset.Nodes.Count; _i++) {
+                DialogueNode _node = Asset.Nodes[_i];
+                if (_node != null && _pasted.Contains(_node.Id)) _positions[_node.Id] = _node.Position;
+            }
+            for (int _i = 0; _i < Asset.Notes.Count; _i++) {
+                DialogueNote _note = Asset.Notes[_i];
+                if (_note != null && _pasted.Contains(_note.Id)) _positions[_note.Id] = _note.Rect.position;
+            }
+            return _positions;
+        }
+
+        private void RememberPastePosition(Vector2 _panelPosition) {
+            pastePosition = contentViewContainer.WorldToLocal(_panelPosition);
+            hasPastePosition = true;
+        }
+        #endregion
+
+        // ==================== ARRANGE ====================
+        #region Arrange
+        /// <summary> Aligns or distributes the selected nodes </summary>
+        internal void ArrangeSelection(DialogueGraphOps.Arrangement _arrangement) {
+            if (Asset == null) return;
+
+            Dictionary<string, Rect> _rects = new Dictionary<string, Rect>();
+            List<DialogueNodeView> _nodes = SelectedNodes();
+            for (int _i = 0; _i < _nodes.Count; _i++) {
+                Vector2 _size = new Vector2(float.IsNaN(_nodes[_i].layout.width) ? 0f : _nodes[_i].layout.width, float.IsNaN(_nodes[_i].layout.height) ? 0f : _nodes[_i].layout.height);
+                _rects[_nodes[_i].NodeId] = new Rect(_nodes[_i].CanvasPosition, _size);
+            }
+            if (_rects.Count < 2) return;
+
+            DialogueGraphOps.Move(Asset, DialogueGraphOps.Arrange(_rects, _arrangement));
+            string _name = ObjectNames.NicifyVariableName(_arrangement.ToString());
+            Undo.SetCurrentGroupName(_name.StartsWith("Distribute") ? _name : "Align " + _name);
+            Rebuild();
+        }
+        #endregion
+
+        // ==================== MENU ====================
+        #region Menu
+        /// <summary> The menu of a right click on the empty canvas, at that panel position </summary>
+        internal void BuildCanvasMenu(DropdownMenu _menu, Vector2 _panelPosition) {
+            RememberPastePosition(_panelPosition);
+            Vector2 _canvas = pastePosition;
+            Vector2 _screen = PanelToScreen(_panelPosition);
+            DropdownMenuAction.Status Available(bool _available) => _available ? DropdownMenuAction.Status.Normal : DropdownMenuAction.Status.Disabled;
+
+            _menu.AppendAction("Create Node", _ => OpenSearch(_screen, null), _ => Available(Asset != null));
+            _menu.AppendSeparator();
+            _menu.AppendAction("Paste", _ => Paste(), _ => Available(CanPasteData(EditorGUIUtility.systemCopyBuffer)));
+            _menu.AppendAction("Duplicate", _ => DuplicateSelection(), _ => Available(Asset != null && HasCopyableSelection()));
+            _menu.AppendSeparator();
+            _menu.AppendAction("Auto Layout", _ => AutoLayout(), _ => Available(Asset != null));
+            _menu.AppendAction("Create Group", _ => GroupSelection(), _ => Available(Asset != null && SelectedNodeIds().Count > 0));
+            _menu.AppendAction("Create Note", _ => CreateNote(_canvas), _ => Available(Asset != null));
+        }
+
+        /// <summary> Items added after the graph view's own (cut, copy, paste, delete, duplicate) when the selection is right clicked </summary>
+        private void BuildSelectionMenu(DropdownMenu _menu) {
+            List<DialogueNodeView> _nodes = SelectedNodes();
+            if (_nodes.Count == 0) return;
+
+            _menu.AppendSeparator();
+            _menu.AppendAction("Create Group", _ => GroupSelection());
+            bool _grouped = false;
+            foreach (DialogueGroupView _group in groupViews.Values) {
+                for (int _i = 0; _i < _nodes.Count && !_grouped; _i++) _grouped = _group.ContainsElement(_nodes[_i]);
+            }
+            if (_grouped) _menu.AppendAction("Remove from Group", _ => RemoveSelectionFromGroups());
+            if (_nodes.Count < 2) return;
+
+            _menu.AppendSeparator();
+            AppendArrange(_menu, "Align/Left", DialogueGraphOps.Arrangement.Left, true);
+            AppendArrange(_menu, "Align/Center", DialogueGraphOps.Arrangement.Center, true);
+            AppendArrange(_menu, "Align/Right", DialogueGraphOps.Arrangement.Right, true);
+            AppendArrange(_menu, "Align/Top", DialogueGraphOps.Arrangement.Top, true);
+            AppendArrange(_menu, "Align/Middle", DialogueGraphOps.Arrangement.Middle, true);
+            AppendArrange(_menu, "Align/Bottom", DialogueGraphOps.Arrangement.Bottom, true);
+            AppendArrange(_menu, "Distribute/Horizontally", DialogueGraphOps.Arrangement.DistributeHorizontally, _nodes.Count > 2);
+            AppendArrange(_menu, "Distribute/Vertically", DialogueGraphOps.Arrangement.DistributeVertically, _nodes.Count > 2);
+        }
+
+        private void AppendArrange(DropdownMenu _menu, string _name, DialogueGraphOps.Arrangement _arrangement, bool _enabled) {
+            _menu.AppendAction(_name, _ => ArrangeSelection(_arrangement), _enabled ? DropdownMenuAction.Status.Normal : DropdownMenuAction.Status.Disabled);
+        }
+
+        private void OnKeyDown(KeyDownEvent _event) {
+            if (!_event.actionKey || _event.shiftKey || _event.altKey || _event.keyCode != KeyCode.G) return;
+            GroupSelection();
+            _event.StopPropagation();
+        }
+        #endregion
+
+        // ==================== SELECTION ====================
+        #region Selection
+        private List<DialogueNodeView> SelectedNodes() {
+            List<DialogueNodeView> _nodes = new List<DialogueNodeView>();
+            foreach (ISelectable _item in selection) {
+                if (_item is DialogueNodeView _view) _nodes.Add(_view);
+            }
+            return _nodes;
+        }
+
+        private List<string> SelectedNodeIds() {
+            return SelectedNodes().Select(_view => _view.NodeId).ToList();
+        }
+
+        private bool HasCopyableSelection() {
+            foreach (ISelectable _item in selection) {
+                if (_item is GraphElement _element && _element.IsCopiable()) return true;
+            }
+            return false;
+        }
+
+        /// <summary> The id of the node, group or note the element shows. Null for anything else </summary>
+        private static string ElementId(ISelectable _item) {
+            switch (_item) {
+                case DialogueNodeView _node: return _node.NodeId;
+                case DialogueGroupView _group: return _group.GroupId;
+                case DialogueNoteView _note: return _note.NoteId;
+                default: return null;
+            }
+        }
+
+        private GraphElement FindElement(string _id) {
+            if (string.IsNullOrEmpty(_id)) return null;
+            if (nodeViews.TryGetValue(_id, out DialogueNodeView _node)) return _node;
+            if (groupViews.TryGetValue(_id, out DialogueGroupView _group)) return _group;
+            return noteViews.TryGetValue(_id, out DialogueNoteView _note) ? _note : null;
+        }
         #endregion
 
         // ==================== GRAPH VIEW ====================
@@ -285,12 +627,13 @@ namespace HarryTools.Dialogue.Editor {
         }
 
         public override void BuildContextualMenu(ContextualMenuPopulateEvent _event) {
-            // A right click on the empty canvas goes straight to the node search
+            // The empty canvas gets its own menu, led by the node search
             if (_event.target == this) {
-                OpenSearch(PanelToScreen(_event.mousePosition), null);
+                BuildCanvasMenu(_event.menu, _event.mousePosition);
                 return;
             }
             base.BuildContextualMenu(_event);
+            BuildSelectionMenu(_event.menu);
         }
 
         private GraphViewChange OnGraphViewChanged(GraphViewChange _change) {
@@ -317,14 +660,31 @@ namespace HarryTools.Dialogue.Editor {
 
         private void ApplyMoves(List<GraphElement> _moved) {
             Dictionary<string, Vector2> _positions = new Dictionary<string, Vector2>();
-            for (int _i = 0; _i < _moved.Count; _i++) {
-                if (!(_moved[_i] is DialogueNodeView _view)) continue;
+            void AddNode(DialogueNodeView _view) {
+                if (_positions.ContainsKey(_view.NodeId)) return;
                 Vector2 _position = _view.CanvasPosition;
                 if (SnapToGrid) {
                     _position = Snap(_position);
                     _view.SetPosition(new Rect(_position, Vector2.zero));
                 }
                 _positions[_view.NodeId] = _position;
+            }
+
+            for (int _i = 0; _i < _moved.Count; _i++) {
+                switch (_moved[_i]) {
+                    case DialogueNodeView _node:
+                        AddNode(_node);
+                        break;
+                    case DialogueGroupView _group:
+                        // A moved group carries its nodes
+                        foreach (GraphElement _member in _group.containedElements) {
+                            if (_member is DialogueNodeView _memberNode) AddNode(_memberNode);
+                        }
+                        break;
+                    case DialogueNoteView _note:
+                        _positions[_note.NoteId] = _note.CanvasPosition;
+                        break;
+                }
             }
             DialogueGraphOps.Move(Asset, _positions);
         }
@@ -333,8 +693,17 @@ namespace HarryTools.Dialogue.Editor {
             List<string> _ids = new List<string>();
             List<string> _disconnected = new List<string>();
             for (int _i = 0; _i < _removed.Count; _i++) {
-                if (_removed[_i] is DialogueNodeView _view) _ids.Add(_view.NodeId);
+                string _id = ElementId(_removed[_i]);
+                if (_id != null) _ids.Add(_id);
                 else if (_removed[_i] is Edge _edge && _edge.output != null && _edge.output.userData is string _outputId) _disconnected.Add(_outputId);
+            }
+
+            // Groups whose nodes are all deleted go with them
+            HashSet<string> _deleted = new HashSet<string>(_ids);
+            for (int _g = 0; _g < Asset.Groups.Count; _g++) {
+                DialogueGroup _group = Asset.Groups[_g];
+                if (_group == null || _deleted.Contains(_group.Id) || _group.NodeIds.Count == 0) continue;
+                if (_group.NodeIds.All(_member => _deleted.Contains(_member) && !(Asset.Find(_member) is StartNode))) _ids.Add(_group.Id);
             }
 
             for (int _i = 0; _i < _disconnected.Count; _i++) DialogueGraphOps.Disconnect(Asset, _disconnected[_i]);
@@ -380,7 +749,11 @@ namespace HarryTools.Dialogue.Editor {
             restoringCamera = false;
             if (_stored) return;
 
-            // Framing needs the size of the nodes, known after the next layout pass
+            FrameAllWhenLaidOut();
+        }
+
+        /// <summary> Frames every element once the nodes have a size, known after the next layout pass </summary>
+        private void FrameAllWhenLaidOut() {
             DialogueAsset _framed = Asset;
             bool _done = false;
             schedule.Execute(() => {

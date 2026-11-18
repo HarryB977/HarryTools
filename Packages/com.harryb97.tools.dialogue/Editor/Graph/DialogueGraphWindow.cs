@@ -11,6 +11,7 @@ namespace HarryTools.Dialogue.Editor {
         #region Private Variables
         private const string WindowTitle = "Dialogue Graph";
         private const float PanelWidth = 320f;
+        private const string FindCommand = "Find";
 
         // Survives domain reloads; the asset reference itself is looked up again from it
         [SerializeField] private string assetGuid = "";
@@ -31,6 +32,9 @@ namespace HarryTools.Dialogue.Editor {
 
         /// <summary> The bar above the canvas. Other parts of the window add their controls to it </summary>
         internal Toolbar Toolbar { get; private set; }
+
+        /// <summary> The search of nodes in the bar </summary>
+        internal DialogueNodeFinderField Finder { get; private set; }
         #endregion
 
         // ==================== OPEN ====================
@@ -77,6 +81,7 @@ namespace HarryTools.Dialogue.Editor {
             View = null;
             Panel = null;
             Toolbar = null;
+            Finder = null;
             assetField = null;
             asset = null;
         }
@@ -106,6 +111,7 @@ namespace HarryTools.Dialogue.Editor {
         private void ShowAsset() {
             titleContent = new GUIContent(asset != null ? asset.name : WindowTitle);
             assetField?.SetValueWithoutNotify(asset);
+            Finder?.ClearQuery();
             View?.Load(asset);
             Panel?.Show(asset, View?.SelectedNodeId);
         }
@@ -142,6 +148,11 @@ namespace HarryTools.Dialogue.Editor {
             });
             Toolbar.Add(_miniMap);
 
+            Toolbar.Add(new ToolbarSpacer { flex = true });
+            Finder = new DialogueNodeFinderField { AssetSource = () => asset };
+            Finder.Picked += _nodeId => View?.SelectAndFrame(_nodeId);
+            Toolbar.Add(Finder);
+
             View = new DialogueGraphView(this) { SnapToGrid = snapToGrid, MiniMapVisible = showMiniMap };
             View.style.flexGrow = 1f;
             Panel = new DialogueInspectorPanel();
@@ -158,6 +169,25 @@ namespace HarryTools.Dialogue.Editor {
 
             rootVisualElement.Add(Toolbar);
             rootVisualElement.Add(_split);
+            // Last, so the results are drawn above the canvas
+            rootVisualElement.Add(Finder.Popup);
+
+            View.RegisterCallback<PointerDownEvent>(_ => Finder?.HideResults(), TrickleDown.TrickleDown);
+            rootVisualElement.RegisterCallback<KeyDownEvent>(OnKeyDown, TrickleDown.TrickleDown);
+            rootVisualElement.RegisterCallback<ValidateCommandEvent>(_event => {
+                if (_event.commandName == FindCommand) _event.StopPropagation();
+            });
+            rootVisualElement.RegisterCallback<ExecuteCommandEvent>(_event => {
+                if (_event.commandName != FindCommand) return;
+                Finder?.FocusField();
+                _event.StopPropagation();
+            });
+        }
+
+        private void OnKeyDown(KeyDownEvent _event) {
+            if (!_event.actionKey || _event.shiftKey || _event.altKey || _event.keyCode != KeyCode.F) return;
+            Finder?.FocusField();
+            _event.StopPropagation();
         }
         #endregion
     }

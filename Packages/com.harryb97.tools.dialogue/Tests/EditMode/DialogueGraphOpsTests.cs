@@ -430,5 +430,111 @@ namespace HarryTools.Dialogue.Tests {
             Assert.IsFalse(DialogueClipboard.CanPaste(_data));
         }
         #endregion
+
+        #region Layout
+        [Test]
+        public void AutoLayout_ColumnsByDepth_RowsInOutputOrder() {
+            DialogueAsset _asset = NewAsset("LayoutDepth");
+            LineNode _line = (LineNode)DialogueGraphOps.CreateConnected(_asset, typeof(LineNode), Vector2.zero, _asset.Start.Next.Id);
+            ChoiceNode _choice = (ChoiceNode)DialogueGraphOps.CreateConnected(_asset, typeof(ChoiceNode), Vector2.zero, _line.Next.Id);
+            DialogueGraphOps.AddOption(_asset, _choice);
+            DialogueNode _first = DialogueGraphOps.CreateConnected(_asset, typeof(EndNode), Vector2.zero, _choice.Options[0].Next.Id);
+            DialogueNode _noAnswer = DialogueGraphOps.CreateConnected(_asset, typeof(EndNode), Vector2.zero, _choice.NoAnswer.Id);
+            Assert.IsTrue(DialogueGraphOps.NeedsAutoLayout(_asset));
+            Undo.IncrementCurrentGroup();
+
+            DialogueGraphOps.AutoLayout(_asset);
+
+            Assert.AreEqual(new Vector2(0f, 0f), _asset.Start.Position);
+            Assert.AreEqual(new Vector2(350f, 0f), _line.Position);
+            Assert.AreEqual(new Vector2(700f, 0f), _choice.Position);
+            Assert.AreEqual(new Vector2(1050f, 0f), _first.Position);
+            Assert.AreEqual(new Vector2(1050f, 200f), _noAnswer.Position);
+            Assert.IsFalse(DialogueGraphOps.NeedsAutoLayout(_asset));
+
+            // One undo step puts every node back
+            UndoLast();
+            Assert.AreEqual(Vector2.zero, _line.Position);
+            Assert.AreEqual(Vector2.zero, _noAnswer.Position);
+        }
+
+        [Test]
+        public void AutoLayout_Cycle_Terminates() {
+            DialogueAsset _asset = NewAsset("LayoutCycle");
+            LineNode _a = (LineNode)DialogueGraphOps.CreateConnected(_asset, typeof(LineNode), Vector2.zero, _asset.Start.Next.Id);
+            LineNode _b = (LineNode)DialogueGraphOps.CreateConnected(_asset, typeof(LineNode), Vector2.zero, _a.Next.Id);
+            DialogueGraphOps.Connect(_asset, _b.Next.Id, _a.Id);
+            LineNode _self = (LineNode)DialogueGraphOps.CreateNode(_asset, typeof(LineNode), Vector2.zero);
+            DialogueGraphOps.Connect(_asset, _self.Next.Id, _self.Id);
+
+            DialogueGraphOps.AutoLayout(_asset);
+
+            Assert.AreEqual(new Vector2(350f, 0f), _a.Position);
+            Assert.AreEqual(new Vector2(700f, 0f), _b.Position);
+            // Unreachable, so in the column after the deepest one
+            Assert.AreEqual(new Vector2(1050f, 0f), _self.Position);
+        }
+
+        [Test]
+        public void AutoLayout_Unreachable_InLastColumn() {
+            DialogueAsset _asset = NewAsset("LayoutUnreachable");
+            DialogueNode _x = DialogueGraphOps.CreateNode(_asset, typeof(LineNode), Vector2.zero);
+            LineNode _reached = (LineNode)DialogueGraphOps.CreateConnected(_asset, typeof(LineNode), Vector2.zero, _asset.Start.Next.Id);
+            DialogueNode _y = DialogueGraphOps.CreateNode(_asset, typeof(EndNode), Vector2.zero);
+
+            DialogueGraphOps.AutoLayout(_asset);
+
+            Assert.AreEqual(new Vector2(350f, 0f), _reached.Position);
+            Assert.AreEqual(new Vector2(700f, 0f), _x.Position);
+            Assert.AreEqual(new Vector2(700f, 200f), _y.Position);
+        }
+
+        [Test]
+        public void NeedsAutoLayout_OnlyWhenEveryNodeAtOrigin() {
+            DialogueAsset _asset = NewAsset("LayoutNeeds");
+            Assert.IsFalse(DialogueGraphOps.NeedsAutoLayout(_asset), "a single node");
+
+            DialogueNode _line = DialogueGraphOps.CreateNode(_asset, typeof(LineNode), Vector2.zero);
+            Assert.IsTrue(DialogueGraphOps.NeedsAutoLayout(_asset));
+
+            _line.Position = new Vector2(10f, 0f);
+            Assert.IsFalse(DialogueGraphOps.NeedsAutoLayout(_asset));
+            Assert.IsFalse(DialogueGraphOps.NeedsAutoLayout(null));
+        }
+
+        [Test]
+        public void Arrange_AlignAndDistribute() {
+            Dictionary<string, Rect> _rects = new Dictionary<string, Rect> {
+                { "a", new Rect(0f, 0f, 100f, 50f) },
+                { "b", new Rect(300f, 40f, 200f, 100f) },
+                { "c", new Rect(120f, 90f, 100f, 10f) }
+            };
+
+            IReadOnlyDictionary<string, Vector2> _left = DialogueGraphOps.Arrange(_rects, DialogueGraphOps.Arrangement.Left);
+            Assert.AreEqual(new Vector2(0f, 40f), _left["b"]);
+            Assert.AreEqual(new Vector2(0f, 90f), _left["c"]);
+
+            IReadOnlyDictionary<string, Vector2> _right = DialogueGraphOps.Arrange(_rects, DialogueGraphOps.Arrangement.Right);
+            Assert.AreEqual(new Vector2(400f, 0f), _right["a"]);
+            Assert.AreEqual(new Vector2(300f, 40f), _right["b"]);
+
+            // Middle of the selection's bounds: y from 0 to 140
+            IReadOnlyDictionary<string, Vector2> _middle = DialogueGraphOps.Arrange(_rects, DialogueGraphOps.Arrangement.Middle);
+            Assert.AreEqual(new Vector2(0f, 45f), _middle["a"]);
+            Assert.AreEqual(new Vector2(120f, 65f), _middle["c"]);
+
+            // The first and last stay; between a's right edge (100) and b's left edge (300) c leaves two gaps of 50
+            IReadOnlyDictionary<string, Vector2> _spread = DialogueGraphOps.Arrange(_rects, DialogueGraphOps.Arrangement.DistributeHorizontally);
+            Assert.AreEqual(new Vector2(0f, 0f), _spread["a"]);
+            Assert.AreEqual(new Vector2(150f, 90f), _spread["c"]);
+            Assert.AreEqual(new Vector2(300f, 40f), _spread["b"]);
+
+            // Between a's bottom (50) and c's top (90) b does not fit: the gaps are -30
+            IReadOnlyDictionary<string, Vector2> _stack = DialogueGraphOps.Arrange(_rects, DialogueGraphOps.Arrangement.DistributeVertically);
+            Assert.AreEqual(new Vector2(0f, 0f), _stack["a"]);
+            Assert.AreEqual(new Vector2(300f, 20f), _stack["b"]);
+            Assert.AreEqual(new Vector2(120f, 90f), _stack["c"]);
+        }
+        #endregion
     }
 }

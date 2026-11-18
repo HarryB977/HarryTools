@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEditor;
 using UnityEngine;
 
@@ -17,6 +18,9 @@ namespace HarryTools.Dialogue.Editor {
         private const string CaseUndo = "Edit Dialogue Cases";
         private const string GroupUndo = "Edit Dialogue Group";
         private const string NoteUndo = "Edit Dialogue Note";
+        private const string AutoLayoutUndo = "Auto Layout";
+        private const float LayoutColumnWidth = 350f;
+        private const float LayoutRowHeight = 200f;
 
         private static readonly List<NodeOutput> outputBuffer = new List<NodeOutput>();
         #endregion
@@ -214,6 +218,105 @@ namespace HarryTools.Dialogue.Editor {
         }
         #endregion
 
+        // ==================== LAYOUT ====================
+        #region Layout
+        /// <summary> Ways to line up a set of elements </summary>
+        internal enum Arrangement { Left, Center, Right, Top, Middle, Bottom, DistributeHorizontally, DistributeVertically }
+
+        /// <summary> The dialogue has more than one node and all of them sit at the origin, as dialogues made without the graph window do </summary>
+        internal static bool NeedsAutoLayout(DialogueAsset _asset) {
+            if (_asset == null) return false;
+
+            int _count = 0;
+            for (int _i = 0; _i < _asset.Nodes.Count; _i++) {
+                if (_asset.Nodes[_i] == null) continue;
+                if (_asset.Nodes[_i].Position != Vector2.zero) return false;
+                _count++;
+            }
+            return _count > 1;
+        }
+
+        /// <summary> Places the nodes left to right by their distance from the start node, one column per step, in output order inside each column. Nodes the start node never reaches go in a last column </summary>
+        internal static void AutoLayout(DialogueAsset _asset) {
+            if (_asset == null) return;
+
+            List<List<DialogueNode>> _columns = new List<List<DialogueNode>>();
+            Dictionary<DialogueNode, int> _depths = new Dictionary<DialogueNode, int>();
+            Queue<DialogueNode> _queue = new Queue<DialogueNode>();
+            List<NodeOutput> _outputs = new List<NodeOutput>();
+
+            StartNode _start = _asset.Start;
+            if (_start != null) {
+                _depths.Add(_start, 0);
+                _queue.Enqueue(_start);
+            }
+            while (_queue.Count > 0) {
+                DialogueNode _node = _queue.Dequeue();
+                int _depth = _depths[_node];
+                if (_columns.Count <= _depth) _columns.Add(new List<DialogueNode>());
+                _columns[_depth].Add(_node);
+
+                _outputs.Clear();
+                _node.CollectOutputs(_outputs);
+                for (int _o = 0; _o < _outputs.Count; _o++) {
+                    if (_outputs[_o] == null || !_outputs[_o].IsConnected) continue;
+                    DialogueNode _target = _asset.Find(_outputs[_o].Target);
+                    // A node already placed keeps its column, so cycles end here
+                    if (_target == null || _depths.ContainsKey(_target)) continue;
+                    _depths.Add(_target, _depth + 1);
+                    _queue.Enqueue(_target);
+                }
+            }
+
+            List<DialogueNode> _unreached = new List<DialogueNode>();
+            for (int _i = 0; _i < _asset.Nodes.Count; _i++) {
+                if (_asset.Nodes[_i] != null && !_depths.ContainsKey(_asset.Nodes[_i])) _unreached.Add(_asset.Nodes[_i]);
+            }
+            if (_unreached.Count > 0) _columns.Add(_unreached);
+
+            Begin(_asset, AutoLayoutUndo);
+            for (int _c = 0; _c < _columns.Count; _c++) {
+                for (int _r = 0; _r < _columns[_c].Count; _r++) _columns[_c][_r].Position = new Vector2(_c * LayoutColumnWidth, _r * LayoutRowHeight);
+            }
+            End(_asset);
+            Undo.SetCurrentGroupName(AutoLayoutUndo);
+        }
+
+        /// <summary> The new top left corner of each rect so they line up as asked. Distributing keeps the first and last rects in place and leaves equal gaps between all of them </summary>
+        internal static IReadOnlyDictionary<string, Vector2> Arrange(IReadOnlyDictionary<string, Rect> _rects, Arrangement _mode) {
+            Dictionary<string, Vector2> _positions = new Dictionary<string, Vector2>();
+            if (_rects == null || _rects.Count == 0) return _positions;
+
+            if (_mode == Arrangement.DistributeHorizontally || _mode == Arrangement.DistributeVertically) {
+                Distribute(_rects, _mode == Arrangement.DistributeHorizontally, _positions);
+                return _positions;
+            }
+
+            float _xMin = float.MaxValue, _xMax = float.MinValue, _yMin = float.MaxValue, _yMax = float.MinValue;
+            foreach (Rect _rect in _rects.Values) {
+                _xMin = Mathf.Min(_xMin, _rect.xMin);
+                _xMax = Mathf.Max(_xMax, _rect.xMax);
+                _yMin = Mathf.Min(_yMin, _rect.yMin);
+                _yMax = Mathf.Max(_yMax, _rect.yMax);
+            }
+
+            foreach (KeyValuePair<string, Rect> _pair in _rects) {
+                Rect _rect = _pair.Value;
+                Vector2 _position = _rect.position;
+                switch (_mode) {
+                    case Arrangement.Left: _position.x = _xMin; break;
+                    case Arrangement.Center: _position.x = (_xMin + _xMax) * 0.5f - _rect.width * 0.5f; break;
+                    case Arrangement.Right: _position.x = _xMax - _rect.width; break;
+                    case Arrangement.Top: _position.y = _yMin; break;
+                    case Arrangement.Middle: _position.y = (_yMin + _yMax) * 0.5f - _rect.height * 0.5f; break;
+                    case Arrangement.Bottom: _position.y = _yMax - _rect.height; break;
+                }
+                _positions[_pair.Key] = _position;
+            }
+            return _positions;
+        }
+        #endregion
+
         // ==================== LOOKUP ====================
         #region Lookup
         /// <summary> The output with the id, in any node. Null when none has it </summary>
@@ -283,6 +386,28 @@ namespace HarryTools.Dialogue.Editor {
 
             _group.NodeIdList.Clear();
             _group.NodeIdList.AddRange(_members);
+        }
+
+        private static void Distribute(IReadOnlyDictionary<string, Rect> _rects, bool _horizontal, Dictionary<string, Vector2> _into) {
+            List<KeyValuePair<string, Rect>> _ordered = _rects.OrderBy(_pair => _horizontal ? _pair.Value.x : _pair.Value.y).ToList();
+            for (int _i = 0; _i < _ordered.Count; _i++) _into[_ordered[_i].Key] = _ordered[_i].Value.position;
+            if (_ordered.Count < 3) return;
+
+            float Start(Rect _rect) => _horizontal ? _rect.xMin : _rect.yMin;
+            float Size(Rect _rect) => _horizontal ? _rect.width : _rect.height;
+
+            float _inner = 0f;
+            for (int _i = 1; _i < _ordered.Count - 1; _i++) _inner += Size(_ordered[_i].Value);
+            Rect _first = _ordered[0].Value;
+            float _firstEnd = Start(_first) + Size(_first);
+            float _gap = (Start(_ordered[_ordered.Count - 1].Value) - _firstEnd - _inner) / (_ordered.Count - 1);
+
+            float _cursor = _firstEnd + _gap;
+            for (int _i = 1; _i < _ordered.Count - 1; _i++) {
+                Rect _rect = _ordered[_i].Value;
+                _into[_ordered[_i].Key] = _horizontal ? new Vector2(_cursor, _rect.y) : new Vector2(_rect.x, _cursor);
+                _cursor += Size(_rect) + _gap;
+            }
         }
 
         private static DialogueGroup FindGroup(DialogueAsset _asset, string _id) {

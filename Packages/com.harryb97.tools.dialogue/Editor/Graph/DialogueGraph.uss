@@ -118,3 +118,44 @@
     flex-direction: row;
     justify-content: flex-end;
 }
+
+.dialogue-group {
+    border-top-width: 1px;
+    border-bottom-width: 1px;
+    border-left-width: 1px;
+    border-right-width: 1px;
+}
+
+.dialogue-group__color {
+    width: 36px;
+    flex-grow: 0;
+    flex-shrink: 0;
+    align-self: center;
+    margin-right: 6px;
+}
+
+.dialogue-finder {
+    background-color: rgb(42, 42, 42);
+    border-top-width: 1px;
+    border-bottom-width: 1px;
+    border-left-width: 1px;
+    border-right-width: 1px;
+    border-top-color: rgb(25, 25, 25);
+    border-bottom-color: rgb(25, 25, 25);
+    border-left-color: rgb(25, 25, 25);
+    border-right-color: rgb(25, 25, 25);
+    padding: 2px;
+}
+
+.dialogue-finder__list Label {
+    -unity-text-align: middle-left;
+    padding-left: 4px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.dialogue-finder__empty {
+    padding: 4px;
+    color: rgb(150, 150, 150);
+}
