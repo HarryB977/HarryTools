@@ -1,3 +1,4 @@
+using UnityEditor;
 using UnityEditor.Experimental.GraphView;
 using UnityEditor.UIElements;
 using UnityEngine;
@@ -13,7 +14,11 @@ namespace HarryTools.Dialogue.Editor {
         private const float BackgroundAlpha = 0.15f;
         private const float HeaderAlpha = 0.6f;
 
+        private const string ColorUndo = "Group Color";
+
         private readonly ColorField colorField;
+        // Undo group of the first change made with the color picker; its later changes are folded into it
+        private int pickerUndoGroup = -1;
         #endregion
 
         #region Public Variables
@@ -30,6 +35,9 @@ namespace HarryTools.Dialogue.Editor {
         };
 
         internal string GroupId { get; }
+
+        /// <summary> The field in the header that opens the color picker </summary>
+        internal ColorField ColorPicker => colorField;
 
         internal DialogueGroup Data { get; }
 
@@ -48,7 +56,9 @@ namespace HarryTools.Dialogue.Editor {
 
             colorField = new ColorField { showAlpha = false, showEyeDropper = false, value = _group.Color, tooltip = "Color of the group" };
             colorField.AddToClassList(ColorClass);
-            colorField.RegisterValueChangedCallback(_event => SetColor(_event.newValue));
+            colorField.RegisterValueChangedCallback(_event => PickColor(_event.newValue));
+            // A click on the field opens the picker: a new interaction, so a new undo step
+            colorField.RegisterCallback<PointerDownEvent>(_ => pickerUndoGroup = -1, TrickleDown.TrickleDown);
             headerContainer.Add(colorField);
 
             this.AddManipulator(new ContextualMenuManipulator(BuildColorMenu));
@@ -90,8 +100,19 @@ namespace HarryTools.Dialogue.Editor {
         // ==================== PRIVATE ====================
         #region Private Methods
         private void WriteTitle(string _title) {
-            if (Asset == null || Data == null || (_title ?? "") == Data.Title) return;
+            if (Asset == null || Data == null || (_title ?? "") == (Data.Title ?? "")) return;
             DialogueGraphOps.SetGroup(Asset, GroupId, _title, Data.Color);
+        }
+
+        /// <summary> A change from the color picker. Dragging in the picker sends many, which make a single undo step </summary>
+        private void PickColor(Color _color) {
+            if (pickerUndoGroup < 0) {
+                Undo.IncrementCurrentGroup();
+                pickerUndoGroup = Undo.GetCurrentGroup();
+            }
+            SetColor(_color);
+            Undo.SetCurrentGroupName(ColorUndo);
+            Undo.CollapseUndoOperations(pickerUndoGroup);
         }
 
         private void ApplyColor(Color _color) {

@@ -685,6 +685,120 @@ namespace HarryTools.Dialogue.Tests {
             CollectionAssert.AreEqual(new[] { _choice.Id }, window.View.selection.OfType<DialogueNodeView>().Select(_view => _view.NodeId));
         }
 
+        [Test]
+        public void Window_Regroup_RemovesEmptiedGroup() {
+            DialogueAsset _asset = NewSample("Regroup");
+            window = DialogueGraphWindow.Open(_asset);
+            LineNode _line = _asset.Nodes.OfType<LineNode>().First();
+            ChoiceNode _choice = _asset.Nodes.OfType<ChoiceNode>().First();
+            void SelectBoth() {
+                window.View.ClearSelection();
+                window.View.AddToSelection(window.View.FindNodeView(_line.Id));
+                window.View.AddToSelection(window.View.FindNodeView(_choice.Id));
+            }
+
+            SelectBoth();
+            Undo.IncrementCurrentGroup();
+            window.View.GroupSelection();
+            string _first = _asset.Groups[0].Id;
+            SelectBoth();
+            Undo.IncrementCurrentGroup();
+            window.View.GroupSelection();
+
+            Assert.AreEqual(1, _asset.Groups.Count);
+            Assert.AreNotEqual(_first, _asset.Groups[0].Id);
+            Assert.AreEqual(1, window.View.graphElements.OfType<DialogueGroupView>().Count());
+
+            // One undo step brings the first group back
+            Undo.PerformUndo();
+            Assert.AreEqual(1, _asset.Groups.Count);
+            Assert.AreEqual(_first, _asset.Groups[0].Id);
+            CollectionAssert.AreEquivalent(new[] { _line.Id, _choice.Id }, _asset.Groups[0].NodeIds);
+        }
+
+        [Test]
+        public void Window_GroupShortcut_IgnoredInTextField() {
+            DialogueAsset _asset = NewSample("Shortcut");
+            window = DialogueGraphWindow.Open(_asset);
+            LineNodeView _lineView = (LineNodeView)window.View.FindNodeView(_asset.Nodes.OfType<LineNode>().First().Id);
+            window.View.AddToSelection(_lineView);
+            void SendCtrlG(VisualElement _target) {
+                using (KeyDownEvent _event = KeyDownEvent.GetPooled('\0', KeyCode.G, EventModifiers.Control)) {
+                    _event.target = _target;
+                    _target.SendEvent(_event);
+                }
+            }
+
+            SendCtrlG(_lineView.TextField.Q<TextElement>());
+            Assert.AreEqual(0, _asset.Groups.Count, "typing in a node field");
+
+            SendCtrlG(_lineView);
+            Assert.AreEqual(1, _asset.Groups.Count, "on the canvas");
+        }
+
+        [Test]
+        public void Window_GroupColorPicker_OneUndoStep() {
+            DialogueAsset _asset = NewSample("PickerUndo");
+            window = DialogueGraphWindow.Open(_asset);
+            window.View.AddToSelection(window.View.FindNodeView(_asset.Nodes.OfType<LineNode>().First().Id));
+            window.View.GroupSelection();
+            DialogueGroup _group = _asset.Groups[0];
+            Color _original = _group.Color;
+            DialogueGroupView _view = window.View.FindGroupView(_group.Id);
+
+            // Dragging in the picker sends a change per event
+            Undo.IncrementCurrentGroup();
+            _view.ColorPicker.value = Color.red;
+            Undo.IncrementCurrentGroup();
+            _view.ColorPicker.value = Color.green;
+            Undo.IncrementCurrentGroup();
+            _view.ColorPicker.value = Color.blue;
+            Assert.AreEqual(Color.blue, _group.Color);
+
+            Undo.PerformUndo();
+            Assert.AreEqual(_original, _asset.Groups[0].Color);
+            Assert.AreEqual(1, _asset.Groups.Count, "the group itself is an earlier step");
+        }
+
+        [Test]
+        public void Window_Arrange_SnapsToGrid() {
+            DialogueAsset _asset = NewSample("ArrangeSnap");
+            window = DialogueGraphWindow.Open(_asset);
+            LineNode _line = _asset.Nodes.OfType<LineNode>().First();
+            ChoiceNode _choice = _asset.Nodes.OfType<ChoiceNode>().First();
+            _line.Position = new Vector2(133f, 47f);
+            window.View.Rebuild();
+            window.View.SnapToGrid = true;
+            window.View.AddToSelection(window.View.FindNodeView(_line.Id));
+            window.View.AddToSelection(window.View.FindNodeView(_choice.Id));
+
+            window.View.ArrangeSelection(DialogueGraphOps.Arrangement.Left);
+
+            Assert.AreEqual(new Vector2(140f, 40f), _line.Position);
+            Assert.AreEqual(new Vector2(140f, 0f), _choice.Position);
+        }
+
+        [Test]
+        public void Note_ContextMenu_HasEditItems() {
+            DialogueAsset _asset = NewSample("NoteMenu");
+            window = DialogueGraphWindow.Open(_asset);
+            DialogueNote _note = window.View.CreateNote(Vector2.zero);
+            window.View.ClearSelection();
+            DropdownMenu _menu = new DropdownMenu();
+
+            window.View.BuildElementMenu(_menu, window.View.FindNoteView(_note.Id).Q<Label>("contents"));
+
+            List<DropdownMenuAction> _actions = _menu.MenuItems().OfType<DropdownMenuAction>().ToList();
+            CollectionAssert.IsSubsetOf(new[] { "Copy", "Duplicate", "Delete" }, _actions.Select(_action => _action.name));
+            Assert.IsTrue(window.View.selection.Contains(window.View.FindNoteView(_note.Id)), "the right clicked note is selected");
+
+            DropdownMenuAction _delete = _actions.First(_action => _action.name == "Delete");
+            _delete.UpdateActionStatus(null);
+            Assert.AreEqual(DropdownMenuAction.Status.Normal, _delete.status);
+            _delete.Execute();
+            Assert.AreEqual(0, _asset.Notes.Count);
+        }
+
         private static PropertyField FindBoundField(VisualElement _root, string _name) {
             return _root.Query<PropertyField>().Where(_field => _field.bindingPath != null && (_field.bindingPath == _name || _field.bindingPath.EndsWith("." + _name))).First();
         }

@@ -296,6 +296,7 @@ namespace HarryTools.Dialogue.Tests {
             DialogueGraphOps.SetGroupNodes(_asset, _first.Id, new[] { _a.Id, _b.Id });
             Assert.AreEqual(2, _first.NodeIds.Count);
             Assert.AreEqual(0, _second.NodeIds.Count);
+            CollectionAssert.AreEqual(new[] { _first }, _asset.Groups, "a group left without nodes is removed");
 
             DialogueGraphOps.SetGroup(_asset, _first.Id, "Renamed", Color.red);
             Assert.AreEqual("Renamed", _first.Title);

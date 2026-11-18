@@ -175,17 +175,17 @@ namespace HarryTools.Dialogue.Editor {
             View.RegisterCallback<PointerDownEvent>(_ => Finder?.HideResults(), TrickleDown.TrickleDown);
             rootVisualElement.RegisterCallback<KeyDownEvent>(OnKeyDown, TrickleDown.TrickleDown);
             rootVisualElement.RegisterCallback<ValidateCommandEvent>(_event => {
-                if (_event.commandName == FindCommand) _event.StopPropagation();
+                if (_event.commandName == FindCommand && !DialogueGraphView.IsTextInput(_event.target)) _event.StopPropagation();
             });
             rootVisualElement.RegisterCallback<ExecuteCommandEvent>(_event => {
-                if (_event.commandName != FindCommand) return;
+                if (_event.commandName != FindCommand || DialogueGraphView.IsTextInput(_event.target)) return;
                 Finder?.FocusField();
                 _event.StopPropagation();
             });
         }
 
         private void OnKeyDown(KeyDownEvent _event) {
-            if (!_event.actionKey || _event.shiftKey || _event.altKey || _event.keyCode != KeyCode.F) return;
+            if (!_event.actionKey || _event.shiftKey || _event.altKey || _event.keyCode != KeyCode.F || DialogueGraphView.IsTextInput(_event.target)) return;
             Finder?.FocusField();
             _event.StopPropagation();
         }

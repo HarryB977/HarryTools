@@ -163,7 +163,7 @@ namespace HarryTools.Dialogue.Editor {
 
         // ==================== GROUPS AND NOTES ====================
         #region Groups and Notes
-        /// <summary> Adds a group around the nodes. A node belongs to one group at most, so it leaves any group it was in </summary>
+        /// <summary> Adds a group around the nodes. A node belongs to one group at most, so it leaves any group it was in; a group left without nodes is removed </summary>
         internal static DialogueGroup CreateGroup(DialogueAsset _asset, string _title, IEnumerable<string> _nodeIds) {
             if (_asset == null) return null;
 
@@ -176,7 +176,7 @@ namespace HarryTools.Dialogue.Editor {
             return _group;
         }
 
-        /// <summary> Replaces the nodes of the group. Nodes taken from another group leave it </summary>
+        /// <summary> Replaces the nodes of the group. Nodes taken from another group leave it; a group left without nodes is removed </summary>
         internal static void SetGroupNodes(DialogueAsset _asset, string _groupId, IEnumerable<string> _nodeIds) {
             DialogueGroup _group = FindGroup(_asset, _groupId);
             if (_group == null) return;
@@ -378,10 +378,11 @@ namespace HarryTools.Dialogue.Editor {
                 }
             }
 
-            for (int _g = 0; _g < _asset.GroupList.Count; _g++) {
+            // A group is drawn around its nodes, so one whose last nodes move away goes too
+            for (int _g = _asset.GroupList.Count - 1; _g >= 0; _g--) {
                 DialogueGroup _other = _asset.GroupList[_g];
                 if (_other == null || _other == _group) continue;
-                _other.NodeIdList.RemoveAll(_id => _members.Contains(_id));
+                if (_other.NodeIdList.RemoveAll(_id => _members.Contains(_id)) > 0 && _other.NodeIdList.Count == 0) _asset.GroupList.RemoveAt(_g);
             }
 
             _group.NodeIdList.Clear();

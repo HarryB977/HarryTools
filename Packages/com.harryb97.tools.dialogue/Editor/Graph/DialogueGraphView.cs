@@ -355,6 +355,7 @@ namespace HarryTools.Dialogue.Editor {
                 // Raises elementsRemovedFromGroup, which writes the asset
                 if (_members.Count > 0) _group.RemoveElements(_members);
             }
+            Undo.SetCurrentGroupName("Remove from Group");
         }
 
         /// <summary> Adds a note at the canvas position, which is then selected </summary>
@@ -490,7 +491,11 @@ namespace HarryTools.Dialogue.Editor {
             }
             if (_rects.Count < 2) return;
 
-            DialogueGraphOps.Move(Asset, DialogueGraphOps.Arrange(_rects, _arrangement));
+            Dictionary<string, Vector2> _positions = new Dictionary<string, Vector2>(DialogueGraphOps.Arrange(_rects, _arrangement));
+            if (SnapToGrid) {
+                foreach (string _id in _positions.Keys.ToList()) _positions[_id] = Snap(_positions[_id]);
+            }
+            DialogueGraphOps.Move(Asset, _positions);
             string _name = ObjectNames.NicifyVariableName(_arrangement.ToString());
             Undo.SetCurrentGroupName(_name.StartsWith("Distribute") ? _name : "Align " + _name);
             Rebuild();
@@ -516,7 +521,27 @@ namespace HarryTools.Dialogue.Editor {
             _menu.AppendAction("Create Note", _ => CreateNote(_canvas), _ => Available(Asset != null));
         }
 
-        /// <summary> Items added after the graph view's own (cut, copy, paste, delete, duplicate) when the selection is right clicked </summary>
+        /// <summary> Items added after the graph view's own (cut, copy, paste, delete, duplicate) when an element is right clicked </summary>
+        internal void BuildElementMenu(DropdownMenu _menu, VisualElement _target) {
+            // The graph view's menu leaves notes out, so a note gets its edit items here
+            DialogueNoteView _note = _target?.GetFirstOfType<DialogueNoteView>();
+            if (_note != null) {
+                if (!selection.Contains(_note)) {
+                    ClearSelection();
+                    AddToSelection(_note);
+                }
+                AppendMissing(_menu, "Copy", CopySelection, HasCopyableSelection());
+                AppendMissing(_menu, "Duplicate", DuplicateSelection, HasCopyableSelection());
+                AppendMissing(_menu, "Delete", () => DeleteSelection(), HasDeletableSelection());
+            }
+            BuildSelectionMenu(_menu);
+        }
+
+        private static void AppendMissing(DropdownMenu _menu, string _name, Action _action, bool _enabled) {
+            if (_menu.MenuItems().OfType<DropdownMenuAction>().Any(_item => _item.name == _name)) return;
+            _menu.AppendAction(_name, _ => _action(), _enabled ? DropdownMenuAction.Status.Normal : DropdownMenuAction.Status.Disabled);
+        }
+
         private void BuildSelectionMenu(DropdownMenu _menu) {
             List<DialogueNodeView> _nodes = SelectedNodes();
             if (_nodes.Count == 0) return;
@@ -546,7 +571,7 @@ namespace HarryTools.Dialogue.Editor {
         }
 
         private void OnKeyDown(KeyDownEvent _event) {
-            if (!_event.actionKey || _event.shiftKey || _event.altKey || _event.keyCode != KeyCode.G) return;
+            if (!_event.actionKey || _event.shiftKey || _event.altKey || _event.keyCode != KeyCode.G || IsTextInput(_event.target)) return;
             GroupSelection();
             _event.StopPropagation();
         }
@@ -564,6 +589,18 @@ namespace HarryTools.Dialogue.Editor {
 
         private List<string> SelectedNodeIds() {
             return SelectedNodes().Select(_view => _view.NodeId).ToList();
+        }
+
+        private bool HasDeletableSelection() {
+            foreach (ISelectable _item in selection) {
+                if (_item is GraphElement _element && (_element.capabilities & Capabilities.Deletable) != 0) return true;
+            }
+            return false;
+        }
+
+        /// <summary> The event comes from a field the user types in, where shortcuts belong to the text </summary>
+        internal static bool IsTextInput(IEventHandler _target) {
+            return _target is VisualElement _element && _element.GetFirstOfType<TextField>() != null;
         }
 
         private bool HasCopyableSelection() {
@@ -633,7 +670,7 @@ namespace HarryTools.Dialogue.Editor {
                 return;
             }
             base.BuildContextualMenu(_event);
-            BuildSelectionMenu(_event.menu);
+            BuildElementMenu(_event.menu, _event.target as VisualElement);
         }
 
         private GraphViewChange OnGraphViewChanged(GraphViewChange _change) {
