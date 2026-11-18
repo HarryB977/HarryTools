@@ -109,6 +109,9 @@ namespace HarryTools.Dialogue {
         /// <summary> The AssetDatabase GUID written by the editor on import </summary>
         internal string SerializedAssetId => assetId;
 
+        /// <summary> The node list itself, for the editor operations that add or remove nodes without the start node rules </summary>
+        internal List<DialogueNode> NodeList => nodes;
+
         internal List<DialogueGroup> GroupList => groups;
 
         internal List<DialogueNote> NoteList => notes;
