@@ -124,6 +124,7 @@ namespace HarryTools.Dialogue.Tests {
             _asset.EnsureIds();
             _asset.Start.Next.Target = _line.Id;
             _line.Next.Target = _end.Id;
+            TranslateAll(_asset, _line, "Hola");
             return _asset;
         }
 
@@ -299,7 +300,47 @@ namespace HarryTools.Dialogue.Tests {
             Assert.IsTrue(Has(_found, _line.Id, "ghost"));
 
             _line.Events = new TextEventTable(new List<TextEventEntry> { new TextEventEntry("ghost", new ActionList()) });
-            Assert.IsFalse(Has(Run(_asset), _line.Id, "ghost"));
+            Assert.IsFalse(Has(Run(_asset), _line.Id, "event table"));
+        }
+
+        [Test]
+        public void Validator_UntranslatedInfo_OutdatedWarning_TagMismatchWarning() {
+            DialogueAsset _asset = NewAsset("Translations");
+            LineNode _line = AddLine(_asset, "Hello");
+
+            List<DialogueIssue> _found = Run(_asset);
+            Assert.IsTrue(Has(_found, _line.Id, "Untranslated in: ", DialogueIssueSeverity.Info));
+            Assert.IsTrue(Has(_found, _line.Id, OtherCode), "the project locale is listed");
+            Assert.AreEqual(1, Count(_found, _line.Id, "Untranslated"), "one issue per owner");
+
+            TranslateAll(_asset, _line, "Hola");
+            _found = Run(_asset);
+            Assert.IsFalse(Has(_found, _line.Id, "Untranslated"));
+            Assert.IsFalse(Has(_found, _line.Id, "Outdated"));
+
+            DialogueTables.SetSourceText(_asset, _line.Text, _line.Id, "Hello again");
+            Assert.IsTrue(Has(Run(_asset), _line.Id, "Outdated in: ", DialogueIssueSeverity.Warning));
+
+            DialogueTables.SetSourceText(_asset, _line.Text, _line.Id, "Hello <pause=1>there");
+            TranslateAll(_asset, _line, "Hola ahi");
+            _found = Run(_asset);
+            Assert.IsFalse(Has(_found, _line.Id, "Outdated"));
+            Assert.IsTrue(Has(_found, _line.Id, "pause", DialogueIssueSeverity.Warning), "a tag the translation lacks");
+        }
+
+        private static int Count(List<DialogueIssue> _issues, string _nodeId, string _fragment) {
+            int _count = 0;
+            for (int _i = 0; _i < _issues.Count; _i++) {
+                if (_issues[_i].NodeId == _nodeId && _issues[_i].Message.Contains(_fragment)) _count++;
+            }
+            return _count;
+        }
+
+        private static void TranslateAll(DialogueAsset _asset, LineNode _line, string _text) {
+            IReadOnlyList<Locale> _locales = LocalizationEditorSettings.GetLocales();
+            for (int _i = 0; _i < _locales.Count; _i++) {
+                if (_locales[_i].Identifier.Code != SourceCode) DialogueTables.SetText(_asset, _line.Text, _line.Id, _locales[_i].Identifier, _text);
+            }
         }
 
         [Test]

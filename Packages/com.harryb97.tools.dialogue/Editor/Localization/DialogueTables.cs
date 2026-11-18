@@ -155,7 +155,7 @@ namespace HarryTools.Dialogue.Editor {
             return true;
         }
 
-        /// <summary> Writes the text to the table of the locale under the key, creating the table and the entry when missing, then points the target to that entry. A target that pointed to another entry brings that entry's texts along first, so nothing it showed is lost. Only the source locale raises <see cref="SourceTextWritten"/>. False when the project has no locales </summary>
+        /// <summary> Writes the text to the table of the locale under the key, creating the table and the entry when missing, records the source text it was written against, then points the target to that entry. A target that pointed to another entry brings that entry's texts along first, so nothing it showed is lost. Only the source locale raises <see cref="SourceTextWritten"/>. False when the project has no locales </summary>
         internal static bool SetText(DialogueAsset _asset, LocalizedString _target, string _key, LocaleIdentifier _locale, string _text) {
             Locale _source = SourceLocale();
             if (_source != null && _source.Identifier == _locale) return SetSourceText(_asset, _target, _key, _text);
@@ -163,6 +163,7 @@ namespace HarryTools.Dialogue.Editor {
 
             CarryOver(_asset, _target, _key);
             if (!WriteText(_asset, _key, _locale, _text, out Guid _collection, out long _keyId)) return false;
+            DialogueTranslations.Stamp(Linked(_asset), _key, _locale);
 
             bool _pointed = _target.TableReference.ReferenceType == TableReference.Type.Guid && _target.TableReference.TableCollectionNameGuid == _collection
                 && _target.TableEntryReference.ReferenceType == TableEntryReference.Type.Id && _target.TableEntryReference.KeyId == _keyId;
@@ -348,7 +349,7 @@ namespace HarryTools.Dialogue.Editor {
         }
 
         /// <summary> Every dialogue text of the asset with the key it belongs under. Every [DialogueText] field must be listed here, or CleanOrphans deletes its entries </summary>
-        private static List<(LocalizedString, string)> Texts(DialogueAsset _asset) {
+        internal static List<(LocalizedString, string)> Texts(DialogueAsset _asset) {
             List<(LocalizedString, string)> _texts = new List<(LocalizedString, string)>();
             for (int _i = 0; _i < _asset.Nodes.Count; _i++) {
                 switch (_asset.Nodes[_i]) {

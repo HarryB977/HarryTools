@@ -6,6 +6,7 @@ using UnityEditor;
 using UnityEditor.Localization;
 using UnityEngine;
 using UnityEngine.Localization;
+using UnityEngine.Localization.Tables;
 using UnityEngine.SceneManagement;
 
 namespace HarryTools.Dialogue.Editor {
@@ -41,6 +42,7 @@ namespace HarryTools.Dialogue.Editor {
             }
 
             CheckReachability(_asset, _start, _byId, _into);
+            StringTableCollection _collection = DialogueTables.Linked(_asset);
             bool _ambient = _launchedAsAmbient != null && _launchedAsAmbient.Contains(_asset);
             // Made only when a line has no character, and shared by every such line
             SerializedObject _serialized = null;
@@ -54,9 +56,11 @@ namespace HarryTools.Dialogue.Editor {
                         case LineNode _line:
                             if (_line.Character == null) CheckCharacter(_serialized ?? (_serialized = new SerializedObject(_asset)), _i, _line, _into);
                             CheckText(_line.Text, _line.Id, "Line", true, _line.Events != null ? (Func<string, bool>)_line.Events.Contains : null, _into);
+                            CheckTranslations(_collection, _line.Text, _line.Id + DialogueTables.KeySuffix(typeof(LineNode), "text"), _line.Id, "", _into);
                             break;
                         case ChoiceNode _choice:
                             CheckChoice(_choice, _ambient, _into);
+                            CheckOptionTranslations(_collection, _choice, _into);
                             break;
                         case JumpNode _jump:
                             if (_jump.Target == null) Add(_into, DialogueIssueSeverity.Warning, _jump.Id, "Jump has no target.");
@@ -206,6 +210,50 @@ namespace HarryTools.Dialogue.Editor {
             TextValidator.ValidateText(_source, TextEffectsSettings.Current, _eventExists, textIssueBuffer);
             for (int _i = 0; _i < textIssueBuffer.Count; _i++) {
                 Add(_into, DialogueIssueSeverity.Warning, _nodeId, _label + " text: " + textIssueBuffer[_i].Message);
+            }
+        }
+
+        /// <summary> Reports the locales where the text has no translation, where it is outdated, and where its tags or events differ from the source. One issue of each kind per text </summary>
+        private static void CheckTranslations(StringTableCollection _collection, LocalizedString _text, string _key, string _nodeId, string _prefix, List<DialogueIssue> _into) {
+            Locale _source = DialogueTables.SourceLocale();
+            if (_collection == null || _source == null || _text == null || _text.IsEmpty) return;
+
+            string _sourceText = DialogueTables.GetSourceText(_text);
+            if (string.IsNullOrWhiteSpace(_sourceText)) return;
+
+            IReadOnlyList<Locale> _locales = LocalizationEditorSettings.GetLocales();
+            List<string> _untranslated = new List<string>();
+            List<string> _outdated = new List<string>();
+            Dictionary<string, string> _textByLocale = new Dictionary<string, string>();
+            _textByLocale[_source.Identifier.Code] = _sourceText;
+            for (int _i = 0; _i < _locales.Count; _i++) {
+                if (_locales[_i] == null || _locales[_i].Identifier == _source.Identifier) continue;
+                LocaleIdentifier _identifier = _locales[_i].Identifier;
+                switch (DialogueTranslations.State(_collection, _key, _identifier)) {
+                    case TranslationState.Untranslated: _untranslated.Add(_identifier.Code); continue;
+                    case TranslationState.Outdated: _outdated.Add(_identifier.Code); break;
+                }
+                _textByLocale[_identifier.Code] = DialogueTranslations.TextOf(_collection, _key, _identifier);
+            }
+
+            if (_untranslated.Count > 0) Add(_into, DialogueIssueSeverity.Info, _nodeId, _prefix + "Untranslated in: " + string.Join(", ", _untranslated));
+            if (_outdated.Count > 0) Add(_into, DialogueIssueSeverity.Warning, _nodeId, _prefix + "Outdated in: " + string.Join(", ", _outdated));
+
+            // The source text's own problems are reported by CheckText
+            List<LocaleIssue> _differences = new List<LocaleIssue>();
+            TextValidator.ValidateLocales(_source.Identifier.Code, _textByLocale, TextEffectsSettings.Current, _differences);
+            for (int _i = 0; _i < _differences.Count; _i++) {
+                if (_differences[_i].Locale == _source.Identifier.Code) continue;
+                Add(_into, DialogueIssueSeverity.Warning, _nodeId, _prefix + "Translation (" + _differences[_i].Locale + "): " + _differences[_i].Issue.Message);
+            }
+        }
+
+        private static void CheckOptionTranslations(StringTableCollection _collection, ChoiceNode _choice, List<DialogueIssue> _into) {
+            for (int _i = 0; _i < _choice.Options.Count; _i++) {
+                ChoiceOption _option = _choice.Options[_i];
+                if (_option == null) continue;
+                CheckTranslations(_collection, _option.Text, _option.Id + DialogueTables.KeySuffix(typeof(ChoiceOption), "text"), _choice.Id, "Option: ", _into);
+                CheckTranslations(_collection, _option.LockedReason, _option.Id + DialogueTables.KeySuffix(typeof(ChoiceOption), "lockedReason"), _choice.Id, "Locked reason: ", _into);
             }
         }
         #endregion

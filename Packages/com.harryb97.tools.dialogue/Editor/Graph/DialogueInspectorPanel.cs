@@ -5,6 +5,7 @@ using UnityEditor;
 using UnityEditor.Localization;
 using UnityEditor.UIElements;
 using UnityEngine.Localization;
+using UnityEngine.Localization.Tables;
 using UnityEngine.UIElements;
 
 namespace HarryTools.Dialogue.Editor {
@@ -28,6 +29,12 @@ namespace HarryTools.Dialogue.Editor {
         private const string NodeSuffix = "Node";
         private const string SectionKeyPrefix = "HarryTools.Dialogue.Panel.Section.";
         private const string NotTranslated = "Not translated";
+        private const string OutdatedFieldClass = "dialogue-panel__translation--outdated";
+        private const string OutdatedClass = "dialogue-panel__outdated";
+        private const string OutdatedLabel = "Outdated";
+        private const string PreviousSourcePrefix = "Previous source: ";
+        private const string MarkReviewedLabel = "Mark as reviewed";
+        private const string MarkAllReviewedLabel = "Mark all as reviewed";
         private const int ShortIdLength = 8;
         private const int MaxTitleLength = 32;
 
@@ -492,6 +499,7 @@ namespace HarryTools.Dialogue.Editor {
 
             IReadOnlyList<Locale> _locales = LocalizationEditorSettings.GetLocales();
             int _added = 0;
+            List<Translation> _group = new List<Translation>();
             for (int _i = 0; _i < _locales.Count; _i++) {
                 Locale _locale = _locales[_i];
                 if (_locale == null || _locale.Identifier == _source.Identifier) continue;
@@ -506,10 +514,64 @@ namespace HarryTools.Dialogue.Editor {
                 _field.RegisterCallback<FocusInEvent>(_ => _field.SetValueWithoutNotify(ReadTranslation(_target(), _identifier)));
 
                 _into.Add(_field);
-                translations[TranslationKey(_key, _identifier.Code)] = new Translation(_field, _target, _identifier);
+                Translation _translation = new Translation(_field, _target, _key, _identifier, CreateOutdatedBox(_field, _key, _identifier));
+                _into.Add(_translation.Outdated);
+                translations[TranslationKey(_key, _identifier.Code)] = _translation;
+                _group.Add(_translation);
                 _added++;
             }
+
+            if (_added > 0) {
+                Button _markAll = new Button(() => MarkReviewed(_key, null)) { text = MarkAllReviewedLabel };
+                _into.Add(_markAll);
+                for (int _i = 0; _i < _group.Count; _i++) _group[_i].MarkAll = _markAll;
+                RefreshState(_group[0]);
+            }
             return _added;
+        }
+
+        /// <summary> The note under a translation that is older than its source text: what the source said before, and the button that accepts the translation as it is </summary>
+        private VisualElement CreateOutdatedBox(TextField _field, string _key, LocaleIdentifier _locale) {
+            VisualElement _box = new VisualElement();
+            _box.AddToClassList(OutdatedClass);
+            _box.Add(new Label());
+            _box.Add(new Button(() => MarkReviewed(_key, _locale)) { text = MarkReviewedLabel });
+            _box.style.display = DisplayStyle.None;
+            return _box;
+        }
+
+        private void MarkReviewed(string _key, LocaleIdentifier? _locale) {
+            if (ReadOnly || asset == null) return;
+            StringTableCollection _collection = DialogueTables.Linked(asset);
+            if (_locale.HasValue) DialogueTranslations.MarkReviewed(_collection, _key, _locale.Value);
+            else DialogueTranslations.MarkReviewed(_collection, _key);
+            RefreshTranslations();
+        }
+
+        /// <summary> Shows or hides the Outdated mark, the previous source text and the review buttons of the translation, and of every other one of the same text </summary>
+        private void RefreshState(Translation _translation) {
+            StringTableCollection _collection = asset != null ? DialogueTables.Linked(asset) : null;
+            bool _any = false;
+            foreach (Translation _other in translations.Values) {
+                if (_other.Key != _translation.Key) continue;
+                bool _outdated = DialogueTranslations.State(_collection, _other.Key, _other.Locale) == TranslationState.Outdated;
+                _any |= _outdated;
+                _other.Field.EnableInClassList(OutdatedFieldClass, _outdated);
+                _other.Field.label = LocaleLabel(_other.Field, _outdated);
+                _other.Outdated.style.display = _outdated ? DisplayStyle.Flex : DisplayStyle.None;
+                if (_outdated) {
+                    string _previous = DialogueTranslations.PreviousSource(_collection, _other.Key, _other.Locale);
+                    _other.Outdated.Q<Label>().text = PreviousSourcePrefix + (string.IsNullOrEmpty(_previous) ? "(empty)" : _previous);
+                }
+            }
+            if (_translation.MarkAll != null) _translation.MarkAll.style.display = _any ? DisplayStyle.Flex : DisplayStyle.None;
+        }
+
+        private static string LocaleLabel(TextField _field, bool _outdated) {
+            string _name = _field.label;
+            int _mark = _name.IndexOf(" (" + OutdatedLabel + ")");
+            if (_mark >= 0) _name = _name.Substring(0, _mark);
+            return _outdated ? _name + " (" + OutdatedLabel + ")" : _name;
         }
 
         /// <summary> The translations of an option text, in a foldout of their own </summary>
@@ -529,6 +591,11 @@ namespace HarryTools.Dialogue.Editor {
                 if (_translation.Field.focusController?.focusedElement == _translation.Field) continue;
                 _translation.Field.SetValueWithoutNotify(ReadTranslation(_translation.Target(), _translation.Locale));
             }
+            // Not skipped while typing: the mark follows the source text, not the field
+            HashSet<string> _done = new HashSet<string>();
+            foreach (Translation _translation in translations.Values) {
+                if (_done.Add(_translation.Key)) RefreshState(_translation);
+            }
         }
 
         private static string ReadTranslation(LocalizedString _target, LocaleIdentifier _locale) {
@@ -546,15 +613,21 @@ namespace HarryTools.Dialogue.Editor {
         private static string LocaleName(Locale _locale) => string.IsNullOrEmpty(_locale.LocaleName) ? _locale.Identifier.Code : _locale.LocaleName;
 
         /// <summary> A translation field with the text it writes, looked up each time so an undo that replaced the node is followed </summary>
-        private readonly struct Translation {
+        private sealed class Translation {
             internal readonly TextField Field;
             internal readonly Func<LocalizedString> Target;
+            internal readonly string Key;
             internal readonly LocaleIdentifier Locale;
+            internal readonly VisualElement Outdated;
+            internal Button MarkAll;
 
-            internal Translation(TextField _field, Func<LocalizedString> _target, LocaleIdentifier _locale) {
+            internal Translation(TextField _field, Func<LocalizedString> _target, string _key, LocaleIdentifier _locale, VisualElement _outdated) {
                 Field = _field;
                 Target = _target;
+                Key = _key;
                 Locale = _locale;
+                Outdated = _outdated;
+                MarkAll = null;
             }
         }
         #endregion
@@ -628,6 +701,7 @@ namespace HarryTools.Dialogue.Editor {
         private void OnSourceTextWritten(DialogueAsset _asset) {
             if (_asset != asset || content == null) return;
             RefreshItemTitles();
+            RefreshTranslations();
             // The text drawers read the table when they draw
             content.Query<IMGUIContainer>().ForEach(_container => _container.MarkDirtyLayout());
         }

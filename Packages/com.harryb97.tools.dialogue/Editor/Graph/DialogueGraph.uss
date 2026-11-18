@@ -242,6 +242,21 @@
     -unity-text-align: upper-left;
 }
 
+.dialogue-panel__translation--outdated > .unity-label {
+    color: rgb(230, 170, 60);
+}
+
+/* The previous source text and the review button under an outdated translation */
+.dialogue-panel__outdated {
+    margin: 0 0 4px 0;
+}
+
+.dialogue-panel__outdated > .unity-label {
+    white-space: normal;
+    color: rgb(180, 180, 180);
+    margin: 0 3px 2px 3px;
+}
+
 .dialogue-panel__description {
     white-space: normal;
     color: rgb(180, 180, 180);
