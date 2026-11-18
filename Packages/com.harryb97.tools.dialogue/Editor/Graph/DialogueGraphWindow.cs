@@ -73,7 +73,9 @@ namespace HarryTools.Dialogue.Editor {
         // Internal so tests can run the same steps as a domain reload
         internal void OnEnable() {
             BuildLayout();
+            Undo.undoRedoPerformed -= OnUndoRedo;
             Undo.undoRedoPerformed += OnUndoRedo;
+            ObjectChangeEvents.changesPublished -= OnObjectChanges;
             ObjectChangeEvents.changesPublished += OnObjectChanges;
 
             if (asset == null && !string.IsNullOrEmpty(assetGuid)) {
@@ -130,9 +132,25 @@ namespace HarryTools.Dialogue.Editor {
             IssueList?.ValidateNow();
         }
 
-        // Any edit to any object may be an edit of this dialogue or of its text tables; the list waits for the changes to stop
+        // Only edits of this dialogue or of its text tables matter; the list waits for them to stop
         private void OnObjectChanges(ref ObjectChangeEventStream _stream) {
-            if (asset != null) IssueList?.ScheduleValidation();
+            if (asset == null || IssueList == null) return;
+            for (int _i = 0; _i < _stream.length; _i++) {
+                if (_stream.GetEventType(_i) != ObjectChangeKind.ChangeAssetObjectProperties) continue;
+                _stream.GetChangeAssetObjectPropertiesEvent(_i, out ChangeAssetObjectPropertiesEventArgs _args);
+#pragma warning disable CS0618 // InstanceIDToObject is obsolete in 6000.3 but required for 6000.0 compatibility.
+                UnityEngine.Object _changed = EditorUtility.InstanceIDToObject(_args.instanceId);
+#pragma warning restore CS0618
+                if (NotifyObjectChanged(_changed)) return;
+            }
+        }
+
+        /// <summary> Schedules a validation when the object is the shown dialogue or a string table or its shared data. Returns whether it did </summary>
+        internal bool NotifyObjectChanged(UnityEngine.Object _changed) {
+            if (asset == null || IssueList == null || _changed == null) return false;
+            bool _relevant = _changed == asset || _changed is UnityEngine.Localization.Tables.StringTable || _changed is UnityEngine.Localization.Tables.SharedTableData;
+            if (_relevant) IssueList.ScheduleValidation();
+            return _relevant;
         }
 
         private void OnUndoRedo() {

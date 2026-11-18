@@ -169,14 +169,27 @@ namespace HarryTools.Dialogue.Editor {
         }
 
         private void ShowCurrent() {
-            entries.Clear();
             DialogueAsset _asset = AssetSource?.Invoke();
+            List<Entry> _next = new List<Entry>(issues.Count);
             for (int _i = 0; _i < issues.Count; _i++) {
                 DialogueIssue _issue = issues[_i];
-                entries.Add(new Entry(Describe(_asset, _issue), _issue.NodeId, null, _issue.Severity == DialogueIssueSeverity.Warning));
+                _next.Add(new Entry(Describe(_asset, _issue), _issue.NodeId, null, _issue.Severity == DialogueIssueSeverity.Warning));
             }
-            list.Rebuild();
+
             RefreshHeader();
+            if (SameEntries(_next)) return;
+            entries.Clear();
+            entries.AddRange(_next);
+            list.Rebuild();
+        }
+
+        // Rebuilding the list resets its scroll, so it is left alone when nothing changed
+        private bool SameEntries(List<Entry> _other) {
+            if (_other.Count != entries.Count) return false;
+            for (int _i = 0; _i < _other.Count; _i++) {
+                if (_other[_i].Text != entries[_i].Text || _other[_i].NodeId != entries[_i].NodeId || _other[_i].Asset != entries[_i].Asset) return false;
+            }
+            return true;
         }
 
         private static string Describe(DialogueAsset _asset, DialogueIssue _issue) {

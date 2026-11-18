@@ -852,6 +852,26 @@ namespace HarryTools.Dialogue.Tests {
             Assert.AreSame(_second, window.Asset);
         }
 
+        [Test]
+        public void Window_UnrelatedChange_KeepsProjectSummary() {
+            DialogueAsset _asset = NewSample("KeepSummary");
+            window = DialogueGraphWindow.Open(_asset);
+            window.IssueList.RevalidateAll();
+            Assert.IsTrue(window.IssueList.Entries.Any(_entry => _entry.Asset != null));
+
+            ScriptableObject _unrelated = ScriptableObject.CreateInstance<DialogueSettings>();
+            try {
+                Assert.IsFalse(window.NotifyObjectChanged(_unrelated));
+            } finally {
+                Object.DestroyImmediate(_unrelated);
+            }
+            Assert.IsFalse(window.IssueList.HasPending, "nothing waits to replace the summary");
+            Assert.IsTrue(window.IssueList.Entries.Any(_entry => _entry.Asset != null), "the summary is still shown");
+
+            Assert.IsTrue(window.NotifyObjectChanged(_asset), "a change of the shown dialogue counts");
+            Assert.IsTrue(window.IssueList.HasPending);
+        }
+
         private static PropertyField FindBoundField(VisualElement _root, string _name) {
             return _root.Query<PropertyField>().Where(_field => _field.bindingPath != null && (_field.bindingPath == _name || _field.bindingPath.EndsWith("." + _name))).First();
         }
