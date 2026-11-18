@@ -69,20 +69,30 @@ namespace HarryTools.Dialogue.Editor {
             return true;
         }
 
-        /// <summary> Writes the text to the table of the locale under the key, creating the table and the entry when missing, then points the target to that entry when it points nowhere. Only the source locale raises <see cref="SourceTextWritten"/>. False when the project has no locales </summary>
+        /// <summary> Writes the text to the table of the locale under the key, creating the table and the entry when missing, then points the target to that entry. A target that pointed to another entry brings that entry's texts along first, so nothing it showed is lost. Only the source locale raises <see cref="SourceTextWritten"/>. False when the project has no locales </summary>
         internal static bool SetText(DialogueAsset _asset, LocalizedString _target, string _key, LocaleIdentifier _locale, string _text) {
             Locale _source = SourceLocale();
             if (_source != null && _source.Identifier == _locale) return SetSourceText(_asset, _target, _key, _text);
-            if (_target == null || !WriteText(_asset, _key, _locale, _text, out Guid _collection, out long _keyId)) return false;
+            if (_target == null || _asset == null || string.IsNullOrEmpty(_key)) return false;
 
-            // A translation written before the source text still needs the reference
-            if (_target.IsEmpty) {
-                Undo.RecordObject(_asset, UndoName);
-                _target.TableReference = _collection;
-                _target.TableEntryReference = _keyId;
-                EditorUtility.SetDirty(_asset);
-            }
+            CarryOver(_asset, _target, _key);
+            if (!WriteText(_asset, _key, _locale, _text, out Guid _collection, out long _keyId)) return false;
+
+            bool _pointed = _target.TableReference.ReferenceType == TableReference.Type.Guid && _target.TableReference.TableCollectionNameGuid == _collection
+                && _target.TableEntryReference.ReferenceType == TableEntryReference.Type.Id && _target.TableEntryReference.KeyId == _keyId;
+            if (_pointed) return true;
+            Undo.RecordObject(_asset, UndoName);
+            _target.TableReference = _collection;
+            _target.TableEntryReference = _keyId;
+            EditorUtility.SetDirty(_asset);
             return true;
+        }
+
+        /// <summary> The key suffix of a [DialogueText] field of the type. Empty when the field has none </summary>
+        internal static string KeySuffix(Type _ownerType, string _field) {
+            System.Reflection.FieldInfo _info = _ownerType?.GetField(_field, System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public);
+            DialogueTextAttribute _attribute = _info != null ? (DialogueTextAttribute)Attribute.GetCustomAttribute(_info, typeof(DialogueTextAttribute)) : null;
+            return _attribute != null ? _attribute.KeySuffix : "";
         }
 
         /// <summary> Raises <see cref="SourceTextWritten"/>. Called once the text and the reference to it are both in place </summary>
@@ -135,6 +145,36 @@ namespace HarryTools.Dialogue.Editor {
             return true;
         }
 
+        /// <summary> Copies the texts of every locale of the entry the target points to into the dialogue's own entry under the key, with undo. Nothing when it already points there or nowhere </summary>
+        private static void CarryOver(DialogueAsset _asset, LocalizedString _target, string _key) {
+            if (_target.IsEmpty) return;
+            StringTableCollection _from = LocalizationEditorSettings.GetStringTableCollection(_target.TableReference);
+            SharedTableData.SharedTableEntry _fromEntry = _from != null && _from.SharedData != null ? _from.SharedData.GetEntryFromReference(_target.TableEntryReference) : null;
+            if (_fromEntry == null) return;
+            StringTableCollection _own = EnsureCollection(_asset);
+            if (_own == null || (_from == _own && _fromEntry.Key == _key)) return;
+
+            Undo.RecordObject(_own.SharedData, UndoName);
+            SharedTableData.SharedTableEntry _entry = _own.SharedData.GetEntry(_key) ?? _own.SharedData.AddKey(_key);
+            EditorUtility.SetDirty(_own.SharedData);
+            CopyValues(_from, _fromEntry.Id, _own, _entry.Id, true);
+        }
+
+        /// <summary> Writes the value of every locale of an entry into the entry of another collection, adding the tables it lacks </summary>
+        private static void CopyValues(StringTableCollection _from, long _fromId, StringTableCollection _to, long _toId, bool _recordUndo) {
+            IReadOnlyList<StringTable> _tables = _from.StringTables;
+            for (int _t = 0; _t < _tables.Count; _t++) {
+                string _value = _tables[_t] != null ? _tables[_t].GetEntry(_fromId)?.Value : null;
+                if (_value == null) continue;
+                StringTable _destination = _to.GetTable(_tables[_t].LocaleIdentifier) as StringTable;
+                if (_destination == null) _destination = _to.AddNewTable(_tables[_t].LocaleIdentifier) as StringTable;
+                if (_destination == null) continue;
+                if (_recordUndo) Undo.RecordObject(_destination, UndoName);
+                _destination.AddEntry(_toId, _value);
+                EditorUtility.SetDirty(_destination);
+            }
+        }
+
         /// <summary> Moves every dialogue text that points outside the dialogue's own collection into it, under the dialogue's own keys, copying the value of every locale. Used after duplicating an asset. Creates the collection only when there is text to move </summary>
         internal static void AdoptTexts(DialogueAsset _asset) {
             if (_asset == null) return;
@@ -155,16 +195,7 @@ namespace HarryTools.Dialogue.Editor {
                 if (_own == null) return;
 
                 SharedTableData.SharedTableEntry _entry = _own.SharedData.GetEntry(_texts[_i].Key) ?? _own.SharedData.AddKey(_texts[_i].Key);
-                IReadOnlyList<StringTable> _tables = _source.StringTables;
-                for (int _t = 0; _t < _tables.Count; _t++) {
-                    string _value = _tables[_t] != null ? _tables[_t].GetEntry(_sourceEntry.Id)?.Value : null;
-                    if (_value == null) continue;
-                    StringTable _destination = _own.GetTable(_tables[_t].LocaleIdentifier) as StringTable;
-                    if (_destination == null) _destination = _own.AddNewTable(_tables[_t].LocaleIdentifier) as StringTable;
-                    if (_destination == null) continue;
-                    _destination.AddEntry(_entry.Id, _value);
-                    EditorUtility.SetDirty(_destination);
-                }
+                CopyValues(_source, _sourceEntry.Id, _own, _entry.Id, false);
 
                 _target.TableReference = _own.SharedData.TableCollectionNameGuid;
                 _target.TableEntryReference = _entry.Id;
@@ -235,14 +266,14 @@ namespace HarryTools.Dialogue.Editor {
             for (int _i = 0; _i < _asset.Nodes.Count; _i++) {
                 switch (_asset.Nodes[_i]) {
                     case LineNode _line:
-                        _texts.Add((_line.Text, _line.Id));
+                        _texts.Add((_line.Text, _line.Id + KeySuffix(typeof(LineNode), "text")));
                         break;
                     case ChoiceNode _choice:
                         for (int _o = 0; _o < _choice.Options.Count; _o++) {
                             ChoiceOption _option = _choice.Options[_o];
                             if (_option == null) continue;
-                            _texts.Add((_option.Text, _option.Id));
-                            _texts.Add((_option.LockedReason, _option.Id + ChoiceOption.LockedSuffix));
+                            _texts.Add((_option.Text, _option.Id + KeySuffix(typeof(ChoiceOption), "text")));
+                            _texts.Add((_option.LockedReason, _option.Id + KeySuffix(typeof(ChoiceOption), "lockedReason")));
                         }
                         break;
                 }

@@ -341,6 +341,27 @@ namespace HarryTools.Dialogue.Tests {
         }
 
         [Test]
+        public void SetText_TargetInOtherCollection_RepointsAndKeepsItsText() {
+            DialogueAsset _other = NewAsset("TablesTranslateOther");
+            LineNode _otherLine = _other.AddNode<LineNode>();
+            DialogueTables.SetSourceText(_other, _otherLine.Text, _otherLine.Id, "Shared");
+            DialogueAsset _asset = NewAsset("TablesTranslateOwn");
+            LineNode _line = _asset.AddNode<LineNode>();
+            // Points at the other dialogue's entry, as a duplicate does before its texts are adopted
+            _line.Text.TableReference = _otherLine.Text.TableReference;
+            _line.Text.TableEntryReference = _otherLine.Text.TableEntryReference;
+            LocaleIdentifier _es = new LocaleIdentifier(OtherCode);
+
+            Assert.IsTrue(DialogueTables.SetText(_asset, _line.Text, _line.Id, _es, "Compartido"));
+
+            StringTableCollection _own = DialogueTables.EnsureCollection(_asset);
+            Assert.AreEqual(_own.SharedData.TableCollectionNameGuid, _line.Text.TableReference.TableCollectionNameGuid, "points at the dialogue's own collection");
+            Assert.AreEqual("Compartido", DialogueTables.GetText(_line.Text.TableReference, _line.Text.TableEntryReference, _es), "the read follows the write");
+            Assert.AreEqual("Shared", DialogueTables.GetSourceText(_line.Text), "the source text came along");
+            Assert.IsNull(DialogueTables.GetText(_otherLine.Text.TableReference, _otherLine.Text.TableEntryReference, _es), "the other dialogue is untouched");
+        }
+
+        [Test]
         public void SetText_LeavesSourceLocaleUntouched() {
             DialogueAsset _asset = NewAsset("TablesTranslateSource");
             LineNode _line = _asset.AddNode<LineNode>();

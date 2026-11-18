@@ -141,7 +141,10 @@ namespace HarryTools.Dialogue.Editor {
             int _index = _node != null ? IndexOf(_asset, _node) : -1;
             if (_index < 0) _node = null;
             string _signature = Signature(_asset, _node, _index);
-            if (_asset == asset && _signature == signature && content != null) return;
+            if (_asset == asset && _signature == signature && content != null) {
+                RefreshTranslations();
+                return;
+            }
 
             asset = _asset;
             NodeId = _node?.Id;
@@ -281,7 +284,7 @@ namespace HarryTools.Dialogue.Editor {
             AddField(_text, _property.FindPropertyRelative("writerNote"), "Writer Note");
 
             VisualElement _translations = new VisualElement();
-            if (AddTranslations(_translations, () => (asset?.Find(_id) as LineNode)?.Text, _id) > 0) AddSection(content, _type, TranslationsSection).Add(_translations);
+            if (AddTranslations(_translations, () => (asset?.Find(_id) as LineNode)?.Text, TextKey(_property.FindPropertyRelative("text"), typeof(LineNode), "text")) > 0) AddSection(content, _type, TranslationsSection).Add(_translations);
 
             Foldout _timing = AddSection(content, _type, TimingSection);
             AddField(_timing, _property.FindPropertyRelative("delayBefore"), "Delay Before");
@@ -321,9 +324,9 @@ namespace HarryTools.Dialogue.Editor {
                 string _nodeId = _choice.Id;
 
                 AddField(_block, _item.FindPropertyRelative("text"), "Text", SourceTooltip());
-                if (_optionId != null) AddSubTranslations(_block, _type, TextTranslations, () => FindOption(_nodeId, _optionId)?.Text, _optionId);
+                if (_optionId != null) AddSubTranslations(_block, _type, TextTranslations, () => FindOption(_nodeId, _optionId)?.Text, TextKey(_item.FindPropertyRelative("text"), typeof(ChoiceOption), "text"));
                 AddField(_block, _item.FindPropertyRelative("lockedReason"), "Locked Reason");
-                if (_optionId != null) AddSubTranslations(_block, _type, LockedTranslations, () => FindOption(_nodeId, _optionId)?.LockedReason, _optionId + ChoiceOption.LockedSuffix);
+                if (_optionId != null) AddSubTranslations(_block, _type, LockedTranslations, () => FindOption(_nodeId, _optionId)?.LockedReason, TextKey(_item.FindPropertyRelative("lockedReason"), typeof(ChoiceOption), "lockedReason"));
                 AddField(_block, _item.FindPropertyRelative("isDefault"), "Default", "Selected when the choice is shown");
                 AddField(_block, _item.FindPropertyRelative("afterChosen"), "After Chosen", "What happens to the option once it is chosen");
                 AddField(_block, _item.FindPropertyRelative("tags"), "Tags", "Markers the presenter can show next to the option");
@@ -450,7 +453,8 @@ namespace HarryTools.Dialogue.Editor {
         private static PropertyField AddField(VisualElement _into, SerializedProperty _property, string _label, string _tooltip = null) {
             if (_property == null) return null;
             PropertyField _field = new PropertyField(_property, _label);
-            if (!string.IsNullOrEmpty(_tooltip)) _field.tooltip = _tooltip;
+            // Lists and custom drawers do not always show the [Tooltip] of the field, so it is set on the whole row
+            _field.tooltip = !string.IsNullOrEmpty(_tooltip) ? _tooltip : _property.tooltip;
             _into.Add(_field);
             return _field;
         }
@@ -498,6 +502,8 @@ namespace HarryTools.Dialogue.Editor {
                 _field.AddToClassList(TranslationClass);
                 _field.SetValueWithoutNotify(ReadTranslation(_target(), _identifier));
                 _field.RegisterValueChangedCallback(_event => WriteTranslation(_target(), _key, _identifier, _event.newValue));
+                // The table may have been edited elsewhere, such as the Localization Tables window, since the field was filled
+                _field.RegisterCallback<FocusInEvent>(_ => _field.SetValueWithoutNotify(ReadTranslation(_target(), _identifier)));
 
                 _into.Add(_field);
                 translations[TranslationKey(_key, _identifier.Code)] = new Translation(_field, _target, _identifier);
@@ -531,6 +537,11 @@ namespace HarryTools.Dialogue.Editor {
         }
 
         private static string TranslationKey(string _key, string _localeCode) => _key + "|" + _localeCode;
+
+        /// <summary> The table key of a dialogue text, built like the source text drawer builds it: the owner's id plus the suffix of the field's [DialogueText] </summary>
+        private static string TextKey(SerializedProperty _text, Type _ownerType, string _field) {
+            return _text != null ? DialogueTables.KeyFor(_text, DialogueTables.KeySuffix(_ownerType, _field)) : null;
+        }
 
         private static string LocaleName(Locale _locale) => string.IsNullOrEmpty(_locale.LocaleName) ? _locale.Identifier.Code : _locale.LocaleName;
 

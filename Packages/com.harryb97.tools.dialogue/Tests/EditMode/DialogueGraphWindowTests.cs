@@ -10,6 +10,7 @@ using UnityEditor.UIElements;
 using UnityEngine;
 using UnityEngine.Localization;
 using UnityEngine.Localization.Settings;
+using UnityEngine.Localization.Tables;
 using UnityEngine.TestTools;
 using UnityEngine.UIElements;
 using Object = UnityEngine.Object;
@@ -1113,6 +1114,27 @@ namespace HarryTools.Dialogue.Tests {
             Assert.AreEqual("Hello", DialogueTables.GetSourceText(_line.Text));
             Undo.PerformUndo();
             Assert.IsTrue(string.IsNullOrEmpty(DialogueTables.GetText(_line.Text.TableReference, _line.Text.TableEntryReference, new LocaleIdentifier(OtherCode))), "one undo takes it back");
+        }
+
+        [Test]
+        public void Panel_TranslationField_ReadsExternalEditOnFocus() {
+            DialogueAsset _asset = NewSample("PanelExternalEdit");
+            LineNode _line = FirstLine(_asset);
+            DialogueTables.SetSourceText(_asset, _line.Text, _line.Id, "Hello");
+            window = DialogueGraphWindow.Open(_asset);
+            window.View.SelectAndFrame(_line.Id);
+            TextField _field = window.Panel.TranslationField(_line.Id, OtherCode);
+            Assert.AreEqual("", _field.value);
+
+            // Written outside the panel, as the Localization Tables window does
+            StringTableCollection _collection = DialogueTables.EnsureCollection(_asset);
+            StringTable _table = (StringTable)_collection.GetTable(new LocaleIdentifier(OtherCode));
+            _table.AddEntry(_collection.SharedData.GetEntry(_line.Id).Id, "Hola desde fuera");
+            using (FocusInEvent _event = FocusInEvent.GetPooled(_field, null, FocusChangeDirection.unspecified, _field.focusController)) {
+                _field.SendEvent(_event);
+            }
+
+            Assert.AreEqual("Hola desde fuera", _field.value, "focusing the field reads the table again");
         }
 
         [Test]
