@@ -204,8 +204,38 @@ namespace HarryTools.Dialogue.Tests {
             _choice.TimeoutRule = TimeoutRule.NoAnswer;
             Assert.IsTrue(Has(Run(_asset), _choice.Id, "No Answer output is not connected", DialogueIssueSeverity.Info));
 
+            _choice.UseTimer = false;
+            Assert.IsFalse(Has(Run(_asset), _choice.Id, "No Answer"));
+
+            _choice.UseTimer = true;
             _choice.NoAnswer.Target = _option.Next.Target;
             Assert.IsFalse(Has(Run(_asset), _choice.Id, "No Answer"));
+        }
+
+        [Test]
+        public void OutputToDeletedNode_Warns() {
+            DialogueAsset _asset = Clean("Dangling", out LineNode _line);
+            _line.Next.Target = "gone";
+
+            Assert.IsTrue(Has(Run(_asset), _line.Id, "no longer exists", DialogueIssueSeverity.Warning));
+        }
+
+        [Test]
+        public void BrokenCharacterReference() {
+            DialogueAsset _asset = Clean("Character", out LineNode _line);
+            DialogueCharacter _character = ScriptableObject.CreateInstance<DialogueCharacter>();
+            string _path = AssetsFolder + "/Speaker.asset";
+            AssetDatabase.CreateAsset(_character, _path);
+            _line.Character = _character;
+            EditorUtility.SetDirty(_asset);
+            AssetDatabase.SaveAssets();
+            Assert.IsFalse(Has(Run(_asset), _line.Id, "Character"));
+
+            AssetDatabase.DeleteAsset(_path);
+            AssetDatabase.ImportAsset(AssetDatabase.GetAssetPath(_asset), ImportAssetOptions.ForceUpdate);
+            DialogueAsset _reloaded = AssetDatabase.LoadAssetAtPath<DialogueAsset>(AssetDatabase.GetAssetPath(_asset));
+
+            Assert.IsTrue(Has(Run(_reloaded), _line.Id, "Character asset is missing", DialogueIssueSeverity.Warning));
         }
 
         [Test]

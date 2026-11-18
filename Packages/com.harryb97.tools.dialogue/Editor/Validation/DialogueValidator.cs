@@ -45,6 +45,7 @@ namespace HarryTools.Dialogue.Editor {
 
                 switch (_node) {
                     case LineNode _line:
+                        CheckCharacter(_asset, _i, _line, _into);
                         CheckText(_line.Text, _line.Id, "Line", true, _line.Events != null ? (Func<string, bool>)_line.Events.Contains : null, _into);
                         break;
                     case ChoiceNode _choice:
@@ -133,10 +134,21 @@ namespace HarryTools.Dialogue.Editor {
                 // The unconnected Start has its own warning
                 if (_isStart) continue;
                 if (_choice != null && _output == _choice.NoAnswer) {
-                    if (_choice.TimeoutRule == TimeoutRule.NoAnswer) Add(_into, DialogueIssueSeverity.Info, _node.Id, "No Answer output is not connected.");
+                    if (_choice.UseTimer && _choice.TimeoutRule == TimeoutRule.NoAnswer) Add(_into, DialogueIssueSeverity.Info, _node.Id, "No Answer output is not connected.");
                     continue;
                 }
                 Add(_into, DialogueIssueSeverity.Info, _node.Id, "Output is not connected.");
+            }
+        }
+
+        /// <summary> A character reference whose asset is gone: the field reads null but still holds the id of the missing object </summary>
+        private static void CheckCharacter(DialogueAsset _asset, int _index, LineNode _line, List<DialogueIssue> _into) {
+            if (_line.Character != null) return;
+            using (SerializedObject _object = new SerializedObject(_asset)) {
+                SerializedProperty _property = _object.FindProperty("nodes.Array.data[" + _index + "].character");
+                if (_property != null && _property.objectReferenceValue == null && _property.objectReferenceInstanceIDValue != 0) {
+                    Add(_into, DialogueIssueSeverity.Warning, _line.Id, "Character asset is missing.");
+                }
             }
         }
 
