@@ -14,6 +14,9 @@
 ### Cambiado
 - El Inspector del `DialogueAsset` deja de ser el editor de nodos: muestra los ajustes del diálogo, un resumen y **Open Graph**.
 
+### Corregido
+- Al salir de Play sin recarga de dominio, `Dialogue.Main` y `Dialogue.Active` conservaban las conversaciones de la sesión y un `Dialogue.Start` principal posterior en modo edición devolvía `null`. Ahora se descartan al volver al modo edición.
+
 ## [1.0.0-beta.1] - 2026-11-17
 ### Añadido
 - `DialogueAsset` con nodos de inicio, línea, decisión, rama, acciones, salto a otro diálogo (continuar o entrar y volver) y fin, conectados por IDs estables. Ajustes por diálogo: tiempo propio, política de ambientales propia y permitir saltar.

@@ -102,7 +102,7 @@ La ventana muestra un diálogo a la vez. Los cambios se escriben en el asset al 
 - Una salida admite una sola conexión; una entrada admite varias. Los ciclos están permitidos.
 - Borrar un nodo desconecta las salidas que lo apuntaban. El nodo Start no se puede borrar ni duplicar.
 - La salida *No Answer* de una decisión y *Otherwise* de una rama están siempre visibles.
-- **Auto Layout** (clic derecho) coloca los nodos por niveles de izquierda a derecha. Se ejecuta solo, una vez, al abrir un diálogo cuyos nodos están todos en el origen.
+- **Auto Layout** (clic derecho) coloca los nodos por niveles de izquierda a derecha. Se ejecuta solo, una vez, al abrir un diálogo cuyos nodos están todos en el origen. Esa primera colocación escribe las posiciones en el asset, así que el asset queda modificado.
 - Doble clic en un nodo Jump abre el diálogo destino.
 
 ### Texto en el lienzo y panel lateral
@@ -138,7 +138,7 @@ La lista de la parte inferior se actualiza al abrir el diálogo y tras cada camb
 - El selector de la barra lista las conversaciones activas (la principal primero) y permite elegir cuál se sigue. Por defecto se sigue la principal. Una ventana sin diálogo abierto muestra el de la conversación que empiece.
 - Con **Follow** activado, la vista se centra sola en el nodo activo y cambia al diálogo al que salta la conversación (y vuelve al regresar de un Jump *Call And Return*). También cambia a una conversación principal de otro diálogo. Mover la vista a mano desactiva **Follow** hasta volver a pulsarlo.
 - En Play el lienzo y el panel lateral son de solo lectura: no se crean, borran, conectan ni mueven nodos.
-- Para integraciones propias, `Dialogue.NodeEntered` y `DialogueRun.NodeEntered` avisan de cada nodo en el que entra una conversación.
+- Para integraciones propias, `Dialogue.NodeEntered` y `DialogueRun.NodeEntered` avisan de cada nodo en el que entra una conversación. El nodo Start se anuncia en la primera actualización de la conversación; si está en pausa, incluida la que aplica la política de ambientales de la principal, se anuncia cuando se reanuda.
 
 ## Ejecución
 
@@ -156,7 +156,7 @@ La lista de la parte inferior se actualiza al abrir el diálogo y tras cada camb
 
 **Actor de cada línea:** el asignado en `Actors`; si no hay, el `DialogueActor` activo de ese personaje más cercano al origen (o el primero registrado si no hay origen); si no hay ninguno, la línea va sin actor. El objeto del actor es el `Self` de las acciones y eventos de la línea; sin actor, `Self` va vacío. Los eventos del texto reciben el mismo contexto que las demás acciones de la línea, se ejecuten al escribirse, al saltarse o sin vista. Las condiciones de ramas y decisiones y las acciones de los nodos *Actions* se evalúan con `Self` vacío.
 
-**Eventos:** `Started`, `Ended` (con `EndReason`: `Completed`, `Stopped` o `Skipped`), `NodeEntered` (cada nodo en el que entra la conversación), `LineStarted`, `LineEnded`, `ChoicePresented` y `ChoiceMade` en `Dialogue`, y los mismos (salvo `Started`) en cada `DialogueRun`. `ChoiceMade` no se lanza cuando se toma la salida *No Answer*.
+**Eventos:** `Started`, `Ended` (con `EndReason`: `Completed`, `Stopped` o `Skipped`), `NodeEntered` (cada nodo en el que entra la conversación; el Start, en su primera actualización, o al reanudarse si una pausa o la política de ambientales de la principal la retiene), `LineStarted`, `LineEnded`, `ChoicePresented` y `ChoiceMade` en `Dialogue`, y los mismos (salvo `Started`) en cada `DialogueRun`. `ChoiceMade` no se lanza cuando se toma la salida *No Answer*.
 
 **Control:** `DialogueRun.Advance()` es el input del jugador sobre la línea actual (ver contenedores). `Dialogue.Main` es la principal en marcha, `Dialogue.Active` todas (una copia: se pueden detener mientras se recorre), y `Dialogue.PauseAll`, `ResumeAll` y `StopAll` actúan sobre todas.
 
