@@ -14,6 +14,8 @@ namespace HarryTools.Dialogue.Editor {
         private const string CameraKeyPrefix = "HarryTools.Dialogue.Graph.Camera.";
         private const float GridSize = 20f;
         private const long FrameRetryMilliseconds = 50;
+        // Tries of a delayed frame before it gives up on a node that never gets a size
+        private const int MaxFrameRetries = 20;
 
         private const string DefaultGroupTitle = "Group";
         private const string DuplicateOperation = "Duplicate";
@@ -55,6 +57,9 @@ namespace HarryTools.Dialogue.Editor {
 
         /// <summary> Raised after the canvas was recreated from the asset </summary>
         internal event Action Rebuilt;
+
+        /// <summary> The canvas has a dialogue and is not read only. Checked by every edit of the asset </summary>
+        internal bool CanEdit => Asset != null && !ReadOnly;
 
         /// <summary> Raised when the camera moves other than by the canvas itself: by the user, or by a call to <see cref="Frame"/> </summary>
         internal event Action CameraMoved;
@@ -150,7 +155,7 @@ namespace HarryTools.Dialogue.Editor {
             Asset = _asset;
             hasPastePosition = false;
             // Dialogues made without the window have every node at the origin
-            if (!ReadOnly && DialogueGraphOps.NeedsAutoLayout(Asset)) {
+            if (CanEdit && DialogueGraphOps.NeedsAutoLayout(Asset)) {
                 Undo.IncrementCurrentGroup();
                 DialogueGraphOps.AutoLayout(Asset);
                 Undo.IncrementCurrentGroup();
@@ -307,8 +312,9 @@ namespace HarryTools.Dialogue.Editor {
             int _request = ++cameraRequest;
             if (IsLaidOut(_view)) return;
             bool _done = false;
+            int _tries = 0;
             schedule.Execute(() => {
-                if (_request != cameraRequest || _view.parent == null) {
+                if (_request != cameraRequest || _view.parent == null || ++_tries > MaxFrameRetries) {
                     _done = true;
                     return;
                 }
@@ -338,7 +344,7 @@ namespace HarryTools.Dialogue.Editor {
         #region Edits
         /// <summary> Adds a node at the canvas position; when an output id is given, that output points to it </summary>
         internal DialogueNode CreateNode(Type _type, Vector2 _position, string _fromOutputId) {
-            if (Asset == null || ReadOnly) return null;
+            if (!CanEdit) return null;
             if (SnapToGrid) _position = Snap(_position);
 
             DialogueNode _node = string.IsNullOrEmpty(_fromOutputId)
@@ -349,14 +355,14 @@ namespace HarryTools.Dialogue.Editor {
         }
 
         internal void Connect(string _outputId, string _targetNodeId) {
-            if (Asset == null || ReadOnly) return;
+            if (!CanEdit) return;
             DialogueGraphOps.Connect(Asset, _outputId, _targetNodeId);
             Rebuild();
         }
 
         /// <summary> Opens the node type search at the screen position. The created node is connected to the output when one is given </summary>
         internal void OpenSearch(Vector2 _screenPosition, string _fromOutputId) {
-            if (Asset == null || ReadOnly) return;
+            if (!CanEdit) return;
             if (search == null) {
                 search = ScriptableObject.CreateInstance<DialogueNodeSearch>();
                 search.hideFlags = HideFlags.HideAndDontSave;
@@ -388,7 +394,7 @@ namespace HarryTools.Dialogue.Editor {
 
         /// <summary> Lays every node out again by its distance from the start node </summary>
         internal void AutoLayout() {
-            if (Asset == null || ReadOnly) return;
+            if (!CanEdit) return;
             DialogueGraphOps.AutoLayout(Asset);
             Rebuild();
             FrameAllWhenLaidOut();
@@ -410,7 +416,7 @@ namespace HarryTools.Dialogue.Editor {
         /// <summary> Puts the selected nodes in a new group, which is then selected </summary>
         internal void GroupSelection() {
             List<string> _ids = SelectedNodeIds();
-            if (Asset == null || ReadOnly || _ids.Count == 0) return;
+            if (!CanEdit || _ids.Count == 0) return;
 
             DialogueGroup _group = DialogueGraphOps.CreateGroup(Asset, DefaultGroupTitle, _ids);
             Undo.SetCurrentGroupName("Create Group");
@@ -419,7 +425,7 @@ namespace HarryTools.Dialogue.Editor {
 
         /// <summary> Takes the selected nodes out of their groups </summary>
         internal void RemoveSelectionFromGroups() {
-            if (ReadOnly) return;
+            if (!CanEdit) return;
             List<DialogueNodeView> _nodes = SelectedNodes();
             foreach (DialogueGroupView _group in groupViews.Values.ToList()) {
                 List<GraphElement> _members = new List<GraphElement>();
@@ -434,7 +440,7 @@ namespace HarryTools.Dialogue.Editor {
 
         /// <summary> Adds a note at the canvas position, which is then selected </summary>
         internal DialogueNote CreateNote(Vector2 _position) {
-            if (Asset == null || ReadOnly) return null;
+            if (!CanEdit) return null;
             if (SnapToGrid) _position = Snap(_position);
 
             DialogueNote _note = DialogueGraphOps.CreateNote(Asset, new Rect(_position, NoteSize));
@@ -444,7 +450,7 @@ namespace HarryTools.Dialogue.Editor {
         }
 
         private void OnGroupMembersChanged(Group _group) {
-            if (rebuilding || ReadOnly || Asset == null || !(_group is DialogueGroupView _view)) return;
+            if (rebuilding || !CanEdit || !(_group is DialogueGroupView _view)) return;
 
             List<string> _ids = new List<string>();
             foreach (GraphElement _element in _view.containedElements) {
@@ -501,11 +507,12 @@ namespace HarryTools.Dialogue.Editor {
                 pasteCheckData = _data;
                 pasteCheckResult = DialogueClipboard.CanPaste(_data);
             }
-            return Asset != null && !ReadOnly && pasteCheckResult;
+            return CanEdit && pasteCheckResult;
         }
 
         private void PasteData(string _operation, string _data) {
-            if (Asset == null) return;
+            // Duplicate reaches here without asking canPasteSerializedData
+            if (!CanEdit) return;
             CommitPendingText();
 
             IReadOnlyList<string> _ids = DialogueClipboard.Paste(Asset, _data, Vector2.zero);
@@ -555,7 +562,7 @@ namespace HarryTools.Dialogue.Editor {
         #region Arrange
         /// <summary> Aligns or distributes the selected nodes </summary>
         internal void ArrangeSelection(DialogueGraphOps.Arrangement _arrangement) {
-            if (Asset == null || ReadOnly) return;
+            if (!CanEdit) return;
 
             Dictionary<string, Rect> _rects = new Dictionary<string, Rect>();
             List<DialogueNodeView> _nodes = SelectedNodes();
@@ -583,7 +590,7 @@ namespace HarryTools.Dialogue.Editor {
             RememberPastePosition(_panelPosition);
             Vector2 _canvas = pastePosition;
             Vector2 _screen = PanelToScreen(_panelPosition);
-            DropdownMenuAction.Status Available(bool _available) => _available && !ReadOnly ? DropdownMenuAction.Status.Normal : DropdownMenuAction.Status.Disabled;
+            DropdownMenuAction.Status Available(bool _available) => _available && CanEdit ? DropdownMenuAction.Status.Normal : DropdownMenuAction.Status.Disabled;
 
             _menu.AppendAction("Create Node", _ => OpenSearch(_screen, null), _ => Available(Asset != null));
             _menu.AppendSeparator();
@@ -605,8 +612,8 @@ namespace HarryTools.Dialogue.Editor {
                     AddToSelection(_note);
                 }
                 AppendMissing(_menu, "Copy", CopySelection, HasCopyableSelection());
-                AppendMissing(_menu, "Duplicate", DuplicateSelection, HasCopyableSelection());
-                AppendMissing(_menu, "Delete", () => DeleteSelection(), HasDeletableSelection());
+                AppendMissing(_menu, "Duplicate", DuplicateSelection, CanEdit && HasCopyableSelection());
+                AppendMissing(_menu, "Delete", () => DeleteSelection(), CanEdit && HasDeletableSelection());
             }
             BuildSelectionMenu(_menu);
         }
@@ -618,7 +625,7 @@ namespace HarryTools.Dialogue.Editor {
 
         private void BuildSelectionMenu(DropdownMenu _menu) {
             List<DialogueNodeView> _nodes = SelectedNodes();
-            if (_nodes.Count == 0 || ReadOnly) return;
+            if (_nodes.Count == 0 || !CanEdit) return;
 
             _menu.AppendSeparator();
             _menu.AppendAction("Create Group", _ => GroupSelection());
@@ -749,7 +756,7 @@ namespace HarryTools.Dialogue.Editor {
 
         private GraphViewChange OnGraphViewChanged(GraphViewChange _change) {
             if (Asset == null) return _change;
-            if (ReadOnly) return BlockChange(_change);
+            if (!CanEdit) return BlockChange(_change);
 
             if (_change.movedElements != null && _change.movedElements.Count > 0) ApplyMoves(_change.movedElements);
 
@@ -770,12 +777,14 @@ namespace HarryTools.Dialogue.Editor {
             return _change;
         }
 
-        /// <summary> Drops what the graph view was about to change; the canvas is drawn again from the asset if anything moved </summary>
+        /// <summary> Drops what the graph view was about to change. The canvas is drawn again from the asset, so an element moved or an edge dragged off its port goes back </summary>
         private GraphViewChange BlockChange(GraphViewChange _change) {
-            bool _moved = _change.movedElements != null && _change.movedElements.Count > 0;
+            bool _any = (_change.movedElements != null && _change.movedElements.Count > 0)
+                || (_change.elementsToRemove != null && _change.elementsToRemove.Count > 0)
+                || (_change.edgesToCreate != null && _change.edgesToCreate.Count > 0);
             _change.elementsToRemove?.Clear();
             _change.edgesToCreate?.Clear();
-            if (_moved) schedule.Execute(() => Rebuild());
+            if (_any) schedule.Execute(() => Rebuild());
             return _change;
         }
 
@@ -924,7 +933,7 @@ namespace HarryTools.Dialogue.Editor {
         }
 
         private void ApplyDroppedEdge(Edge _edge) {
-            if (Asset == null || ReadOnly) return;
+            if (!CanEdit) return;
             ApplyEdge(_edge);
             Rebuild();
         }

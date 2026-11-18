@@ -70,6 +70,10 @@ namespace HarryTools.Dialogue.Editor {
         #region Methods
         /// <summary> Writes the color to the asset and shows it </summary>
         internal void SetColor(Color _color) {
+            if (!CanWrite) {
+                colorField.SetValueWithoutNotify(Data.Color);
+                return;
+            }
             _color.a = 1f;
             colorField.SetValueWithoutNotify(_color);
             ApplyColor(_color);
@@ -101,10 +105,23 @@ namespace HarryTools.Dialogue.Editor {
         #region Private Methods
         private void WriteTitle(string _title) {
             if (Asset == null || Data == null || (_title ?? "") == (Data.Title ?? "")) return;
+            if (!CanWrite) {
+                // A rename the canvas does not allow shows the stored title again
+                base.title = Data.Title;
+                return;
+            }
             DialogueGraphOps.SetGroup(Asset, GroupId, _title, Data.Color);
         }
 
         /// <summary> A change from the color picker. Dragging in the picker sends many, which make a single undo step </summary>
+        /// <summary> False while the canvas holding the group is read only </summary>
+        private bool CanWrite {
+            get {
+                DialogueGraphView _graph = GetFirstAncestorOfType<DialogueGraphView>();
+                return _graph == null || _graph.CanEdit;
+            }
+        }
+
         private void PickColor(Color _color) {
             if (pickerUndoGroup < 0) {
                 Undo.IncrementCurrentGroup();

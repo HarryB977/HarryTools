@@ -61,6 +61,8 @@ namespace HarryTools.Dialogue.Editor {
 
         private void Write(string _text, Rect _rect) {
             if (Asset == null) return;
+            DialogueGraphView _graph = GetFirstAncestorOfType<DialogueGraphView>();
+            if (_graph != null && !_graph.CanEdit) return;
             if (float.IsNaN(_rect.width) || float.IsNaN(_rect.height)) _rect = Data.Rect;
             DialogueGraphOps.SetNote(Asset, NoteId, _text, _rect);
         }

@@ -985,6 +985,69 @@ namespace HarryTools.Dialogue.Tests {
         }
 
         [Test]
+        public void Window_PlayMode_EditsLeaveAssetUnchanged() {
+            DialogueAsset _asset = NewSample("ReadOnlyEdits");
+            LineNode _line = FirstLine(_asset);
+            ChoiceNode _choice = _asset.Nodes.OfType<ChoiceNode>().First();
+            DialogueGroup _group = DialogueGraphOps.CreateGroup(_asset, "Group", new List<string> { _line.Id });
+            window = DialogueGraphWindow.Open(_asset);
+            window.View.SelectAndFrame(_line.Id);
+            window.View.CopySelection();
+
+            window.BeginPlayMode();
+            string _before = EditorJsonUtility.ToJson(_asset);
+
+            window.View.SelectAndFrame(_line.Id);
+            window.View.DuplicateSelection();
+            Assert.AreEqual(_before, EditorJsonUtility.ToJson(_asset), "duplicate");
+            window.View.Paste();
+            Assert.AreEqual(_before, EditorJsonUtility.ToJson(_asset), "paste");
+            window.View.SelectAndFrame(_line.Id);
+            window.View.DeleteSelection();
+            Assert.AreEqual(_before, EditorJsonUtility.ToJson(_asset), "delete");
+            window.View.SelectAndFrame(_line.Id);
+            window.View.GroupSelection();
+            Assert.AreEqual(_before, EditorJsonUtility.ToJson(_asset), "group");
+            DialogueGroupView _groupView = window.View.FindGroupView(_group.Id);
+            _groupView.title = "Renamed";
+            Assert.AreEqual(_before, EditorJsonUtility.ToJson(_asset), "group rename");
+            Assert.AreEqual("Group", _groupView.title, "the stored title is shown again");
+            window.View.SelectAndFrame(_choice.Id);
+            window.Panel.AddItem();
+            Assert.AreEqual(_before, EditorJsonUtility.ToJson(_asset), "panel add option");
+            Assert.IsNotNull(window.View.FindNodeView(_line.Id), "the canvas still shows the node");
+        }
+
+        [Test]
+        public void Window_PlayMode_LoadDoesNotLayOut() {
+            DialogueAsset _asset = NewAsset("ReadOnlyAtOrigin");
+            DialogueGraphOps.CreateConnected(_asset, typeof(LineNode), Vector2.zero, _asset.Start.Next.Id);
+            Undo.ClearAll();
+            Assert.IsTrue(DialogueGraphOps.NeedsAutoLayout(_asset));
+            window = DialogueGraphWindow.Open(null);
+            window.BeginPlayMode();
+            string _before = EditorJsonUtility.ToJson(_asset);
+
+            window.SetAsset(_asset);
+
+            Assert.AreEqual(_before, EditorJsonUtility.ToJson(_asset));
+        }
+
+        [Test]
+        public void Window_RunMenu_MainFirstThenEndedFollowed() {
+            DialogueAsset _asset = NewSample("RunMenu");
+            StartRunning();
+            DialogueRun _ended = Dialogue.Start(_asset);
+            _ended.Stop();
+            DialogueRun _ambient = Dialogue.Start(_asset, new DialogueStartOptions { IsMain = false });
+            DialogueRun _main = Dialogue.Start(_asset);
+
+            List<DialogueRun> _runs = DialogueGraphWindow.MenuRuns(_ended, Dialogue.Active);
+
+            CollectionAssert.AreEqual(new[] { _main, _ended, _ambient }, _runs);
+        }
+
+        [Test]
         public void Window_SourceTextWritten_SchedulesValidation() {
             DialogueAsset _asset = NewSample("TextWritten");
             window = DialogueGraphWindow.Open(_asset);

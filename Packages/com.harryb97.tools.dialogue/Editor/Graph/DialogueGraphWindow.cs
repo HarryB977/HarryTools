@@ -113,9 +113,14 @@ namespace HarryTools.Dialogue.Editor {
             if (asset == null && !string.IsNullOrEmpty(assetGuid)) {
                 asset = AssetDatabase.LoadAssetAtPath<DialogueAsset>(AssetDatabase.GUIDToAssetPath(assetGuid));
             }
+            // Opened in Play, or reloaded while entering it: read only before the dialogue loads, so loading cannot lay it out
+            bool _playing = EditorApplication.isPlaying;
+            if (_playing) {
+                View.ReadOnly = true;
+                Panel.ReadOnly = true;
+            }
             ShowAsset();
-            // Opened in Play, or reloaded while entering it
-            if (EditorApplication.isPlaying) BeginPlayMode();
+            if (_playing) BeginPlayMode();
         }
 
         internal void OnDisable() {
@@ -408,8 +413,7 @@ namespace HarryTools.Dialogue.Editor {
             DialogueRun _followed = tracker.Followed;
             runMenu.text = _followed != null ? RunLabel(_followed) : NoRunText;
 
-            List<DialogueRun> _runs = Dialogue.Active.OrderBy(_run => _run.IsMain ? 0 : 1).ToList();
-            if (_followed != null && !_runs.Contains(_followed)) _runs.Insert(0, _followed);
+            List<DialogueRun> _runs = MenuRuns(_followed, Dialogue.Active);
             List<DropdownMenuItem> _items = runMenu.menu.MenuItems();
             _items.Clear();
             HashSet<string> _labels = new HashSet<string>();
@@ -423,6 +427,13 @@ namespace HarryTools.Dialogue.Editor {
                 }, _run == _followed ? DropdownMenuAction.Status.Checked : DropdownMenuAction.Status.Normal);
             }
             if (_runs.Count == 0) runMenu.menu.AppendAction(NoRunText, null, DropdownMenuAction.Status.Disabled);
+        }
+
+        /// <summary> The runs listed in the menu, in order: main runs, then the followed run once it ended, then the ambient ones </summary>
+        internal static List<DialogueRun> MenuRuns(DialogueRun _followed, IReadOnlyList<DialogueRun> _active) {
+            List<DialogueRun> _runs = _active.OrderBy(_run => _run.IsMain ? 0 : 1).ToList();
+            if (_followed != null && !_runs.Contains(_followed)) _runs.Insert(_runs.Count(_run => _run.IsMain), _followed);
+            return _runs;
         }
 
         /// <summary> "Main · dialogue · actor" for the main run, "dialogue · actor" for the others </summary>
