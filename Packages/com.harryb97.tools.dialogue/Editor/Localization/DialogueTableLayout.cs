@@ -57,11 +57,11 @@ namespace HarryTools.Dialogue.Editor {
             return _keys;
         }
 
-        /// <summary> Writes the comment of every entry of the dialogue's collection and puts the entries in script order, with undo. Only marks the collection dirty when something changed. Does nothing when the dialogue has no collection </summary>
-        internal static void Refresh(DialogueAsset _asset) {
+        /// <summary> Writes the comment of every entry of the dialogue's collection and puts the entries in script order, with undo. Only marks the collection dirty when something changed. Does nothing when the dialogue has no collection. True when the shared table data was changed </summary>
+        internal static bool Refresh(DialogueAsset _asset) {
             StringTableCollection _collection = _asset != null ? DialogueTables.Linked(_asset) : null;
             SharedTableData _shared = _collection != null ? _collection.SharedData : null;
-            if (_shared == null) return;
+            if (_shared == null) return false;
 
             Plan _plan = Analyze(_asset);
             bool _recorded = false;
@@ -86,6 +86,7 @@ namespace HarryTools.Dialogue.Editor {
             }
 
             if (_recorded) EditorUtility.SetDirty(_shared);
+            return _recorded;
         }
         #endregion
 

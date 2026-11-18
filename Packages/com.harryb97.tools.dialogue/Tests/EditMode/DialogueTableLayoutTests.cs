@@ -256,9 +256,55 @@ namespace HarryTools.Dialogue.Tests {
             _asset.Start.Next.Target = _line.Id;
             Assert.IsNull(CommentOf(_asset, LineKey(_line)));
 
-            DialogueTableSaveHook.OnWillSaveAssets(new[] { AssetDatabase.GetAssetPath(_asset), "Assets/Other.txt" });
+            string _dialoguePath = AssetDatabase.GetAssetPath(_asset);
+            string[] _returned = DialogueTableSaveHook.OnWillSaveAssets(new[] { _dialoguePath, "Assets/Other.txt" });
 
+            SharedTableData _shared = DialogueTables.EnsureCollection(_asset).SharedData;
+            CollectionAssert.Contains(_returned, AssetDatabase.GetAssetPath(_shared));
+            CollectionAssert.Contains(_returned, _dialoguePath);
+            Assert.AreEqual(_returned.Length, new HashSet<string>(_returned).Count);
             Assert.AreEqual("Line\nDialogue: SaveHook\nAfter: start", CommentOf(_asset, LineKey(_line)));
+
+            AssetDatabase.SaveAssets();
+            Assert.IsFalse(EditorUtility.IsDirty(_shared));
+        }
+
+        [Test]
+        public void Comment_Option_OriginIsTheOptionText_NewlinesCollapsed() {
+            DialogueAsset _asset = NewAsset("CommentAfterOption");
+            ChoiceNode _choice = _asset.AddNode<ChoiceNode>();
+            ChoiceOption _yes = AddOption(_asset, _choice, "Yes\nplease", null);
+            LineNode _reply = AddLine(_asset, "Reply");
+            LineNode _next = AddLine(_asset, "Next");
+            _asset.Start.Next.Target = _choice.Id;
+            _yes.Next.Target = _reply.Id;
+            _reply.Next.Target = _next.Id;
+
+            Assert.AreEqual("Line\nDialogue: CommentAfterOption\nAfter option \"Yes please\"", DialogueTableLayout.BuildComment(_asset, LineKey(_reply)));
+            Assert.AreEqual("Line\nDialogue: CommentAfterOption\nAfter option \"Yes please\"", DialogueTableLayout.BuildComment(_asset, LineKey(_next)));
+        }
+
+        [Test]
+        public void Comment_Otherwise_Alone() {
+            DialogueAsset _asset = NewAsset("CommentOtherwise");
+            BranchNode _branch = _asset.AddNode<BranchNode>();
+            LineNode _line = AddLine(_asset, "Fallback");
+            _asset.Start.Next.Target = _branch.Id;
+            _branch.Otherwise.Target = _line.Id;
+
+            Assert.AreEqual("Line\nDialogue: CommentOtherwise\nOtherwise",DialogueTableLayout.BuildComment(_asset, LineKey(_line)));
+        }
+
+        [Test]
+        public void Refresh_NoCollection_CreatesNothing() {
+            DialogueAsset _asset = NewAsset("NoCollection");
+
+            bool _changed = false;
+            Assert.DoesNotThrow(() => _changed = DialogueTableLayout.Refresh(_asset));
+
+            Assert.IsFalse(_changed);
+            Assert.IsEmpty(_asset.TableCollectionGuid);
+            Assert.AreEqual(0, AssetDatabase.FindAssets("t:StringTableCollection", new[] { TablesFolder }).Length);
         }
         #endregion
     }
