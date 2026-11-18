@@ -5,8 +5,13 @@ using HarryTools.Dialogue.Editor;
 using NUnit.Framework;
 using UnityEditor;
 using UnityEditor.Experimental.GraphView;
+using UnityEditor.Localization;
+using UnityEditor.UIElements;
 using UnityEngine;
+using UnityEngine.Localization;
+using UnityEngine.Localization.Settings;
 using UnityEngine.TestTools;
+using UnityEngine.UIElements;
 using Object = UnityEngine.Object;
 
 namespace HarryTools.Dialogue.Tests {
@@ -16,17 +21,54 @@ namespace HarryTools.Dialogue.Tests {
         private const string TempFolder = "Assets/__DialogueTests__";
         private const string AssetsFolder = TempFolder + "/GraphWindow";
         private const string TablesFolder = TempFolder + "/GraphWindowTables";
+        private const string LocalesFolder = TempFolder + "/GraphWindowLocales";
+        private const string SourceCode = "en";
 
+        private readonly List<Locale> addedLocales = new List<Locale>();
+        private LocalizationSettings createdSettings;
         private DialogueSettings settings;
         private DialogueGraphWindow window;
         #endregion
 
         // ==================== SETUP ====================
         #region Setup
+        [OneTimeSetUp]
+        public void OneTimeSetUp() {
+            EnsureFolder(TempFolder);
+
+            // Reuse the project's localization setup; add only what is missing and undo it afterwards
+            if (LocalizationEditorSettings.ActiveLocalizationSettings == null) {
+                createdSettings = ScriptableObject.CreateInstance<LocalizationSettings>();
+                AssetDatabase.CreateAsset(createdSettings, TempFolder + "/GraphWindowLocalization.asset");
+                LocalizationEditorSettings.ActiveLocalizationSettings = createdSettings;
+            }
+            if (LocalizationEditorSettings.GetLocale(SourceCode) == null) {
+                EnsureFolder(LocalesFolder);
+                Locale _locale = Locale.CreateLocale(SourceCode);
+                AssetDatabase.CreateAsset(_locale, LocalesFolder + "/" + SourceCode + ".asset");
+                LocalizationEditorSettings.AddLocale(_locale);
+                addedLocales.Add(_locale);
+            }
+        }
+
+        [OneTimeTearDown]
+        public void OneTimeTearDown() {
+            for (int _i = 0; _i < addedLocales.Count; _i++) {
+                if (addedLocales[_i] != null) LocalizationEditorSettings.RemoveLocale(addedLocales[_i]);
+            }
+            addedLocales.Clear();
+            if (createdSettings != null) LocalizationEditorSettings.ActiveLocalizationSettings = null;
+            createdSettings = null;
+
+            if (AssetDatabase.IsValidFolder(LocalesFolder)) AssetDatabase.DeleteAsset(LocalesFolder);
+            if (AssetDatabase.IsValidFolder(TempFolder) && AssetDatabase.FindAssets("", new[] { TempFolder }).Length == 0) AssetDatabase.DeleteAsset(TempFolder);
+        }
+
         [SetUp]
         public void SetUp() {
             settings = ScriptableObject.CreateInstance<DialogueSettings>();
             settings.TablesFolder = TablesFolder;
+            settings.SourceLocaleCode = SourceCode;
             DialogueSettings.UseForTests(settings);
             EnsureFolder(TempFolder);
             EnsureFolder(AssetsFolder);
@@ -41,7 +83,7 @@ namespace HarryTools.Dialogue.Tests {
             DialogueSettings.ClearForTests();
             Object.DestroyImmediate(settings);
 
-            if (AssetDatabase.IsValidFolder(TablesFolder)) AssetDatabase.DeleteAsset(TablesFolder);
+            DeleteTables();
             if (AssetDatabase.IsValidFolder(AssetsFolder)) AssetDatabase.DeleteAsset(AssetsFolder);
             if (AssetDatabase.IsValidFolder(TempFolder) && AssetDatabase.FindAssets("", new[] { TempFolder }).Length == 0) AssetDatabase.DeleteAsset(TempFolder);
             Undo.ClearAll();
@@ -51,6 +93,22 @@ namespace HarryTools.Dialogue.Tests {
             if (AssetDatabase.IsValidFolder(_path)) return;
             int _slash = _path.LastIndexOf('/');
             AssetDatabase.CreateFolder(_path.Substring(0, _slash), _path.Substring(_slash + 1));
+        }
+
+        private static void DeleteTables() {
+            if (!AssetDatabase.IsValidFolder(TablesFolder)) return;
+            // Collections first: deleting one removes it from the project before its tables go
+            foreach (string _guid in AssetDatabase.FindAssets("t:StringTableCollection", new[] { TablesFolder })) {
+                AssetDatabase.DeleteAsset(AssetDatabase.GUIDToAssetPath(_guid));
+            }
+            AssetDatabase.DeleteAsset(TablesFolder);
+        }
+
+        /// <summary> Sends the event a text field gets when the user clicks elsewhere </summary>
+        private static void LoseFocus(VisualElement _field) {
+            using (FocusOutEvent _event = FocusOutEvent.GetPooled(_field, null, FocusChangeDirection.unspecified, _field.focusController)) {
+                _field.SendEvent(_event);
+            }
         }
 
         private static DialogueAsset NewAsset(string _name) {
@@ -295,6 +353,148 @@ namespace HarryTools.Dialogue.Tests {
             Assert.AreSame(_asset, window.Asset);
             Assert.AreNotSame(_before, window.View);
             AssertViewMatchesAsset(window.View, _asset);
+        }
+
+        [Test]
+        public void LineText_EditInCanvas_WritesSourceTable() {
+            DialogueAsset _asset = NewSample("LineText");
+            window = DialogueGraphWindow.Open(_asset);
+            LineNode _line = _asset.Nodes.OfType<LineNode>().First();
+            TextField _field = ((LineNodeView)window.View.FindNodeView(_line.Id)).TextField;
+
+            Undo.IncrementCurrentGroup();
+            _field.value = "First line\nsecond row";
+            // Typing alone writes nothing
+            Assert.IsNull(DialogueTables.GetSourceText(_line.Text));
+
+            LoseFocus(_field);
+
+            Assert.AreEqual("First line\nsecond row", DialogueTables.GetSourceText(_line.Text));
+            Assert.IsNotNull(DialogueTables.EnsureCollection(_asset).SharedData.GetEntry(_line.Id), "entry keyed by the node id");
+
+            // One undo step takes the whole edit back
+            Undo.PerformUndo();
+            Assert.IsNull(DialogueTables.GetSourceText(_line.Text));
+            Assert.AreEqual("", ((LineNodeView)window.View.FindNodeView(_line.Id)).TextField.value);
+        }
+
+        [Test]
+        public void OptionText_EditInCanvas_WritesSourceTable() {
+            DialogueAsset _asset = NewSample("OptionText");
+            window = DialogueGraphWindow.Open(_asset);
+            ChoiceNode _choice = _asset.Nodes.OfType<ChoiceNode>().First();
+            ChoiceNodeView _view = (ChoiceNodeView)window.View.FindNodeView(_choice.Id);
+            ChoiceOption _option = _choice.Options[1];
+
+            TextField _field = _view.OptionField(1);
+            _field.value = "Second answer";
+            Assert.IsNull(DialogueTables.GetSourceText(_option.Text));
+            LoseFocus(_field);
+
+            Assert.AreEqual("Second answer", DialogueTables.GetSourceText(_option.Text));
+            Assert.IsNotNull(DialogueTables.EnsureCollection(_asset).SharedData.GetEntry(_option.Id), "entry keyed by the option id");
+            Assert.IsNull(DialogueTables.GetSourceText(_choice.Options[0].Text));
+        }
+
+        [UnityTest]
+        public IEnumerator Panel_ShowsSelectedNode_ChangesApplyToAsset() {
+            DialogueAsset _asset = NewSample("Panel");
+            window = DialogueGraphWindow.Open(_asset);
+            LineNode _line = _asset.Nodes.OfType<LineNode>().First();
+
+            // Nothing selected: the dialogue options
+            Assert.IsNull(window.Panel.NodeId);
+            Assert.IsNotNull(FindBoundField(window.Panel, "allowSkip"));
+
+            window.View.AddToSelection(window.View.FindNodeView(_line.Id));
+            Assert.AreEqual(_line.Id, window.Panel.NodeId);
+            // Property fields create their inner field once bound
+            for (int _i = 0; _i < 200 && FindBoundField(window.Panel, "delayBefore")?.Q<FloatField>() == null; _i++) yield return null;
+
+            FloatField _delay = FindBoundField(window.Panel, "delayBefore")?.Q<FloatField>();
+            Assert.IsNotNull(_delay, "delay field of the line");
+            _delay.value = 2f;
+            LineNodeView LineView() => (LineNodeView)window.View.FindNodeView(_line.Id);
+            for (int _i = 0; _i < 200 && !LineView().Indicators.Contains("Delay"); _i++) yield return null;
+
+            Assert.AreEqual(2f, _line.DelayBefore);
+            CollectionAssert.Contains(LineView().Indicators, "Delay");
+
+            window.View.ClearSelection();
+            Assert.IsNull(window.Panel.NodeId);
+        }
+
+        [Test]
+        public void Panel_AddOption_RebuildsPorts() {
+            DialogueAsset _asset = NewSample("PanelOptions");
+            window = DialogueGraphWindow.Open(_asset);
+            ChoiceNode _choice = _asset.Nodes.OfType<ChoiceNode>().First();
+            window.View.AddToSelection(window.View.FindNodeView(_choice.Id));
+            Assert.AreEqual(2, window.Panel.ItemCount);
+
+            Undo.IncrementCurrentGroup();
+            window.Panel.AddItem();
+
+            Assert.AreEqual(3, _choice.Options.Count);
+            Assert.AreEqual(4, window.View.FindNodeView(_choice.Id).Outputs.Count, "three options plus no answer");
+            Assert.AreEqual(3, window.Panel.ItemCount);
+            Assert.AreEqual(_choice.Id, window.Panel.NodeId);
+            AssertViewMatchesAsset(window.View, _asset);
+
+            string _first = _choice.Options[0].Id;
+            Undo.IncrementCurrentGroup();
+            window.Panel.MoveItem(0, 2);
+            Assert.AreEqual(_first, _choice.Options[2].Id);
+            Assert.AreEqual(_choice.Options[2].Next.Id, window.View.FindNodeView(_choice.Id).Outputs[2].OutputId);
+
+            Undo.IncrementCurrentGroup();
+            window.Panel.RemoveItem(2);
+            Assert.AreEqual(2, _choice.Options.Count);
+            Assert.AreEqual(3, window.View.FindNodeView(_choice.Id).Outputs.Count);
+            Assert.AreEqual(2, window.Panel.ItemCount);
+            AssertViewMatchesAsset(window.View, _asset);
+
+            BranchNode _branch = _asset.Nodes.OfType<BranchNode>().First();
+            window.View.ClearSelection();
+            window.View.AddToSelection(window.View.FindNodeView(_branch.Id));
+            window.Panel.AddItem();
+            Assert.AreEqual(2, _branch.Cases.Count);
+            Assert.AreEqual(3, window.View.FindNodeView(_branch.Id).Outputs.Count, "two cases plus otherwise");
+        }
+
+        [Test]
+        public void Canvas_SelfConnection_Allowed() {
+            DialogueAsset _asset = NewSample("SelfLoop");
+            window = DialogueGraphWindow.Open(_asset);
+            DialogueNodeView _line = window.View.FindNodeView(_asset.Nodes.OfType<LineNode>().First().Id);
+
+            List<Port> _compatible = window.View.GetCompatiblePorts(_line.Outputs[0].Port, null);
+
+            CollectionAssert.Contains(_compatible, _line.Input);
+            CollectionAssert.DoesNotContain(_compatible, _line.Outputs[0].Port);
+        }
+
+        [UnityTest]
+        public IEnumerator ScreenToCanvas_RoundTripsThroughThePanel() {
+            DialogueAsset _asset = NewSample("Screen");
+            window = DialogueGraphWindow.Open(_asset);
+            DialogueGraphView _view = window.View;
+            // The window's content sits below its tab only once laid out
+            for (int _i = 0; _i < 100 && float.IsNaN(window.rootVisualElement.worldBound.height); _i++) yield return null;
+            Assert.IsFalse(float.IsNaN(window.rootVisualElement.worldBound.height), "window laid out");
+
+            // A point of the canvas, seen from the screen, maps back to the same canvas point
+            Vector2 _canvas = new Vector2(123f, 45f);
+            Vector2 _panel = _view.contentViewContainer.LocalToWorld(_canvas);
+            Vector2 _screen = window.rootVisualElement.WorldToLocal(_panel) + window.position.position;
+
+            Vector2 _back = _view.ScreenToCanvas(_screen);
+            Assert.AreEqual(_canvas.x, _back.x, 0.01f);
+            Assert.AreEqual(_canvas.y, _back.y, 0.01f);
+        }
+
+        private static PropertyField FindBoundField(VisualElement _root, string _name) {
+            return _root.Query<PropertyField>().Where(_field => _field.bindingPath != null && (_field.bindingPath == _name || _field.bindingPath.EndsWith("." + _name))).First();
         }
         #endregion
     }

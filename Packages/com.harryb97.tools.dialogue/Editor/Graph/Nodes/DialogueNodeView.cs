@@ -1,16 +1,23 @@
 using System.Collections.Generic;
+using UnityEditor;
 using UnityEditor.Experimental.GraphView;
 using UnityEngine;
+using UnityEngine.Localization;
 using UnityEngine.UIElements;
 
 namespace HarryTools.Dialogue.Editor {
-    /// <summary> Canvas view of one dialogue node: its title, an input port and one output port per <see cref="NodeOutput"/>. Built from the node and rebuilt with the graph </summary>
+    /// <summary> Canvas view of one dialogue node: its title, an input port, one output port per <see cref="NodeOutput"/> and a short summary of its content. Built from the node and rebuilt with the graph </summary>
     internal abstract class DialogueNodeView : Node {
         // ==================== VARIABLES ===================
         #region Private Variables
         private const string NodeClass = "dialogue-node";
+        private const string IndicatorsClass = "dialogue-node__indicators";
+        private const string IndicatorClass = "dialogue-node__indicator";
+        private const string TextUndo = "Edit Dialogue Text";
 
         private readonly List<(string OutputId, Port Port)> outputs = new List<(string OutputId, Port Port)>();
+        private readonly List<string> indicators = new List<string>();
+        private readonly VisualElement indicatorRow;
         #endregion
 
         #region Public Variables
@@ -18,16 +25,23 @@ namespace HarryTools.Dialogue.Editor {
 
         internal DialogueNode Data { get; }
 
+        /// <summary> The dialogue the node belongs to. Text typed on the node is written to its table </summary>
+        internal DialogueAsset Asset { get; }
+
         /// <summary> The port other outputs connect to. Null for the start node </summary>
         internal Port Input { get; private set; }
 
         /// <summary> One port per output shown on the canvas, in the node's output order </summary>
         internal IReadOnlyList<(string OutputId, Port Port)> Outputs => outputs;
+
+        /// <summary> The short markers shown under the node, such as "Actions" or "Delay" </summary>
+        internal IReadOnlyList<string> Indicators => indicators;
         #endregion
 
         // ==================== CONSTRUCTION ====================
         #region Construction
-        protected DialogueNodeView(DialogueNode _node, IEdgeConnectorListener _listener) {
+        protected DialogueNodeView(DialogueAsset _asset, DialogueNode _node, IEdgeConnectorListener _listener) {
+            Asset = _asset;
             Data = _node;
             NodeId = _node.Id;
             viewDataKey = _node.Id;
@@ -51,21 +65,26 @@ namespace HarryTools.Dialogue.Editor {
                 outputs.Add((_output.Id, _port));
             }
 
+            indicatorRow = new VisualElement();
+            indicatorRow.AddToClassList(IndicatorsClass);
+            extensionContainer.Add(indicatorRow);
+            expanded = true;
+
             SetPosition(new Rect(_node.Position, Vector2.zero));
         }
 
         /// <summary> The view for the node's type. Types without their own view get a plain one with title and ports </summary>
-        internal static DialogueNodeView Create(DialogueNode _node, IEdgeConnectorListener _listener) {
+        internal static DialogueNodeView Create(DialogueAsset _asset, DialogueNode _node, IEdgeConnectorListener _listener) {
             DialogueNodeView _view;
             switch (_node) {
-                case StartNode _start: _view = new StartNodeView(_start, _listener); break;
-                case LineNode _line: _view = new LineNodeView(_line, _listener); break;
-                case ChoiceNode _choice: _view = new ChoiceNodeView(_choice, _listener); break;
-                case BranchNode _branch: _view = new BranchNodeView(_branch, _listener); break;
-                case ActionsNode _actions: _view = new ActionsNodeView(_actions, _listener); break;
-                case JumpNode _jump: _view = new JumpNodeView(_jump, _listener); break;
-                case EndNode _end: _view = new EndNodeView(_end, _listener); break;
-                default: _view = new PlainNodeView(_node, _listener); break;
+                case StartNode _start: _view = new StartNodeView(_asset, _start, _listener); break;
+                case LineNode _line: _view = new LineNodeView(_asset, _line, _listener); break;
+                case ChoiceNode _choice: _view = new ChoiceNodeView(_asset, _choice, _listener); break;
+                case BranchNode _branch: _view = new BranchNodeView(_asset, _branch, _listener); break;
+                case ActionsNode _actions: _view = new ActionsNodeView(_asset, _actions, _listener); break;
+                case JumpNode _jump: _view = new JumpNodeView(_asset, _jump, _listener); break;
+                case EndNode _end: _view = new EndNodeView(_asset, _end, _listener); break;
+                default: _view = new PlainNodeView(_asset, _node, _listener); break;
             }
 
             // After construction, so a derived view can fill its own fields before the first refresh
@@ -78,10 +97,34 @@ namespace HarryTools.Dialogue.Editor {
 
         // ==================== METHODS ====================
         #region Methods
-        /// <summary> Updates what the node shows from its data. Ports stay as they are: a change of outputs needs a rebuild of the graph </summary>
+        /// <summary> Updates what the node shows from its data. Ports stay as they are: a change of outputs needs a rebuild of the graph (see <see cref="OutputsChanged"/>) </summary>
         internal virtual void Refresh() {
             title = Title;
             for (int _i = 0; _i < outputs.Count; _i++) outputs[_i].Port.portName = OutputLabel(_i);
+
+            indicators.Clear();
+            CollectIndicators(indicators);
+            indicatorRow.Clear();
+            for (int _i = 0; _i < indicators.Count; _i++) {
+                Label _label = new Label(indicators[_i]);
+                _label.AddToClassList(IndicatorClass);
+                indicatorRow.Add(_label);
+            }
+            indicatorRow.style.display = indicators.Count > 0 ? DisplayStyle.Flex : DisplayStyle.None;
+        }
+
+        /// <summary> The node's data now has other outputs than the ports shown, so the graph has to be rebuilt </summary>
+        internal bool OutputsChanged() {
+            List<NodeOutput> _nodeOutputs = new List<NodeOutput>();
+            Data.CollectOutputs(_nodeOutputs);
+            int _shown = 0;
+            for (int _i = 0; _i < _nodeOutputs.Count; _i++) {
+                NodeOutput _output = _nodeOutputs[_i];
+                if (_output == null || !ShowsOutput(_output)) continue;
+                if (_shown >= outputs.Count || outputs[_shown].OutputId != _output.Id) return true;
+                _shown++;
+            }
+            return _shown != outputs.Count;
         }
 
         /// <summary> Where the node is placed on the canvas. Read from its style, which is up to date before the next layout pass </summary>
@@ -111,6 +154,55 @@ namespace HarryTools.Dialogue.Editor {
 
         /// <summary> Label of the output at the index of <see cref="Outputs"/> </summary>
         protected virtual string OutputLabel(int _index) => "";
+
+        /// <summary> Adds the markers shown under the node </summary>
+        protected virtual void CollectIndicators(List<string> _into) { }
+        #endregion
+
+        // ==================== HELPERS ====================
+        #region Helpers
+        /// <summary> Writes a text of the node to the source locale table as one undo step </summary>
+        protected void WriteText(LocalizedString _target, string _key, string _text) {
+            if (Asset == null || _target == null || string.IsNullOrEmpty(_key)) return;
+
+            Undo.IncrementCurrentGroup();
+            int _group = Undo.GetCurrentGroup();
+            DialogueTables.SetSourceText(Asset, _target, _key, _text);
+            Undo.SetCurrentGroupName(TextUndo);
+            Undo.CollapseUndoOperations(_group);
+        }
+
+        /// <summary> A text field on the node for a dialogue text in the source locale. Disabled when the project has no source locale </summary>
+        protected NodeTextField CreateTextField(System.Func<LocalizedString> _target, System.Func<string> _key) {
+            NodeTextField _field = new NodeTextField(() => DialogueTables.GetSourceText(_target()), _text => WriteText(_target(), _key(), _text));
+            if (DialogueTables.SourceLocale() == null) {
+                _field.SetEnabled(false);
+                _field.tooltip = "No source locale. Add locales in the Localization settings to write text.";
+            }
+            return _field;
+        }
+
+        protected static string Count(int _count, string _singular) {
+            return _count + " " + _singular + (_count == 1 ? "" : "s");
+        }
+
+        protected static int ActionCount(HarryTools.Actions.ActionList _list) {
+            if (_list == null || _list.Actions == null) return 0;
+            int _count = 0;
+            for (int _i = 0; _i < _list.Actions.Length; _i++) {
+                if (_list.Actions[_i] != null) _count++;
+            }
+            return _count;
+        }
+
+        protected static int ConditionCount(HarryTools.Conditions.ConditionList _list) {
+            if (_list == null || _list.Conditions == null) return 0;
+            int _count = 0;
+            for (int _i = 0; _i < _list.Conditions.Length; _i++) {
+                if (_list.Conditions[_i] != null) _count++;
+            }
+            return _count;
+        }
         #endregion
 
         // ==================== PORT ====================
@@ -130,7 +222,7 @@ namespace HarryTools.Dialogue.Editor {
         }
 
         private sealed class PlainNodeView : DialogueNodeView {
-            internal PlainNodeView(DialogueNode _node, IEdgeConnectorListener _listener) : base(_node, _listener) { }
+            internal PlainNodeView(DialogueAsset _asset, DialogueNode _node, IEdgeConnectorListener _listener) : base(_asset, _node, _listener) { }
 
             protected override string Title => Data.GetType().Name;
             protected override string TypeClass => "dialogue-node--plain";

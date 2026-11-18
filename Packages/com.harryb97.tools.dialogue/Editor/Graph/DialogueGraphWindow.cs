@@ -10,6 +10,7 @@ namespace HarryTools.Dialogue.Editor {
         // ==================== VARIABLES ===================
         #region Private Variables
         private const string WindowTitle = "Dialogue Graph";
+        private const float PanelWidth = 320f;
 
         // Survives domain reloads; the asset reference itself is looked up again from it
         [SerializeField] private string assetGuid = "";
@@ -24,6 +25,9 @@ namespace HarryTools.Dialogue.Editor {
         internal DialogueAsset Asset => asset;
 
         internal DialogueGraphView View { get; private set; }
+
+        /// <summary> The side panel with the properties of the selected node </summary>
+        internal DialogueInspectorPanel Panel { get; private set; }
 
         /// <summary> The bar above the canvas. Other parts of the window add their controls to it </summary>
         internal Toolbar Toolbar { get; private set; }
@@ -67,11 +71,18 @@ namespace HarryTools.Dialogue.Editor {
 
         internal void OnDisable() {
             Undo.undoRedoPerformed -= OnUndoRedo;
+            // Text typed on a node is kept when the window closes or reloads
+            View?.CommitPendingText();
             rootVisualElement.Clear();
             View = null;
+            Panel = null;
             Toolbar = null;
             assetField = null;
             asset = null;
+        }
+
+        private void OnLostFocus() {
+            View?.CommitPendingText();
         }
 
         private void OnProjectChange() {
@@ -83,6 +94,7 @@ namespace HarryTools.Dialogue.Editor {
         #region Asset
         /// <summary> Shows the dialogue in the window. Null leaves it empty </summary>
         internal void SetAsset(DialogueAsset _asset) {
+            if (!AssetWasDeleted) View?.CommitPendingText();
             asset = _asset;
             assetGuid = _asset != null && AssetDatabase.TryGetGUIDAndLocalFileIdentifier(_asset, out string _guid, out long _) ? _guid : "";
             ShowAsset();
@@ -95,6 +107,7 @@ namespace HarryTools.Dialogue.Editor {
             titleContent = new GUIContent(asset != null ? asset.name : WindowTitle);
             assetField?.SetValueWithoutNotify(asset);
             View?.Load(asset);
+            Panel?.Show(asset, View?.SelectedNodeId);
         }
 
         private void OnUndoRedo() {
@@ -131,9 +144,20 @@ namespace HarryTools.Dialogue.Editor {
 
             View = new DialogueGraphView(this) { SnapToGrid = snapToGrid, MiniMapVisible = showMiniMap };
             View.style.flexGrow = 1f;
+            Panel = new DialogueInspectorPanel();
+
+            View.SelectionChanged += () => Panel?.Show(asset, View?.SelectedNodeId);
+            Panel.NodeEdited += _nodeId => View?.RefreshNode(_nodeId);
+            Panel.OutputsEdited += _ => View?.Rebuild();
+
+            // The panel keeps its width when the window is resized
+            TwoPaneSplitView _split = new TwoPaneSplitView(1, PanelWidth, TwoPaneSplitViewOrientation.Horizontal);
+            _split.style.flexGrow = 1f;
+            _split.Add(View);
+            _split.Add(Panel);
 
             rootVisualElement.Add(Toolbar);
-            rootVisualElement.Add(View);
+            rootVisualElement.Add(_split);
         }
         #endregion
     }

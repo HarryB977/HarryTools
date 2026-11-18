@@ -86,6 +86,7 @@ namespace HarryTools.Dialogue.Editor {
             DialogueTables.WriteReference(_property, _collection, _keyId);
             _property.serializedObject.ApplyModifiedProperties();
             Undo.CollapseUndoOperations(_group);
+            DialogueTables.NotifySourceTextWritten(_asset);
         }
 
         private static void DrawOtherLocales(SerializedProperty _property, Locale _source, Rect _position, float _top) {

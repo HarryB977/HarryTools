@@ -19,6 +19,11 @@ namespace HarryTools.Dialogue.Editor {
         private const string UndoName = "Edit Dialogue Text";
         #endregion
 
+        #region Public Variables
+        /// <summary> Raised after a text of the dialogue is written to its source locale table </summary>
+        internal static event Action<DialogueAsset> SourceTextWritten;
+        #endregion
+
         // ==================== METHODS ====================
         #region Methods
         /// <summary> The locale the dialogue text is written in: the one set in the dialogue settings, otherwise the project locale. Null when it cannot be found </summary>
@@ -60,7 +65,13 @@ namespace HarryTools.Dialogue.Editor {
             _target.TableReference = _collection;
             _target.TableEntryReference = _keyId;
             EditorUtility.SetDirty(_asset);
+            NotifySourceTextWritten(_asset);
             return true;
+        }
+
+        /// <summary> Raises <see cref="SourceTextWritten"/>. Called once the text and the reference to it are both in place </summary>
+        internal static void NotifySourceTextWritten(DialogueAsset _asset) {
+            SourceTextWritten?.Invoke(_asset);
         }
 
         /// <summary> The text of the target in the source locale table. Null when it has none </summary>

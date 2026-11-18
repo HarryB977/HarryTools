@@ -83,8 +83,11 @@ namespace HarryTools.Dialogue {
         // ==================== UNITY ====================
         #region Unity
         private void OnEnable() {
-            // A freshly created asset has no nodes yet
-            if (nodes.Count == 0) AddNode<StartNode>();
+            // A freshly created asset has no nodes yet. Its start output needs an id before anything can connect to it
+            if (nodes.Count == 0) {
+                AddNode<StartNode>();
+                EnsureIds();
+            }
         }
 
         private void OnValidate() {

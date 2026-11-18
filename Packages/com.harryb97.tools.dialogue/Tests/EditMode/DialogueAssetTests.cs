@@ -52,6 +52,14 @@ namespace HarryTools.Dialogue.Tests {
         }
 
         [Test]
+        public void NewAsset_StartOutputHasId() {
+            DialogueAsset _asset = NewAsset();
+
+            // The graph connects outputs by id, so a new dialogue can be connected from its start at once
+            Assert.IsNotEmpty(_asset.Start.Next.Id);
+        }
+
+        [Test]
         public void AddNode_GetsUniqueId() {
             DialogueAsset _asset = NewAsset();
 

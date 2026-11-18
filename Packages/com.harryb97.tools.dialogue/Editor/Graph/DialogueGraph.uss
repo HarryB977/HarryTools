@@ -50,3 +50,71 @@
 .dialogue-node #output .port {
     justify-content: flex-end;
 }
+
+.dialogue-node #extension {
+    background-color: rgb(46, 46, 46);
+}
+
+.dialogue-node__content {
+    width: 240px;
+    padding: 4px;
+}
+
+.dialogue-node__character {
+    margin: 0 0 4px 0;
+}
+
+.dialogue-node__text {
+    margin: 0;
+}
+
+.dialogue-node__text > .unity-text-field__input,
+.dialogue-node__text > .unity-base-text-field__input {
+    min-height: 44px;
+    white-space: normal;
+    -unity-text-align: upper-left;
+}
+
+.dialogue-node__option {
+    width: 200px;
+    margin: 1px 2px;
+}
+
+.dialogue-node__option > .unity-base-text-field__input {
+    white-space: normal;
+}
+
+.dialogue-node__indicators {
+    flex-direction: row;
+    flex-wrap: wrap;
+    padding: 2px 4px 4px 4px;
+}
+
+.dialogue-node__indicator {
+    font-size: 10px;
+    color: rgb(200, 200, 200);
+    background-color: rgb(64, 64, 64);
+    border-radius: 3px;
+    padding: 0 4px;
+    margin: 2px 2px 0 0;
+}
+
+.dialogue-panel {
+    min-width: 220px;
+    padding: 4px;
+    background-color: rgb(56, 56, 56);
+}
+
+.dialogue-panel__header {
+    -unity-font-style: bold;
+    margin: 4px 3px 4px 3px;
+}
+
+.dialogue-panel__item {
+    margin: 2px 0;
+}
+
+.dialogue-panel__item-buttons {
+    flex-direction: row;
+    justify-content: flex-end;
+}

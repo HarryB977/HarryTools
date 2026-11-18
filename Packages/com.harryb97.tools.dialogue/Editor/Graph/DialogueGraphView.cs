@@ -10,7 +10,6 @@ namespace HarryTools.Dialogue.Editor {
     internal sealed class DialogueGraphView : GraphView {
         // ==================== VARIABLES ===================
         #region Private Variables
-        private const string StyleSheetPath = "Packages/com.harryb97.tools.dialogue/Editor/Graph/DialogueGraph.uss";
         private const string CameraKeyPrefix = "HarryTools.Dialogue.Graph.Camera.";
         private const float GridSize = 20f;
         private const long FrameRetryMilliseconds = 50;
@@ -22,10 +21,30 @@ namespace HarryTools.Dialogue.Editor {
         private readonly MiniMap miniMap;
         private DialogueNodeSearch search;
         private bool restoringCamera;
+        private bool rebuilding;
         #endregion
 
         #region Public Variables
+        /// <summary> Styles of the canvas, its nodes and the side panel </summary>
+        internal const string StyleSheetPath = "Packages/com.harryb97.tools.dialogue/Editor/Graph/DialogueGraph.uss";
+
         internal DialogueAsset Asset { get; private set; }
+
+        /// <summary> Raised when the selected elements change. Not raised in the middle of a rebuild, only once after it </summary>
+        internal event Action SelectionChanged;
+
+        /// <summary> The id of the only selected node. Null when no node or more than one is selected </summary>
+        internal string SelectedNodeId {
+            get {
+                string _id = null;
+                foreach (ISelectable _item in selection) {
+                    if (!(_item is DialogueNodeView _view)) continue;
+                    if (_id != null) return null;
+                    _id = _view.NodeId;
+                }
+                return _id;
+            }
+        }
 
         /// <summary> Moved nodes land on the background grid </summary>
         internal bool SnapToGrid { get; set; }
@@ -66,7 +85,11 @@ namespace HarryTools.Dialogue.Editor {
             graphViewChanged = OnGraphViewChanged;
             viewTransformChanged = _ => SaveCamera();
 
-            RegisterCallback<DetachFromPanelEvent>(_ => DestroySearch());
+            RegisterCallback<AttachToPanelEvent>(_ => DialogueTables.SourceTextWritten += OnSourceTextWritten);
+            RegisterCallback<DetachFromPanelEvent>(_ => {
+                DialogueTables.SourceTextWritten -= OnSourceTextWritten;
+                DestroySearch();
+            });
         }
         #endregion
 
@@ -86,6 +109,19 @@ namespace HarryTools.Dialogue.Editor {
                 if (_item is DialogueNodeView _view) _selected.Add(_view.NodeId);
             }
 
+            rebuilding = true;
+            try {
+                RebuildElements(_selected);
+            } finally {
+                rebuilding = false;
+            }
+            SelectionChanged?.Invoke();
+        }
+
+        private void RebuildElements(HashSet<string> _selected) {
+            // Text still being typed belongs to the views about to go; it is dropped rather than written over the asset being rebuilt
+            this.Query<NodeTextField>().ForEach(_field => _field.Discard());
+
             ClearSelection();
             foreach (GraphElement _element in graphElements.ToList()) RemoveElement(_element);
             nodeViews.Clear();
@@ -96,7 +132,7 @@ namespace HarryTools.Dialogue.Editor {
                 DialogueNode _node = Asset.Nodes[_i];
                 // A node whose class no longer exists deserializes as null; the validator reports it
                 if (_node == null || string.IsNullOrEmpty(_node.Id) || nodeViews.ContainsKey(_node.Id)) continue;
-                DialogueNodeView _view = DialogueNodeView.Create(_node, edgeListener);
+                DialogueNodeView _view = DialogueNodeView.Create(Asset, _node, edgeListener);
                 nodeViews.Add(_node.Id, _view);
                 AddElement(_view);
             }
@@ -116,6 +152,19 @@ namespace HarryTools.Dialogue.Editor {
             foreach (string _id in _selected) {
                 if (nodeViews.TryGetValue(_id, out DialogueNodeView _view)) AddToSelection(_view);
             }
+        }
+
+        /// <summary> Updates the node's view after its data changed. The graph is rebuilt when the node's outputs changed </summary>
+        internal void RefreshNode(string _id) {
+            DialogueNodeView _view = FindNodeView(_id);
+            if (_view == null) return;
+            if (_view.OutputsChanged()) Rebuild();
+            else _view.Refresh();
+        }
+
+        /// <summary> Writes the text typed on the nodes that has not been written yet </summary>
+        internal void CommitPendingText() {
+            this.Query<NodeTextField>().ForEach(_field => _field.Commit());
         }
 
         internal DialogueNodeView FindNodeView(string _id) {
@@ -169,12 +218,14 @@ namespace HarryTools.Dialogue.Editor {
 
         /// <summary> The canvas position under a screen position </summary>
         internal Vector2 ScreenToCanvas(Vector2 _screenPosition) {
-            return contentViewContainer.WorldToLocal(_screenPosition - window.position.position);
+            // The window's content starts below its tab, which is part of the panel
+            Vector2 _panel = window.rootVisualElement.LocalToWorld(_screenPosition - window.position.position);
+            return contentViewContainer.WorldToLocal(_panel);
         }
 
         /// <summary> The screen position of a point of the window's panel </summary>
         private Vector2 PanelToScreen(Vector2 _panelPosition) {
-            return _panelPosition + window.position.position;
+            return window.rootVisualElement.WorldToLocal(_panelPosition) + window.position.position;
         }
         #endregion
 
@@ -182,10 +233,35 @@ namespace HarryTools.Dialogue.Editor {
         #region Graph View
         public override List<Port> GetCompatiblePorts(Port _startPort, NodeAdapter _nodeAdapter) {
             List<Port> _compatible = new List<Port>();
+            // Cycles are allowed, including a node that leads back to itself
             foreach (Port _port in ports) {
-                if (_port.direction != _startPort.direction && _port.node != _startPort.node) _compatible.Add(_port);
+                if (_port.direction != _startPort.direction) _compatible.Add(_port);
             }
             return _compatible;
+        }
+
+        public override void AddToSelection(ISelectable _selectable) {
+            base.AddToSelection(_selectable);
+            NotifySelection();
+        }
+
+        public override void RemoveFromSelection(ISelectable _selectable) {
+            base.RemoveFromSelection(_selectable);
+            NotifySelection();
+        }
+
+        public override void ClearSelection() {
+            base.ClearSelection();
+            NotifySelection();
+        }
+
+        private void NotifySelection() {
+            if (!rebuilding) SelectionChanged?.Invoke();
+        }
+
+        private void OnSourceTextWritten(DialogueAsset _asset) {
+            if (_asset != Asset) return;
+            foreach (DialogueNodeView _view in nodeViews.Values) _view.Refresh();
         }
 
         public override void BuildContextualMenu(ContextualMenuPopulateEvent _event) {
