@@ -12,6 +12,9 @@ namespace HarryTools.Dialogue {
         [SerializeField, HideInInspector] private string tableCollectionGuid = "";
         [SerializeReference] private List<DialogueNode> nodes = new List<DialogueNode>();
 
+        [SerializeField, HideInInspector] private List<DialogueGroup> groups = new List<DialogueGroup>();
+        [SerializeField, HideInInspector] private List<DialogueNote> notes = new List<DialogueNote>();
+
         [Tooltip("Use this dialogue's own clock instead of the project default"), SerializeField] private bool overrideTime;
         [SerializeField] private DialogueTime time = DialogueTime.Unscaled;
         [Tooltip("Use this dialogue's own ambient policy instead of the project default"), SerializeField] private bool overrideAmbientPolicy;
@@ -34,6 +37,12 @@ namespace HarryTools.Dialogue {
         }
 
         public IReadOnlyList<DialogueNode> Nodes => nodes;
+
+        /// <summary> Boxes the editor draws around nodes. They have no effect when the dialogue runs </summary>
+        public IReadOnlyList<DialogueGroup> Groups => groups;
+
+        /// <summary> Free text notes of the editor. They have no effect when the dialogue runs </summary>
+        public IReadOnlyList<DialogueNote> Notes => notes;
 
         public StartNode Start {
             get {
@@ -100,6 +109,10 @@ namespace HarryTools.Dialogue {
         /// <summary> The AssetDatabase GUID written by the editor on import </summary>
         internal string SerializedAssetId => assetId;
 
+        internal List<DialogueGroup> GroupList => groups;
+
+        internal List<DialogueNote> NoteList => notes;
+
         internal void SetAssetId(string _id) {
             assetId = _id;
         }
@@ -127,6 +140,9 @@ namespace HarryTools.Dialogue {
             if (_node == null || _node is StartNode) return;
 
             nodes.Remove(_node);
+            for (int _g = 0; _g < groups.Count; _g++) {
+                if (groups[_g] != null) groups[_g].NodeIdList.RemoveAll(_nodeId => _nodeId == _id);
+            }
             for (int _i = 0; _i < nodes.Count; _i++) {
                 if (nodes[_i] == null) continue;
                 outputBuffer.Clear();
@@ -137,7 +153,7 @@ namespace HarryTools.Dialogue {
             }
         }
 
-        /// <summary> Gives a new id to every empty or repeated id in nodes, options and outputs. The first one found keeps its id </summary>
+        /// <summary> Gives a new id to every empty or repeated id in nodes, options, outputs, groups and notes. The first one found keeps its id </summary>
         internal void EnsureIds() {
             HashSet<string> _used = new HashSet<string>();
 
@@ -171,9 +187,19 @@ namespace HarryTools.Dialogue {
                     }
                 }
             }
+
+            for (int _i = 0; _i < groups.Count; _i++) {
+                if (groups[_i] == null) continue;
+                if (string.IsNullOrEmpty(groups[_i].Id) || !_used.Add(groups[_i].Id)) groups[_i].Id = NewUnused(_used);
+            }
+
+            for (int _i = 0; _i < notes.Count; _i++) {
+                if (notes[_i] == null) continue;
+                if (string.IsNullOrEmpty(notes[_i].Id) || !_used.Add(notes[_i].Id)) notes[_i].Id = NewUnused(_used);
+            }
         }
 
-        /// <summary> Gives every node, option and output a new id and points the outputs at the new node ids. Used when the asset is duplicated </summary>
+        /// <summary> Gives every node, option, output, group and note a new id and points the outputs at the new node ids. Used when the asset is duplicated </summary>
         internal void RegenerateIds() {
             Dictionary<string, string> _nodeIds = new Dictionary<string, string>();
             HashSet<string> _used = new HashSet<string>();
@@ -203,6 +229,20 @@ namespace HarryTools.Dialogue {
                     // A target outside this asset no longer exists, so it ends the dialogue as before
                     if (_output.IsConnected) _output.Target = _nodeIds.TryGetValue(_output.Target, out string _target) ? _target : "";
                 }
+            }
+
+            for (int _i = 0; _i < groups.Count; _i++) {
+                if (groups[_i] == null) continue;
+                groups[_i].Id = NewUnused(_used);
+                List<string> _members = groups[_i].NodeIdList;
+                for (int _m = _members.Count - 1; _m >= 0; _m--) {
+                    if (_nodeIds.TryGetValue(_members[_m], out string _member)) _members[_m] = _member;
+                    else _members.RemoveAt(_m);
+                }
+            }
+
+            for (int _i = 0; _i < notes.Count; _i++) {
+                if (notes[_i] != null) notes[_i].Id = NewUnused(_used);
             }
         }
         #endregion

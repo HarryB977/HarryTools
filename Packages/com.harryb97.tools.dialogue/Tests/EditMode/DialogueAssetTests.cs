@@ -247,6 +247,64 @@ namespace HarryTools.Dialogue.Tests {
             AssetDatabase.ImportAsset(_pathC, ImportAssetOptions.ForceUpdate);
             Assert.AreEqual(_guidA, AssetDatabase.LoadAssetAtPath<DialogueAsset>(_pathC).AssetId);
         }
+
+        // ==================== GROUPS AND NOTES ====================
+        #region Groups And Notes
+        [Test]
+        public void RemoveNode_RemovesFromGroups() {
+            DialogueAsset _asset = NewAsset();
+            LineNode _line = _asset.AddNode<LineNode>();
+            LineNode _other = _asset.AddNode<LineNode>();
+            DialogueGroup _group = new DialogueGroup();
+            _group.NodeIdList.Add(_line.Id);
+            _group.NodeIdList.Add(_other.Id);
+            _asset.GroupList.Add(_group);
+
+            _asset.RemoveNode(_line.Id);
+
+            CollectionAssert.AreEqual(new[] { _other.Id }, _group.NodeIds);
+        }
+
+        [Test]
+        public void EnsureIds_GroupAndNoteIds_Regenerated() {
+            DialogueAsset _asset = NewAsset();
+            DialogueGroup _empty = new DialogueGroup();
+            DialogueGroup _first = new DialogueGroup { Id = "same" };
+            DialogueGroup _repeated = new DialogueGroup { Id = "same" };
+            DialogueNote _noteEmpty = new DialogueNote();
+            DialogueNote _noteFirst = new DialogueNote { Id = "note" };
+            DialogueNote _noteRepeated = new DialogueNote { Id = "note" };
+            _asset.GroupList.AddRange(new[] { _empty, _first, _repeated });
+            _asset.NoteList.AddRange(new[] { _noteEmpty, _noteFirst, _noteRepeated });
+
+            _asset.EnsureIds();
+
+            Assert.AreEqual("same", _first.Id);
+            Assert.AreEqual("note", _noteFirst.Id);
+            string[] _ids = { _empty.Id, _first.Id, _repeated.Id, _noteEmpty.Id, _noteFirst.Id, _noteRepeated.Id, _asset.Start.Id };
+            foreach (string _id in _ids) Assert.IsNotEmpty(_id);
+            Assert.AreEqual(_ids.Length, new HashSet<string>(_ids).Count);
+        }
+
+        [Test]
+        public void RegenerateIds_GroupsFollowNewNodeIds() {
+            DialogueAsset _asset = NewAsset();
+            LineNode _line = _asset.AddNode<LineNode>();
+            string _oldLineId = _line.Id;
+            DialogueGroup _group = new DialogueGroup { Id = "group" };
+            _group.NodeIdList.Add(_line.Id);
+            _group.NodeIdList.Add("missing");
+            _asset.GroupList.Add(_group);
+            _asset.NoteList.Add(new DialogueNote { Id = "note" });
+
+            _asset.RegenerateIds();
+
+            Assert.AreNotEqual(_oldLineId, _line.Id);
+            CollectionAssert.AreEqual(new[] { _line.Id }, _group.NodeIds);
+            Assert.AreNotEqual("group", _group.Id);
+            Assert.AreNotEqual("note", _asset.Notes[0].Id);
+        }
+        #endregion
         #endregion
     }
 }

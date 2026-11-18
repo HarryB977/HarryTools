@@ -52,7 +52,8 @@ namespace HarryTools.Dialogue {
         // The run stays paused while either is set: a Pause call, or the ambient policy of the main run
         private bool pausedByCall;
         private bool heldByMain;
-        private bool warnedAmbientChoice;
+        // The start node's entry is announced on the first tick, once the caller has subscribed
+        private bool startEntryPending;
 
         // Requests made while the run is ticking are applied once the current step is done
         private bool ticking;
@@ -91,6 +92,8 @@ namespace HarryTools.Dialogue {
         /// <summary> The choice waiting for an answer, or null </summary>
         public ChoicePrompt CurrentChoice { get; private set; }
 
+        /// <summary> Raised each time the run enters a node, with <see cref="CurrentAsset"/> already set to the asset that holds it </summary>
+        public event Action<DialogueRun, DialogueNode> NodeEntered;
         public event Action<DialogueRun, LineNode> LineStarted;
         public event Action<DialogueRun, LineNode> LineEnded;
         public event Action<DialogueRun, ChoicePrompt> ChoicePresented;
@@ -120,7 +123,9 @@ namespace HarryTools.Dialogue {
             Options = _options;
             IsMain = _options.IsMain;
             Time = _options.Time ?? (_asset.OverrideTime ? _asset.Time : DialogueSettings.Current.DefaultTime);
-            MoveTo(_asset.Start);
+            Current = _asset.Start;
+            phase = Phase.Enter;
+            startEntryPending = true;
         }
 
         // ==================== CONTROL ====================
@@ -181,6 +186,10 @@ namespace HarryTools.Dialogue {
         private void RunSteps() {
             ticking = true;
             try {
+                if (startEntryPending) {
+                    startEntryPending = false;
+                    RaiseNodeEntered(Current);
+                }
                 if (ApplyRequests()) return;
                 for (int _steps = 0; ; _steps++) {
                     if (_steps >= MaxStepsPerTick) {
@@ -409,9 +418,8 @@ namespace HarryTools.Dialogue {
             ChoicePrompt _prompt = new ChoicePrompt(this, _node, Context(null));
 
             if (!IsMain) {
-                if (!warnedAmbientChoice) {
-                    warnedAmbientChoice = true;
-                    Logger.LogWarning(Dialogue.LogCategory, $"Dialogue '{CurrentAsset.name}' reached a choice in an ambient run. Choices belong to main dialogues: the default option is taken.");
+                if (Dialogue.WarnedAmbientChoice.Add(CurrentAsset)) {
+                    Logger.LogWarning(Dialogue.LogCategory, $"Dialogue '{CurrentAsset.name}': an ambient dialogue reached a choice. It is answered with the default option.");
                 }
                 ChoiceOption _option = _prompt.Fallback();
                 if (_option != null) TakeOption(_option);
@@ -685,6 +693,12 @@ namespace HarryTools.Dialogue {
         private void MoveTo(DialogueNode _node) {
             Current = _node;
             phase = Phase.Enter;
+            RaiseNodeEntered(_node);
+        }
+
+        private void RaiseNodeEntered(DialogueNode _node) {
+            NodeEntered?.Invoke(this, _node);
+            Dialogue.RaiseNodeEntered(this, _node);
         }
 
         /// <summary> Follows the output, or ends when it is not connected </summary>

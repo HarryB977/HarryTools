@@ -611,6 +611,105 @@ namespace HarryTools.Dialogue.Tests {
             DialogueRun _call = Dialogue.Start(_asset, new DialogueStartOptions { Time = DialogueTime.Unscaled });
             Assert.AreEqual(DialogueTime.Unscaled, _call.Time);
         }
+
+        // ==================== NODE ENTERED ====================
+        #region NodeEntered
+        [Test]
+        public void NodeEntered_RaisedForEveryNode_InOrder() {
+            DialogueAsset _asset = NewAsset();
+            LineNode _line = AddLine(_asset, "a");
+            BranchNode _branch = _asset.AddNode<BranchNode>();
+            EndNode _end = _asset.AddNode<EndNode>();
+            Link(_asset.Start.Next, _line);
+            Link(_line.Next, _branch);
+            Link(_branch.Otherwise, _end);
+
+            List<DialogueNode> _fromRun = new List<DialogueNode>();
+            List<DialogueNode> _fromStatic = new List<DialogueNode>();
+            System.Action<DialogueRun, DialogueNode> _onStatic = (_, _node) => _fromStatic.Add(_node);
+            Dialogue.NodeEntered += _onStatic;
+            DialogueRun _run = Dialogue.Start(_asset);
+            _run.NodeEntered += (_, _node) => _fromRun.Add(_node);
+
+            Tick();
+            channel.Last.Advance();
+            Tick();
+            Dialogue.NodeEntered -= _onStatic;
+
+            DialogueNode[] _expected = { _asset.Start, _line, _branch, _end };
+            CollectionAssert.AreEqual(_expected, _fromRun);
+            CollectionAssert.AreEqual(_expected, _fromStatic);
+        }
+
+        [Test]
+        public void NodeEntered_AfterJump_CurrentAssetIsTarget() {
+            DialogueAsset _target = SingleLine("target", out LineNode _targetLine);
+            DialogueAsset _asset = NewAsset();
+            JumpNode _jump = _asset.AddNode<JumpNode>();
+            _jump.Target = _target;
+            _jump.Mode = JumpMode.Continue;
+            Link(_asset.Start.Next, _jump);
+
+            DialogueRun _run = Dialogue.Start(_asset);
+            Dictionary<DialogueNode, DialogueAsset> _assetAtEntry = new Dictionary<DialogueNode, DialogueAsset>();
+            _run.NodeEntered += (_r, _node) => _assetAtEntry[_node] = _r.CurrentAsset;
+
+            Tick();
+
+            Assert.AreSame(_asset, _assetAtEntry[_jump]);
+            Assert.AreSame(_target, _assetAtEntry[_target.Start]);
+            Assert.AreSame(_target, _assetAtEntry[_targetLine]);
+        }
+
+        [Test]
+        public void NodeEntered_AfterCallReturn_FiresOnceForTheNextNode() {
+            DialogueAsset _target = NewAsset();
+            Link(_target.Start.Next, _target.AddNode<EndNode>());
+            DialogueAsset _asset = NewAsset();
+            JumpNode _jump = _asset.AddNode<JumpNode>();
+            _jump.Target = _target;
+            _jump.Mode = JumpMode.CallAndReturn;
+            LineNode _after = AddLine(_asset, "after");
+            Link(_asset.Start.Next, _jump);
+            Link(_jump.Next, _after);
+
+            DialogueRun _run = Dialogue.Start(_asset);
+            int _afterCount = 0;
+            DialogueAsset _assetAtAfter = null;
+            _run.NodeEntered += (_r, _node) => {
+                if (_node != _after) return;
+                _afterCount++;
+                _assetAtAfter = _r.CurrentAsset;
+            };
+
+            Tick();
+
+            Assert.AreEqual(1, _afterCount);
+            Assert.AreSame(_asset, _assetAtAfter);
+        }
+        #endregion
+
+        // ==================== AMBIENT CHOICE ====================
+        #region AmbientChoice
+        [Test]
+        public void AmbientChoice_WarnsOncePerDialogue() {
+            DialogueAsset _asset = NewAsset();
+            _asset.name = "ambientChoice";
+            ChoiceNode _first = _asset.AddNode<ChoiceNode>();
+            ChoiceNode _second = _asset.AddNode<ChoiceNode>();
+            _first.Options.Add(new ChoiceOption());
+            _second.Options.Add(new ChoiceOption());
+            Link(_asset.Start.Next, _first);
+            Link(_first.Options[0].Next, _second);
+
+            LogAssert.Expect(LogType.Warning, new Regex("Dialogue 'ambientChoice': an ambient dialogue reached a choice"));
+            DialogueRun _run = Dialogue.Start(_asset, new DialogueStartOptions { IsMain = false });
+            Tick();
+
+            Assert.AreEqual(RunState.Ended, _run.State);
+            LogAssert.NoUnexpectedReceived();
+        }
+        #endregion
         #endregion
     }
 }

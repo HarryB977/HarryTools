@@ -12,6 +12,9 @@ namespace HarryTools.Dialogue {
         #region Private Variables
         internal const string LogCategory = "Dialogue";
 
+        // Assets whose ambient choice warning was already logged this session
+        [ClearOnReload(AssignNewInstance = true)] internal static HashSet<DialogueAsset> WarnedAmbientChoice = new HashSet<DialogueAsset>();
+
         [ClearOnReload(AssignNewInstance = true)] private static List<DialogueRun> active = new List<DialogueRun>();
         // Copy of active handed out by Active, rebuilt after the list changes
         [ClearOnReload] private static ReadOnlyCollection<DialogueRun> activeSnapshot;
@@ -22,6 +25,7 @@ namespace HarryTools.Dialogue {
 
         [ClearOnReload] private static Action<DialogueRun> startedHandlers;
         [ClearOnReload] private static Action<DialogueRun, EndReason> endedHandlers;
+        [ClearOnReload] private static Action<DialogueRun, DialogueNode> nodeEnteredHandlers;
         [ClearOnReload] private static Action<DialogueRun, LineNode> lineStartedHandlers;
         [ClearOnReload] private static Action<DialogueRun, LineNode> lineEndedHandlers;
         [ClearOnReload] private static Action<DialogueRun, ChoicePrompt> choicePresentedHandlers;
@@ -66,6 +70,11 @@ namespace HarryTools.Dialogue {
         public static event Action<DialogueRun, EndReason> Ended {
             add => endedHandlers += value;
             remove => endedHandlers -= value;
+        }
+
+        public static event Action<DialogueRun, DialogueNode> NodeEntered {
+            add => nodeEnteredHandlers += value;
+            remove => nodeEnteredHandlers -= value;
         }
 
         public static event Action<DialogueRun, LineNode> LineStarted {
@@ -185,6 +194,7 @@ namespace HarryTools.Dialogue {
         }
 
         internal static void RaiseEnded(DialogueRun _run, EndReason _reason) => endedHandlers?.Invoke(_run, _reason);
+        internal static void RaiseNodeEntered(DialogueRun _run, DialogueNode _node) => nodeEnteredHandlers?.Invoke(_run, _node);
         internal static void RaiseLineStarted(DialogueRun _run, LineNode _line) => lineStartedHandlers?.Invoke(_run, _line);
         internal static void RaiseLineEnded(DialogueRun _run, LineNode _line) => lineEndedHandlers?.Invoke(_run, _line);
         internal static void RaiseChoicePresented(DialogueRun _run, ChoicePrompt _prompt) => choicePresentedHandlers?.Invoke(_run, _prompt);
@@ -197,8 +207,10 @@ namespace HarryTools.Dialogue {
             tickBuffer.Clear();
             main = null;
             pausedForMain.Clear();
+            WarnedAmbientChoice.Clear();
             startedHandlers = null;
             endedHandlers = null;
+            nodeEnteredHandlers = null;
             lineStartedHandlers = null;
             lineEndedHandlers = null;
             choicePresentedHandlers = null;
