@@ -47,6 +47,9 @@ namespace HarryTools.Dialogue.Editor {
         /// <summary> Raised when the selected elements change. Not raised in the middle of a rebuild, only once after it </summary>
         internal event Action SelectionChanged;
 
+        /// <summary> Raised after the canvas was recreated from the asset </summary>
+        internal event Action Rebuilt;
+
         /// <summary> The id of the only selected node. Null when no node or more than one is selected </summary>
         internal string SelectedNodeId {
             get {
@@ -150,6 +153,7 @@ namespace HarryTools.Dialogue.Editor {
                 rebuilding = false;
             }
             SelectionChanged?.Invoke();
+            Rebuilt?.Invoke();
         }
 
         private void RebuildElements(HashSet<string> _selected) {

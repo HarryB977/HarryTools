@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using System.Linq;
 using UnityEditor;
 using UnityEditor.Callbacks;
 using UnityEditor.UIElements;
@@ -35,6 +37,12 @@ namespace HarryTools.Dialogue.Editor {
 
         /// <summary> The search of nodes in the bar </summary>
         internal DialogueNodeFinderField Finder { get; private set; }
+
+        /// <summary> The list of validator findings at the bottom </summary>
+        internal DialogueIssueList IssueList { get; private set; }
+
+        /// <summary> The issue count in the bar </summary>
+        internal Label IssueCountLabel { get; private set; }
         #endregion
 
         // ==================== OPEN ====================
@@ -66,6 +74,7 @@ namespace HarryTools.Dialogue.Editor {
         internal void OnEnable() {
             BuildLayout();
             Undo.undoRedoPerformed += OnUndoRedo;
+            ObjectChangeEvents.changesPublished += OnObjectChanges;
 
             if (asset == null && !string.IsNullOrEmpty(assetGuid)) {
                 asset = AssetDatabase.LoadAssetAtPath<DialogueAsset>(AssetDatabase.GUIDToAssetPath(assetGuid));
@@ -75,6 +84,7 @@ namespace HarryTools.Dialogue.Editor {
 
         internal void OnDisable() {
             Undo.undoRedoPerformed -= OnUndoRedo;
+            ObjectChangeEvents.changesPublished -= OnObjectChanges;
             // Text typed on a node is kept when the window closes or reloads
             View?.CommitPendingText();
             rootVisualElement.Clear();
@@ -82,6 +92,8 @@ namespace HarryTools.Dialogue.Editor {
             Panel = null;
             Toolbar = null;
             Finder = null;
+            IssueList = null;
+            IssueCountLabel = null;
             assetField = null;
             asset = null;
         }
@@ -114,6 +126,13 @@ namespace HarryTools.Dialogue.Editor {
             Finder?.ClearQuery();
             View?.Load(asset);
             Panel?.Show(asset, View?.SelectedNodeId);
+            // Opening a dialogue validates it without the delay
+            IssueList?.ValidateNow();
+        }
+
+        // Any edit to any object may be an edit of this dialogue or of its text tables; the list waits for the changes to stop
+        private void OnObjectChanges(ref ObjectChangeEventStream _stream) {
+            if (asset != null) IssueList?.ScheduleValidation();
         }
 
         private void OnUndoRedo() {
@@ -149,6 +168,10 @@ namespace HarryTools.Dialogue.Editor {
             Toolbar.Add(_miniMap);
 
             Toolbar.Add(new ToolbarSpacer { flex = true });
+            IssueCountLabel = new Label { tooltip = "Warnings of the shown dialogue" };
+            IssueCountLabel.style.unityTextAlign = TextAnchor.MiddleCenter;
+            IssueCountLabel.style.marginRight = 6f;
+            Toolbar.Add(IssueCountLabel);
             Finder = new DialogueNodeFinderField { AssetSource = () => asset };
             Finder.Picked += _nodeId => View?.SelectAndFrame(_nodeId);
             Toolbar.Add(Finder);
@@ -158,8 +181,21 @@ namespace HarryTools.Dialogue.Editor {
             Panel = new DialogueInspectorPanel();
 
             View.SelectionChanged += () => Panel?.Show(asset, View?.SelectedNodeId);
-            Panel.NodeEdited += _nodeId => View?.RefreshNode(_nodeId);
+            Panel.NodeEdited += _nodeId => {
+                View?.RefreshNode(_nodeId);
+                IssueList?.ScheduleValidation();
+            };
             Panel.OutputsEdited += _ => View?.Rebuild();
+
+            IssueList = new DialogueIssueList { AssetSource = () => asset };
+            IssueList.NodeChosen += _nodeId => View?.SelectAndFrame(_nodeId);
+            IssueList.DialogueChosen += SetAsset;
+            IssueList.IssuesChanged += OnIssuesChanged;
+            // A rebuilt canvas has new node views: they get their marks back at once and are checked again after the delay
+            View.Rebuilt += () => {
+                ApplyWarningMarks();
+                IssueList?.ScheduleValidation();
+            };
 
             // The panel keeps its width when the window is resized
             TwoPaneSplitView _split = new TwoPaneSplitView(1, PanelWidth, TwoPaneSplitViewOrientation.Horizontal);
@@ -169,6 +205,7 @@ namespace HarryTools.Dialogue.Editor {
 
             rootVisualElement.Add(Toolbar);
             rootVisualElement.Add(_split);
+            rootVisualElement.Add(IssueList);
             // Last, so the results are drawn above the canvas
             rootVisualElement.Add(Finder.Popup);
 
@@ -182,6 +219,26 @@ namespace HarryTools.Dialogue.Editor {
                 Finder?.FocusField();
                 _event.StopPropagation();
             });
+        }
+
+        private void OnIssuesChanged() {
+            if (IssueCountLabel != null) IssueCountLabel.text = asset != null ? DialogueIssueList.Summary(IssueList.Issues) : "";
+            ApplyWarningMarks();
+        }
+
+        /// <summary> Puts the mark on the nodes that have warnings, with the messages as tooltip </summary>
+        private void ApplyWarningMarks() {
+            if (View == null || IssueList == null) return;
+            Dictionary<string, string> _messages = new Dictionary<string, string>();
+            IReadOnlyList<DialogueIssue> _issues = IssueList.Issues;
+            for (int _i = 0; _i < _issues.Count; _i++) {
+                DialogueIssue _issue = _issues[_i];
+                if (_issue.Severity != DialogueIssueSeverity.Warning || string.IsNullOrEmpty(_issue.NodeId)) continue;
+                _messages[_issue.NodeId] = _messages.TryGetValue(_issue.NodeId, out string _text) ? _text + "\n" + _issue.Message : _issue.Message;
+            }
+            foreach (DialogueNodeView _view in View.nodes.OfType<DialogueNodeView>()) {
+                _view.SetWarnings(_messages.TryGetValue(_view.NodeId, out string _text) ? _text : null);
+            }
         }
 
         private void OnKeyDown(KeyDownEvent _event) {

@@ -799,6 +799,59 @@ namespace HarryTools.Dialogue.Tests {
             Assert.AreEqual(0, _asset.Notes.Count);
         }
 
+        [Test]
+        public void Window_IssuesListed_AfterChange() {
+            DialogueAsset _asset = NewSample("IssuesListed");
+            window = DialogueGraphWindow.Open(_asset);
+            Assert.IsFalse(window.IssueList.Entries.Any(_entry => _entry.Text.Contains("Jump has no target")));
+
+            JumpNode _jump = (JumpNode)DialogueGraphOps.CreateNode(_asset, typeof(JumpNode), new Vector2(0f, 600f));
+            window.View.Rebuild();
+            Assert.IsTrue(window.IssueList.HasPending, "validation waits for its delay");
+            window.IssueList.ValidateNow();
+
+            Assert.IsFalse(window.IssueList.HasPending);
+            Assert.IsTrue(window.IssueList.Entries.Any(_entry => _entry.NodeId == _jump.Id && _entry.Text.Contains("Jump has no target")));
+            Assert.IsTrue(window.View.FindNodeView(_jump.Id).HasWarningMark, "the node carries the mark");
+            Assert.IsTrue(window.IssueCountLabel.text.Contains("warning"));
+        }
+
+        [Test]
+        public void Window_IssueClick_SelectsNode() {
+            DialogueAsset _asset = NewSample("IssueClick");
+            window = DialogueGraphWindow.Open(_asset);
+            JumpNode _jump = (JumpNode)DialogueGraphOps.CreateNode(_asset, typeof(JumpNode), new Vector2(0f, 600f));
+            window.View.Rebuild();
+            window.IssueList.ValidateNow();
+            window.View.ClearSelection();
+
+            int _index = -1;
+            for (int _i = 0; _i < window.IssueList.Entries.Count; _i++) {
+                if (window.IssueList.Entries[_i].NodeId == _jump.Id) _index = _i;
+            }
+            Assert.GreaterOrEqual(_index, 0);
+            window.IssueList.Activate(_index);
+
+            Assert.AreEqual(_jump.Id, window.View.SelectedNodeId);
+        }
+
+        [Test]
+        public void Window_RevalidateAll_ListsEachDialogue_ClickOpensIt() {
+            DialogueAsset _first = NewSample("AllFirst");
+            DialogueAsset _second = NewSample("AllSecond");
+            window = DialogueGraphWindow.Open(_first);
+
+            window.IssueList.RevalidateAll();
+
+            int _index = -1;
+            for (int _i = 0; _i < window.IssueList.Entries.Count; _i++) {
+                if (window.IssueList.Entries[_i].Asset == _second) _index = _i;
+            }
+            Assert.GreaterOrEqual(_index, 0, "a row per dialogue");
+            window.IssueList.Activate(_index);
+            Assert.AreSame(_second, window.Asset);
+        }
+
         private static PropertyField FindBoundField(VisualElement _root, string _name) {
             return _root.Query<PropertyField>().Where(_field => _field.bindingPath != null && (_field.bindingPath == _name || _field.bindingPath.EndsWith("." + _name))).First();
         }

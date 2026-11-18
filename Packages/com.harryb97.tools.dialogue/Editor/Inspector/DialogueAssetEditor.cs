@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 
@@ -12,6 +13,8 @@ namespace HarryTools.Dialogue.Editor {
         private SerializedProperty overrideAmbientPolicy;
         private SerializedProperty ambientPolicy;
         private SerializedProperty allowSkip;
+        private readonly List<DialogueIssue> issues = new List<DialogueIssue>();
+        private int issuesDirtyCount = -1;
         #endregion
 
         // ==================== UNITY ====================
@@ -33,6 +36,7 @@ namespace HarryTools.Dialogue.Editor {
             if (!serializedObject.isEditingMultipleObjects) {
                 DialogueAsset _asset = (DialogueAsset) target;
                 EditorGUILayout.LabelField("Nodes", NodeCount(_asset).ToString());
+                EditorGUILayout.LabelField("Issues", IssueSummary(_asset));
                 EditorGUILayout.Space();
                 if (GUILayout.Button("Open Graph")) DialogueGraphWindow.Open(_asset);
             }
@@ -54,6 +58,17 @@ namespace HarryTools.Dialogue.Editor {
                 EditorGUILayout.PropertyField(ambientPolicy);
             }
             EditorGUILayout.PropertyField(allowSkip);
+        }
+
+        // Checked again only after the asset changed. Prefabs are not scanned here, so ambient launches are unknown
+        private string IssueSummary(DialogueAsset _asset) {
+            int _dirty = EditorUtility.GetDirtyCount(_asset);
+            if (_dirty != issuesDirtyCount) {
+                issuesDirtyCount = _dirty;
+                issues.Clear();
+                DialogueValidator.Validate(_asset, null, issues);
+            }
+            return DialogueIssueList.Summary(issues);
         }
 
         private static int NodeCount(DialogueAsset _asset) {

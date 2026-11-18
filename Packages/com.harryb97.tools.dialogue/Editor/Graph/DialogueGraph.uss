@@ -159,3 +159,30 @@
     padding: 4px;
     color: rgb(150, 150, 150);
 }
+
+.dialogue-node--warning #node-border {
+    border-color: rgb(230, 170, 40);
+    border-width: 2px;
+}
+
+.dialogue-node--warning #title-label {
+    -unity-font-style: bold-and-italic;
+}
+
+.dialogue-issues {
+    border-top-width: 1px;
+    border-top-color: rgb(25, 25, 25);
+}
+
+.dialogue-issues__row {
+    padding-left: 6px;
+    -unity-text-align: middle-left;
+}
+
+.dialogue-issues__row--warning {
+    color: rgb(230, 190, 90);
+}
+
+.dialogue-issues__row--summary {
+    -unity-font-style: bold;
+}

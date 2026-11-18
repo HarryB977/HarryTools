@@ -13,6 +13,7 @@ namespace HarryTools.Dialogue.Editor {
         private const string NodeClass = "dialogue-node";
         private const string IndicatorsClass = "dialogue-node__indicators";
         private const string IndicatorClass = "dialogue-node__indicator";
+        private const string WarningClass = "dialogue-node--warning";
         private const string TextUndo = "Edit Dialogue Text";
 
         private readonly List<(string OutputId, Port Port)> outputs = new List<(string OutputId, Port Port)>();
@@ -112,6 +113,16 @@ namespace HarryTools.Dialogue.Editor {
             }
             indicatorRow.style.display = indicators.Count > 0 ? DisplayStyle.Flex : DisplayStyle.None;
         }
+
+        /// <summary> Marks the node as having warnings, with their text as tooltip. Null or empty clears the mark </summary>
+        internal void SetWarnings(string _text) {
+            bool _has = !string.IsNullOrEmpty(_text);
+            EnableInClassList(WarningClass, _has);
+            tooltip = _has ? _text : "";
+        }
+
+        /// <summary> Whether the node carries the warning mark </summary>
+        internal bool HasWarningMark => ClassListContains(WarningClass);
 
         /// <summary> The node's data now has other outputs than the ports shown, so the graph has to be rebuilt </summary>
         internal bool OutputsChanged() {
