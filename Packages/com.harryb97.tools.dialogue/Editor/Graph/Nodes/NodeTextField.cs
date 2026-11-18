@@ -15,6 +15,9 @@ namespace HarryTools.Dialogue.Editor {
         #endregion
 
         #region Public Variables
+        /// <summary> Identifies the text across rebuilds of the canvas: the id of the node or option that owns it </summary>
+        internal string Key { get; set; }
+
         /// <summary> The field holds text that has not been written yet </summary>
         internal bool HasPendingEdit => value != stored;
         #endregion
@@ -56,6 +59,11 @@ namespace HarryTools.Dialogue.Editor {
             if (HasPendingEdit) return;
             stored = read() ?? "";
             SetValueWithoutNotify(stored);
+        }
+
+        /// <summary> Shows text that is still to be written, typed in a field this one replaces </summary>
+        internal void RestorePending(string _text) {
+            SetValueWithoutNotify(_text ?? "");
         }
 
         /// <summary> Drops unwritten text </summary>

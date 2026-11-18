@@ -60,8 +60,20 @@ namespace HarryTools.Dialogue.Editor {
             Add(header);
             Add(scroll);
 
-            RegisterCallback<AttachToPanelEvent>(_ => DialogueTables.SourceTextWritten += OnSourceTextWritten);
-            RegisterCallback<DetachFromPanelEvent>(_ => DialogueTables.SourceTextWritten -= OnSourceTextWritten);
+            RegisterCallback<AttachToPanelEvent>(_ => {
+                DialogueTables.SourceTextWritten += OnSourceTextWritten;
+                // Detaching dropped the fields; a panel moved to another place shows its content again
+                if (asset != null && content == null) Show(asset, NodeId);
+            });
+            RegisterCallback<DetachFromPanelEvent>(_ => {
+                DialogueTables.SourceTextWritten -= OnSourceTextWritten;
+                // The native object would otherwise outlive the closed window
+                content?.RemoveFromHierarchy();
+                content = null;
+                serializedObject?.Dispose();
+                serializedObject = null;
+                signature = null;
+            });
         }
         #endregion
 

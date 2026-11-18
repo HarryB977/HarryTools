@@ -174,7 +174,7 @@ namespace HarryTools.Dialogue.Editor {
 
         /// <summary> A text field on the node for a dialogue text in the source locale. Disabled when the project has no source locale </summary>
         protected NodeTextField CreateTextField(System.Func<LocalizedString> _target, System.Func<string> _key) {
-            NodeTextField _field = new NodeTextField(() => DialogueTables.GetSourceText(_target()), _text => WriteText(_target(), _key(), _text));
+            NodeTextField _field = new NodeTextField(() => DialogueTables.GetSourceText(_target()), _text => WriteText(_target(), _key(), _text)) { Key = _key() };
             if (DialogueTables.SourceLocale() == null) {
                 _field.SetEnabled(false);
                 _field.tooltip = "No source locale. Add locales in the Localization settings to write text.";

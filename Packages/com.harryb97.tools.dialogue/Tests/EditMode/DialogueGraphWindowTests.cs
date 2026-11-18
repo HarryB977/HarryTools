@@ -379,6 +379,31 @@ namespace HarryTools.Dialogue.Tests {
         }
 
         [Test]
+        public void LineText_UndoWhileTyping_KeepsPendingText() {
+            DialogueAsset _asset = NewSample("LineUndo");
+            window = DialogueGraphWindow.Open(_asset);
+            LineNode _line = _asset.Nodes.OfType<LineNode>().First();
+
+            // An earlier step for the undo to take back
+            Undo.IncrementCurrentGroup();
+            DialogueNode _created = window.View.CreateNode(typeof(EndNode), new Vector2(0f, 600f), null);
+            Undo.IncrementCurrentGroup();
+
+            ((LineNodeView)window.View.FindNodeView(_line.Id)).TextField.value = "Still typing";
+            Undo.PerformUndo();
+
+            Assert.IsNull(_asset.Find(_created.Id), "the undo took back the earlier step");
+            NodeTextField _field = ((LineNodeView)window.View.FindNodeView(_line.Id)).TextField;
+            Assert.AreEqual("Still typing", _field.value);
+            Assert.IsTrue(_field.HasPendingEdit);
+            Assert.IsNull(DialogueTables.GetSourceText(_line.Text), "nothing written during the undo");
+            Assert.IsNull(DialogueTables.EnsureCollection(_asset).SharedData.GetEntry(_line.Id));
+
+            LoseFocus(_field);
+            Assert.AreEqual("Still typing", DialogueTables.GetSourceText(_line.Text));
+        }
+
+        [Test]
         public void OptionText_EditInCanvas_WritesSourceTable() {
             DialogueAsset _asset = NewSample("OptionText");
             window = DialogueGraphWindow.Open(_asset);

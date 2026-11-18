@@ -119,8 +119,28 @@ namespace HarryTools.Dialogue.Editor {
         }
 
         private void RebuildElements(HashSet<string> _selected) {
-            // Text still being typed belongs to the views about to go; it is dropped rather than written over the asset being rebuilt
-            this.Query<NodeTextField>().ForEach(_field => _field.Discard());
+            // Text still being typed is carried over to the new views unwritten: writing it now would land inside an undo or redo
+            Dictionary<string, string> _pending = new Dictionary<string, string>();
+            string _focusedKey = null;
+            this.Query<NodeTextField>().ForEach(_field => {
+                if (_field.Key == null || !_field.HasPendingEdit) return;
+                _pending[_field.Key] = _field.value;
+                if (_field.focusController?.focusedElement == _field) _focusedKey = _field.Key;
+                _field.Discard();
+            });
+
+            RebuildViews(_selected);
+
+            if (_pending.Count == 0) return;
+            // A text whose node or option is gone after the rebuild is dropped
+            this.Query<NodeTextField>().ForEach(_field => {
+                if (_field.Key == null || !_pending.TryGetValue(_field.Key, out string _text)) return;
+                _field.RestorePending(_text);
+                if (_field.Key == _focusedKey) _field.Focus();
+            });
+        }
+
+        private void RebuildViews(HashSet<string> _selected) {
 
             ClearSelection();
             foreach (GraphElement _element in graphElements.ToList()) RemoveElement(_element);
