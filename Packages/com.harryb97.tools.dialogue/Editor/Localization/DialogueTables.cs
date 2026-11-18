@@ -255,7 +255,8 @@ namespace HarryTools.Dialogue.Editor {
 
         // ==================== PRIVATE ====================
         #region Private Methods
-        private static StringTableCollection Linked(DialogueAsset _asset) {
+        /// <summary> The collection linked to the dialogue. Null when it has none, without creating it </summary>
+        internal static StringTableCollection Linked(DialogueAsset _asset) {
             if (string.IsNullOrEmpty(_asset.TableCollectionGuid) || !Guid.TryParse(_asset.TableCollectionGuid, out Guid _guid)) return null;
             return LocalizationEditorSettings.GetStringTableCollection(_guid);
         }
