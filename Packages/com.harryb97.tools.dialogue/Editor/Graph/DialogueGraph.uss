@@ -1,0 +1,52 @@
+.dialogue-graph GridBackground {
+    --grid-background-color: rgb(32, 32, 32);
+    --line-color: rgba(193, 196, 192, 0.1);
+    --thick-line-color: rgba(193, 196, 192, 0.1);
+    --spacing: 20;
+    --thick-lines: 5;
+}
+
+.dialogue-node #title {
+    min-height: 26px;
+}
+
+.dialogue-node #title-label {
+    -unity-font-style: bold;
+    color: rgb(230, 230, 230);
+}
+
+.dialogue-node--start #title {
+    background-color: rgb(46, 110, 64);
+}
+
+.dialogue-node--line #title {
+    background-color: rgb(52, 88, 128);
+}
+
+.dialogue-node--choice #title {
+    background-color: rgb(120, 86, 40);
+}
+
+.dialogue-node--branch #title {
+    background-color: rgb(98, 66, 128);
+}
+
+.dialogue-node--actions #title {
+    background-color: rgb(40, 110, 112);
+}
+
+.dialogue-node--jump #title {
+    background-color: rgb(112, 54, 92);
+}
+
+.dialogue-node--end #title {
+    background-color: rgb(128, 48, 48);
+}
+
+.dialogue-node--plain #title {
+    background-color: rgb(70, 70, 70);
+}
+
+.dialogue-node #output .port {
+    justify-content: flex-end;
+}
