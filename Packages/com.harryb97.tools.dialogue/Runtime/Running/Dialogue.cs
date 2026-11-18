@@ -72,6 +72,7 @@ namespace HarryTools.Dialogue {
             remove => endedHandlers -= value;
         }
 
+        /// <summary> Raised each time a run enters a node. The Start node is announced on the run's first update; a run that is paused then, including by the main run's ambient policy, announces it when it resumes </summary>
         public static event Action<DialogueRun, DialogueNode> NodeEntered {
             add => nodeEnteredHandlers += value;
             remove => nodeEnteredHandlers -= value;

@@ -92,7 +92,7 @@ namespace HarryTools.Dialogue {
         /// <summary> The choice waiting for an answer, or null </summary>
         public ChoicePrompt CurrentChoice { get; private set; }
 
-        /// <summary> Raised each time the run enters a node, with <see cref="CurrentAsset"/> already set to the asset that holds it </summary>
+        /// <summary> Raised each time the run enters a node, with <see cref="CurrentAsset"/> already set to the asset that holds it. The Start node is announced on the run's first update; a run that is paused then, including by the main run's ambient policy, announces it when it resumes </summary>
         public event Action<DialogueRun, DialogueNode> NodeEntered;
         public event Action<DialogueRun, LineNode> LineStarted;
         public event Action<DialogueRun, LineNode> LineEnded;
