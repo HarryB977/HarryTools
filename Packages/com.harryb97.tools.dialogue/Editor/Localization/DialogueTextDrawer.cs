@@ -1,13 +1,11 @@
 using System;
-using System.Collections.Generic;
 using UnityEditor;
-using UnityEditor.Localization;
 using UnityEngine;
 using UnityEngine.Localization;
 using UnityEngine.Localization.Tables;
 
 namespace HarryTools.Dialogue.Editor {
-    /// <summary> Edits a dialogue text in the source locale and stores it in the dialogue's string table. The other locales are shown read only </summary>
+    /// <summary> Edits a dialogue text in the source locale and stores it in the dialogue's string table. The other locales are edited in the translations of the graph window's side panel </summary>
     [CustomPropertyDrawer(typeof(DialogueTextAttribute))]
     internal sealed class DialogueTextDrawer : PropertyDrawer {
         // ==================== VARIABLES ===================
@@ -16,7 +14,6 @@ namespace HarryTools.Dialogue.Editor {
         private const int MinLines = 2;
         private const int MaxLines = 8;
         private const int HelpLines = 2;
-        private const string Untranslated = "untranslated";
         private const string NoLocaleWarning = "No source locale. Add locales in the Localization settings, or check the source locale in the dialogue settings, to write text.";
         #endregion
 
@@ -31,8 +28,7 @@ namespace HarryTools.Dialogue.Editor {
 
             string _text = SourceText(_property, _source) ?? "";
             int _lines = Mathf.Clamp(_text.Split('\n').Length, MinLines, MaxLines);
-            int _others = LocalizationEditorSettings.GetLocales().Count - 1;
-            return _line + Spacing + _line * _lines + Mathf.Max(0, _others) * (_line + Spacing);
+            return _line + Spacing + _line * _lines;
         }
 
         public override void OnGUI(Rect _position, SerializedProperty _property, GUIContent _label) {
@@ -66,8 +62,6 @@ namespace HarryTools.Dialogue.Editor {
                 string _edited = EditorGUI.TextArea(_area, _text, EditorStyles.textArea);
                 if (EditorGUI.EndChangeCheck()) Write(_property, _asset, _edited);
             }
-
-            DrawOtherLocales(_property, _source, _position, _area.yMax);
         }
         #endregion
 
@@ -89,23 +83,6 @@ namespace HarryTools.Dialogue.Editor {
             DialogueTables.NotifySourceTextWritten(_asset);
         }
 
-        private static void DrawOtherLocales(SerializedProperty _property, Locale _source, Rect _position, float _top) {
-            DialogueTables.ReadReference(_property, out TableReference _table, out TableEntryReference _entry);
-            IReadOnlyList<Locale> _locales = LocalizationEditorSettings.GetLocales();
-            float _line = EditorGUIUtility.singleLineHeight;
-            float _y = _top + Spacing;
-
-            using (new EditorGUI.DisabledScope(true)) {
-                for (int _i = 0; _i < _locales.Count; _i++) {
-                    if (_locales[_i] == null || _locales[_i].Identifier == _source.Identifier) continue;
-                    string _value = DialogueTables.GetText(_table, _entry, _locales[_i].Identifier);
-                    Rect _row = EditorGUI.IndentedRect(new Rect(_position.x, _y, _position.width, _line));
-                    EditorGUI.LabelField(_row, _locales[_i].Identifier.Code, string.IsNullOrEmpty(_value) ? Untranslated : FirstLine(_value));
-                    _y += _line + Spacing;
-                }
-            }
-        }
-
         private static string SourceText(SerializedProperty _property, Locale _source) {
             DialogueTables.ReadReference(_property, out TableReference _table, out TableEntryReference _entry);
             return DialogueTables.GetText(_table, _entry, _source.Identifier);
@@ -113,11 +90,6 @@ namespace HarryTools.Dialogue.Editor {
 
         private static bool IsLocalizedString(SerializedProperty _property) {
             return _property.propertyType == SerializedPropertyType.Generic && _property.FindPropertyRelative("m_TableReference") != null && _property.FindPropertyRelative("m_TableEntryReference") != null;
-        }
-
-        private static string FirstLine(string _value) {
-            int _break = _value.IndexOf('\n');
-            return _break < 0 ? _value : _value.Substring(0, _break) + " …";
         }
         #endregion
     }

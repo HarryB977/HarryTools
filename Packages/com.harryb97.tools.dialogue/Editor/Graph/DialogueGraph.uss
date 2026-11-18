@@ -47,41 +47,95 @@
     background-color: rgb(70, 70, 70);
 }
 
-.dialogue-node #output .port {
-    justify-content: flex-end;
+/* Connectors sit against the node's border: inputs on the left, outputs on the right */
+.dialogue-node .port {
+    padding-left: 0;
+    padding-right: 0;
 }
 
+.dialogue-node .port > #connector {
+    margin-left: 2px;
+    margin-right: 2px;
+}
+
+/* One body color, so the port columns and the text read as one block */
+.dialogue-node #top,
+.dialogue-node #top > #input,
+.dialogue-node #top > #output,
 .dialogue-node #extension {
     background-color: rgb(46, 46, 46);
 }
 
+/* Content nodes share one width; their text is a preview cut to a fixed number of lines */
+.dialogue-node--content {
+    width: 260px;
+}
+
 .dialogue-node__content {
-    width: 240px;
-    padding: 4px;
+    flex-grow: 1;
+    flex-shrink: 1;
+    min-width: 0;
+    padding: 4px 2px 6px 2px;
 }
 
 .dialogue-node__character {
-    margin: 0 0 4px 0;
-}
-
-.dialogue-node__text {
+    -unity-font-style: bold;
+    color: rgb(150, 190, 235);
     margin: 0;
+    padding: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
-.dialogue-node__text > .unity-text-field__input,
-.dialogue-node__text > .unity-base-text-field__input {
-    min-height: 44px;
+.dialogue-node__character--none {
+    -unity-font-style: italic;
+    color: rgb(140, 140, 140);
+}
+
+.dialogue-node__preview {
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
     white-space: normal;
     -unity-text-align: upper-left;
+    color: rgb(215, 215, 215);
+}
+
+.dialogue-node__content > .dialogue-node__preview {
+    height: 32px;
+    margin-top: 2px;
 }
 
 .dialogue-node__option {
-    width: 200px;
-    margin: 1px 2px;
+    flex-grow: 1;
 }
 
-.dialogue-node__option > .unity-base-text-field__input {
-    white-space: normal;
+.dialogue-node__option > .dialogue-node__preview {
+    flex-grow: 1;
+    flex-shrink: 1;
+    min-width: 0;
+    height: 16px;
+    -unity-text-align: middle-left;
+}
+
+/* Start and end: the title and its port, nothing else */
+.dialogue-node--compact #contents {
+    display: none;
+}
+
+.dialogue-node--compact #title-button-container {
+    display: none;
+}
+
+.dialogue-node--compact #title-label {
+    flex-grow: 1;
+    -unity-text-align: middle-center;
+    margin: 0;
+}
+
+.dialogue-node--compact #title {
+    min-width: 96px;
 }
 
 .dialogue-node__indicators {
@@ -106,8 +160,92 @@
 }
 
 .dialogue-panel__header {
+    flex-direction: row;
+    align-items: center;
+    min-height: 24px;
+    margin: 0 0 4px 0;
+    padding: 2px 8px;
+    border-radius: 3px;
+    background-color: rgb(70, 70, 70);
+}
+
+.dialogue-panel__header-title {
+    flex-grow: 1;
     -unity-font-style: bold;
-    margin: 4px 3px 4px 3px;
+    color: rgb(235, 235, 235);
+    margin: 0;
+    padding: 0;
+}
+
+.dialogue-panel__header-id {
+    color: rgb(200, 200, 200);
+    font-size: 10px;
+    margin: 0;
+    padding: 0;
+}
+
+.dialogue-panel__header--start {
+    background-color: rgb(46, 110, 64);
+}
+
+.dialogue-panel__header--line {
+    background-color: rgb(52, 88, 128);
+}
+
+.dialogue-panel__header--choice {
+    background-color: rgb(120, 86, 40);
+}
+
+.dialogue-panel__header--branch {
+    background-color: rgb(98, 66, 128);
+}
+
+.dialogue-panel__header--actions {
+    background-color: rgb(40, 110, 112);
+}
+
+.dialogue-panel__header--jump {
+    background-color: rgb(112, 54, 92);
+}
+
+.dialogue-panel__header--end {
+    background-color: rgb(128, 48, 48);
+}
+
+.dialogue-panel__section {
+    margin: 2px 0 4px 0;
+}
+
+.dialogue-panel__section > .unity-foldout__toggle {
+    -unity-font-style: bold;
+}
+
+.dialogue-panel__subsection {
+    margin: 2px 0;
+}
+
+/* The locale name above its text, like the source text drawn above it */
+.dialogue-panel__translation {
+    flex-direction: column;
+    align-items: stretch;
+    margin-top: 2px;
+    margin-bottom: 4px;
+}
+
+.dialogue-panel__translation > .unity-label {
+    margin-bottom: 2px;
+}
+
+.dialogue-panel__translation > .unity-base-text-field__input {
+    min-height: 32px;
+    white-space: normal;
+    -unity-text-align: upper-left;
+}
+
+.dialogue-panel__description {
+    white-space: normal;
+    color: rgb(180, 180, 180);
+    margin: 4px 3px;
 }
 
 .dialogue-panel__item {
@@ -160,9 +298,11 @@
     color: rgb(150, 150, 150);
 }
 
+/* Thicker borders take their room from the margin, so a mark never changes the node's size */
 .dialogue-node--warning #node-border {
     border-color: rgb(230, 170, 40);
     border-width: 2px;
+    margin: 0;
 }
 
 .dialogue-node--warning #title-label {
@@ -190,10 +330,16 @@
 .dialogue-node.current #node-border {
     border-color: rgb(90, 200, 255);
     border-width: 3px;
+    margin: -1px;
 }
 
 .dialogue-node.current #title-label {
     color: rgb(255, 255, 255);
+}
+
+/* Back edges are drawn dimmer by the edge itself; a traversed one keeps its full width */
+.edge.back {
+    --edge-width: 1;
 }
 
 .edge.traversed {

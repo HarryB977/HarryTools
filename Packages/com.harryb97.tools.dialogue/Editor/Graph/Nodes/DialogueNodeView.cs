@@ -1,21 +1,27 @@
+using System;
 using System.Collections.Generic;
-using UnityEditor;
+using System.Text.RegularExpressions;
+using HarryTools.TextEffects;
 using UnityEditor.Experimental.GraphView;
 using UnityEngine;
 using UnityEngine.Localization;
 using UnityEngine.UIElements;
 
 namespace HarryTools.Dialogue.Editor {
-    /// <summary> Canvas view of one dialogue node: its title, an input port, one output port per <see cref="NodeOutput"/> and a short summary of its content. Built from the node and rebuilt with the graph </summary>
+    /// <summary> Canvas view of one dialogue node: its title, an input port, one output port per <see cref="NodeOutput"/> and a short read only summary of its content. Built from the node and rebuilt with the graph; its data is edited in the side panel </summary>
     internal abstract class DialogueNodeView : Node {
         // ==================== VARIABLES ===================
         #region Private Variables
         private const string NodeClass = "dialogue-node";
+        private const string ContentNodeClass = "dialogue-node--content";
+        private const string CompactNodeClass = "dialogue-node--compact";
         private const string IndicatorsClass = "dialogue-node__indicators";
         private const string IndicatorClass = "dialogue-node__indicator";
         private const string WarningClass = "dialogue-node--warning";
         private const string CurrentClass = "current";
-        private const string TextUndo = "Edit Dialogue Text";
+        // Any tag left after the text effects parser, so the preview is plain text
+        private static readonly Regex MarkupTag = new Regex("<[^<>]*>");
+        private static readonly Regex LineBreaks = new Regex(@"\s*\n\s*");
 
         private readonly List<(string OutputId, Port Port)> outputs = new List<(string OutputId, Port Port)>();
         private readonly List<string> indicators = new List<string>();
@@ -27,7 +33,7 @@ namespace HarryTools.Dialogue.Editor {
 
         internal DialogueNode Data { get; }
 
-        /// <summary> The dialogue the node belongs to. Text typed on the node is written to its table </summary>
+        /// <summary> The dialogue the node belongs to, whose table holds the node's text </summary>
         internal DialogueAsset Asset { get; }
 
         /// <summary> The port other outputs connect to. Null for the start node </summary>
@@ -49,6 +55,7 @@ namespace HarryTools.Dialogue.Editor {
             viewDataKey = _node.Id;
             AddToClassList(NodeClass);
             AddToClassList(TypeClass);
+            AddToClassList(IsCompact ? CompactNodeClass : ContentNodeClass);
             tooltip = BaseTooltip;
 
             if (HasInput) {
@@ -72,6 +79,20 @@ namespace HarryTools.Dialogue.Editor {
             indicatorRow.AddToClassList(IndicatorsClass);
             extensionContainer.Add(indicatorRow);
             expanded = true;
+
+            // A compact node is only its title with the port on its side
+            if (IsCompact) {
+                if (Input != null) titleContainer.Insert(0, Input);
+                for (int _i = 0; _i < outputs.Count; _i++) titleContainer.Add(outputs[_i].Port);
+            } else {
+                // The input takes only its port's room, so outputs and their texts get the rest of the width
+                // Inline, as the graph view's own sheets win over the package's for these containers. Long texts shrink instead of widening the node
+                inputContainer.style.flexGrow = 0f;
+                outputContainer.style.flexGrow = 1f;
+                outputContainer.style.flexShrink = 1f;
+                outputContainer.style.minWidth = 0f;
+                topContainer.style.overflow = Overflow.Hidden;
+            }
 
             SetPosition(new Rect(_node.Position, Vector2.zero));
         }
@@ -132,11 +153,9 @@ namespace HarryTools.Dialogue.Editor {
             EnableInClassList(CurrentClass, _current);
         }
 
-        /// <summary> Leaves the node to look at: it cannot be moved or deleted and its fields cannot be edited. Undone by building the view again </summary>
+        /// <summary> Leaves the node to look at: it cannot be moved or deleted. Undone by building the view again </summary>
         internal void MakeReadOnly() {
             capabilities &= ~(Capabilities.Movable | Capabilities.Deletable);
-            this.Query<TextField>().ForEach(_field => _field.isReadOnly = true);
-            this.Query<UnityEditor.UIElements.ObjectField>().ForEach(_field => _field.SetEnabled(false));
         }
 
         /// <summary> The node's data now has other outputs than the ports shown, so the graph has to be rebuilt </summary>
@@ -167,8 +186,11 @@ namespace HarryTools.Dialogue.Editor {
 
         // ==================== OVERRIDABLE ====================
         #region Overridable
-        // TypeClass, HasInput, ShowsOutput and BaseTooltip are read by the base constructor, so they may only use Data
+        // TypeClass, IsCompact, HasInput, ShowsOutput and BaseTooltip are read by the base constructor, so they may only use Data
         protected abstract string Title { get; }
+
+        /// <summary> Drawn as its title and port only, without content. Content nodes all share one width </summary>
+        protected virtual bool IsCompact => false;
 
         /// <summary> USS class of the node type, for its header color </summary>
         protected abstract string TypeClass { get; }
@@ -190,25 +212,21 @@ namespace HarryTools.Dialogue.Editor {
 
         // ==================== HELPERS ====================
         #region Helpers
-        /// <summary> Writes a text of the node to the source locale table as one undo step </summary>
-        protected void WriteText(LocalizedString _target, string _key, string _text) {
-            if (Asset == null || _target == null || string.IsNullOrEmpty(_key)) return;
+        /// <summary> The text in the source locale as plain text: effect and markup tags removed, trimmed. With one line, line breaks become spaces. Empty when there is no text </summary>
+        internal static string PreviewText(LocalizedString _text, bool _oneLine) {
+            string _source = DialogueTables.GetSourceText(_text);
+            if (string.IsNullOrEmpty(_source)) return "";
 
-            Undo.IncrementCurrentGroup();
-            int _group = Undo.GetCurrentGroup();
-            DialogueTables.SetSourceText(Asset, _target, _key, _text);
-            Undo.SetCurrentGroupName(TextUndo);
-            Undo.CollapseUndoOperations(_group);
-        }
-
-        /// <summary> A text field on the node for a dialogue text in the source locale. Disabled when the project has no source locale </summary>
-        protected NodeTextField CreateTextField(System.Func<LocalizedString> _target, System.Func<string> _key) {
-            NodeTextField _field = new NodeTextField(() => DialogueTables.GetSourceText(_target()), _text => WriteText(_target(), _key(), _text)) { Key = _key() };
-            if (DialogueTables.SourceLocale() == null) {
-                _field.SetEnabled(false);
-                _field.tooltip = "No source locale. Add locales in the Localization settings to write text.";
+            string _plain;
+            try {
+                _plain = TextParser.Parse(_source, TextEffectsSettings.Current).TmpText ?? "";
+            } catch (Exception) {
+                // A preview never breaks the canvas; the validator reports broken markup
+                _plain = _source;
             }
-            return _field;
+            _plain = MarkupTag.Replace(_plain, "").Replace("\r", "");
+            if (_oneLine) _plain = LineBreaks.Replace(_plain, " ");
+            return _plain.Trim();
         }
 
         protected static string Count(int _count, string _singular) {

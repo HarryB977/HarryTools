@@ -64,7 +64,7 @@ namespace HarryTools.Dialogue.Editor {
         /// <summary> Raised when the camera moves other than by the canvas itself: by the user, or by a call to <see cref="Frame"/> </summary>
         internal event Action CameraMoved;
 
-        /// <summary> Nothing on the canvas can be created, deleted, connected, moved or typed. Changing it rebuilds the canvas </summary>
+        /// <summary> Nothing on the canvas can be created, deleted, connected or moved. Changing it rebuilds the canvas </summary>
         internal bool ReadOnly {
             get => readOnly;
             set {
@@ -178,7 +178,8 @@ namespace HarryTools.Dialogue.Editor {
         private void RebuildSelecting(HashSet<string> _selected) {
             rebuilding = true;
             try {
-                RebuildElements(_selected);
+                RebuildViews(_selected);
+                UpdateBackEdges();
             } finally {
                 rebuilding = false;
             }
@@ -186,31 +187,7 @@ namespace HarryTools.Dialogue.Editor {
             Rebuilt?.Invoke();
         }
 
-        private void RebuildElements(HashSet<string> _selected) {
-            // Text still being typed is carried over to the new views unwritten: writing it now would land inside an undo or redo
-            Dictionary<string, string> _pending = new Dictionary<string, string>();
-            string _focusedKey = null;
-            this.Query<NodeTextField>().ForEach(_field => {
-                if (_field.Key == null || !_field.HasPendingEdit) return;
-                _pending[_field.Key] = _field.value;
-                if (_field.focusController?.focusedElement == _field) _focusedKey = _field.Key;
-                _field.Discard();
-            });
-
-            RebuildViews(_selected);
-
-            // A read only canvas cannot write it, so it is dropped
-            if (_pending.Count == 0 || ReadOnly) return;
-            // A text whose node or option is gone after the rebuild is dropped
-            this.Query<NodeTextField>().ForEach(_field => {
-                if (_field.Key == null || !_pending.TryGetValue(_field.Key, out string _text)) return;
-                _field.RestorePending(_text);
-                if (_field.Key == _focusedKey) _field.Focus();
-            });
-        }
-
         private void RebuildViews(HashSet<string> _selected) {
-
             ClearSelection();
             foreach (GraphElement _element in graphElements.ToList()) RemoveElement(_element);
             nodeViews.Clear();
@@ -287,9 +264,12 @@ namespace HarryTools.Dialogue.Editor {
             else _view.Refresh();
         }
 
-        /// <summary> Writes the text typed on the nodes that has not been written yet </summary>
-        internal void CommitPendingText() {
-            this.Query<NodeTextField>().ForEach(_field => _field.Commit());
+        /// <summary> Marks the edges whose target is left of their source, or at the same x, as going back </summary>
+        private void UpdateBackEdges() {
+            foreach (DialogueEdge _edge in edgeViews.Values) {
+                if (!(_edge.output?.node is DialogueNodeView _source) || !(_edge.input?.node is DialogueNodeView _target)) continue;
+                _edge.IsBack = _target.CanvasPosition.x <= _source.CanvasPosition.x;
+            }
         }
 
         internal DialogueNodeView FindNodeView(string _id) {
@@ -503,7 +483,6 @@ namespace HarryTools.Dialogue.Editor {
 
         private string SerializeElements(IEnumerable<GraphElement> _elements) {
             if (Asset == null) return "";
-            CommitPendingText();
 
             HashSet<string> _ids = new HashSet<string>();
             foreach (GraphElement _element in _elements) {
@@ -529,7 +508,6 @@ namespace HarryTools.Dialogue.Editor {
         private void PasteData(string _operation, string _data) {
             // Duplicate reaches here without asking canPasteSerializedData
             if (!CanEdit) return;
-            CommitPendingText();
 
             IReadOnlyList<string> _ids = DialogueClipboard.Paste(Asset, _data, Vector2.zero);
             if (_ids.Count == 0) return;
@@ -833,6 +811,7 @@ namespace HarryTools.Dialogue.Editor {
                 }
             }
             DialogueGraphOps.Move(Asset, _positions);
+            UpdateBackEdges();
         }
 
         private void ApplyRemovals(List<GraphElement> _removed) {

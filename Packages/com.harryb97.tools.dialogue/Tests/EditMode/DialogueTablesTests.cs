@@ -310,6 +310,53 @@ namespace HarryTools.Dialogue.Tests {
             Assert.AreEqual(_count, LocalizationEditorSettings.GetStringTableCollections().Count);
             Assert.AreEqual("Hello", DialogueTables.GetSourceText(((LineNode) _asset.Nodes[1]).Text));
         }
+
+        [Test]
+        public void SetText_WritesEntryInTargetLocale() {
+            DialogueAsset _asset = NewAsset("TablesTranslate");
+            LineNode _line = _asset.AddNode<LineNode>();
+            DialogueTables.SetSourceText(_asset, _line.Text, _line.Id, "Hello");
+
+            bool _written = DialogueTables.SetText(_asset, _line.Text, _line.Id, new LocaleIdentifier(OtherCode), "Hola");
+
+            Assert.IsTrue(_written);
+            Assert.AreEqual("Hola", DialogueTables.GetText(_line.Text.TableReference, _line.Text.TableEntryReference, new LocaleIdentifier(OtherCode)));
+            Assert.AreEqual(1, DialogueTables.EnsureCollection(_asset).SharedData.Entries.Count, "same key as the source text");
+        }
+
+        [Test]
+        public void SetText_MissingEntry_CreatesItAndPointsTarget() {
+            DialogueAsset _asset = NewAsset("TablesTranslateNew");
+            LineNode _line = _asset.AddNode<LineNode>();
+            Assert.IsTrue(_line.Text.IsEmpty);
+
+            bool _written = DialogueTables.SetText(_asset, _line.Text, _line.Id, new LocaleIdentifier(OtherCode), "Hola");
+
+            Assert.IsTrue(_written);
+            StringTableCollection _collection = DialogueTables.EnsureCollection(_asset);
+            SharedTableData.SharedTableEntry _entry = _collection.SharedData.GetEntry(_line.Id);
+            Assert.IsNotNull(_entry, "entry keyed by the node id");
+            Assert.AreEqual("Hola", Table(_collection, OtherCode).GetEntry(_entry.Id)?.Value);
+            Assert.AreEqual(_entry.Id, _line.Text.TableEntryReference.KeyId);
+        }
+
+        [Test]
+        public void SetText_LeavesSourceLocaleUntouched() {
+            DialogueAsset _asset = NewAsset("TablesTranslateSource");
+            LineNode _line = _asset.AddNode<LineNode>();
+            DialogueTables.SetSourceText(_asset, _line.Text, _line.Id, "Hello");
+            int _raised = 0;
+            void Count(DialogueAsset _) => _raised++;
+            DialogueTables.SourceTextWritten += Count;
+            try {
+                DialogueTables.SetText(_asset, _line.Text, _line.Id, new LocaleIdentifier(OtherCode), "Hola");
+            } finally {
+                DialogueTables.SourceTextWritten -= Count;
+            }
+
+            Assert.AreEqual("Hello", DialogueTables.GetSourceText(_line.Text));
+            Assert.AreEqual(0, _raised, "no source text was written");
+        }
         #endregion
 
         // ==================== PRIVATE ====================

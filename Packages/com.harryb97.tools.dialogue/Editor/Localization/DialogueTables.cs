@@ -69,6 +69,22 @@ namespace HarryTools.Dialogue.Editor {
             return true;
         }
 
+        /// <summary> Writes the text to the table of the locale under the key, creating the table and the entry when missing, then points the target to that entry when it points nowhere. Only the source locale raises <see cref="SourceTextWritten"/>. False when the project has no locales </summary>
+        internal static bool SetText(DialogueAsset _asset, LocalizedString _target, string _key, LocaleIdentifier _locale, string _text) {
+            Locale _source = SourceLocale();
+            if (_source != null && _source.Identifier == _locale) return SetSourceText(_asset, _target, _key, _text);
+            if (_target == null || !WriteText(_asset, _key, _locale, _text, out Guid _collection, out long _keyId)) return false;
+
+            // A translation written before the source text still needs the reference
+            if (_target.IsEmpty) {
+                Undo.RecordObject(_asset, UndoName);
+                _target.TableReference = _collection;
+                _target.TableEntryReference = _keyId;
+                EditorUtility.SetDirty(_asset);
+            }
+            return true;
+        }
+
         /// <summary> Raises <see cref="SourceTextWritten"/>. Called once the text and the reference to it are both in place </summary>
         internal static void NotifySourceTextWritten(DialogueAsset _asset) {
             SourceTextWritten?.Invoke(_asset);
@@ -86,18 +102,25 @@ namespace HarryTools.Dialogue.Editor {
         #region Internal
         /// <summary> Adds the key when missing and writes the text to the source locale table, with undo. False when there is no source locale </summary>
         internal static bool WriteSourceText(DialogueAsset _asset, string _key, string _text, out Guid _collectionGuid, out long _keyId) {
+            Locale _source = SourceLocale();
+            if (_source != null) return WriteText(_asset, _key, _source.Identifier, _text, out _collectionGuid, out _keyId);
             _collectionGuid = Guid.Empty;
             _keyId = 0;
-            if (_asset == null || string.IsNullOrEmpty(_key)) return false;
+            return false;
+        }
 
-            Locale _source = SourceLocale();
-            if (_source == null) return false;
+        /// <summary> Adds the key when missing and writes the text to the table of the locale, with undo. False when the dialogue has no collection and none can be made </summary>
+        private static bool WriteText(DialogueAsset _asset, string _key, LocaleIdentifier _locale, string _text, out Guid _collectionGuid, out long _keyId) {
+            _collectionGuid = Guid.Empty;
+            _keyId = 0;
+            if (_asset == null || string.IsNullOrEmpty(_key) || string.IsNullOrEmpty(_locale.Code)) return false;
+
             StringTableCollection _collection = EnsureCollection(_asset);
             if (_collection == null) return false;
 
-            // The source locale may have been added after the collection was created
-            StringTable _table = _collection.GetTable(_source.Identifier) as StringTable;
-            if (_table == null) _table = _collection.AddNewTable(_source.Identifier) as StringTable;
+            // The locale may have been added after the collection was created
+            StringTable _table = _collection.GetTable(_locale) as StringTable;
+            if (_table == null) _table = _collection.AddNewTable(_locale) as StringTable;
             if (_table == null) return false;
 
             SharedTableData _shared = _collection.SharedData;

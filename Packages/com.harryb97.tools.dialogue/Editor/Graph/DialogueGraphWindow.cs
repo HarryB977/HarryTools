@@ -129,8 +129,6 @@ namespace HarryTools.Dialogue.Editor {
             DialogueTables.SourceTextWritten -= OnSourceTextWritten;
             EditorApplication.playModeStateChanged -= OnPlayModeStateChanged;
             DisposeTracker();
-            // Text typed on a node is kept when the window closes or reloads
-            View?.CommitPendingText();
             rootVisualElement.Clear();
             View = null;
             Panel = null;
@@ -144,10 +142,6 @@ namespace HarryTools.Dialogue.Editor {
             asset = null;
         }
 
-        private void OnLostFocus() {
-            View?.CommitPendingText();
-        }
-
         internal void OnProjectChange() {
             if (AssetWasDeleted) SetAsset(null);
             // A renamed dialogue keeps its object, so only the title has to follow
@@ -159,7 +153,6 @@ namespace HarryTools.Dialogue.Editor {
         #region Asset
         /// <summary> Shows the dialogue in the window. Null leaves it empty </summary>
         internal void SetAsset(DialogueAsset _asset) {
-            if (!AssetWasDeleted) View?.CommitPendingText();
             asset = _asset;
             assetGuid = _asset != null && AssetDatabase.TryGetGUIDAndLocalFileIdentifier(_asset, out string _guid, out long _) ? _guid : "";
             ShowAsset();
@@ -199,7 +192,7 @@ namespace HarryTools.Dialogue.Editor {
             return _relevant;
         }
 
-        // Text typed on the canvas is written to the tables, which the filtered object changes may not report
+        // Text written in the panel goes to the tables, which the filtered object changes may not report
         private void OnSourceTextWritten(DialogueAsset _asset) {
             if (_asset != null && _asset == asset) IssueList?.ScheduleValidation();
         }
@@ -354,10 +347,8 @@ namespace HarryTools.Dialogue.Editor {
         }
 
         internal void OnPlayModeStateChanged(PlayModeStateChange _change) {
-            // Text typed on a node is written before Play, while the canvas can still write it
-            if (_change == PlayModeStateChange.ExitingEditMode) View?.CommitPendingText();
             // The tracker is made once Play has started: entering Play resets the runtime's static handlers (the domain reload does, or [ClearOnReload] when there is none), which would drop one made earlier
-            else if (_change == PlayModeStateChange.EnteredPlayMode) BeginPlayMode();
+            if (_change == PlayModeStateChange.EnteredPlayMode) BeginPlayMode();
             else if (_change == PlayModeStateChange.ExitingPlayMode) EndPlayMode();
         }
 

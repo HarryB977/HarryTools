@@ -105,11 +105,24 @@ La ventana muestra un diálogo a la vez. Los cambios se escriben en el asset al 
 - **Auto Layout** (clic derecho) coloca los nodos por niveles de izquierda a derecha. Se ejecuta solo, una vez, al abrir un diálogo cuyos nodos están todos en el origen. Esa primera colocación escribe las posiciones en el asset, así que el asset queda modificado.
 - Doble clic en un nodo Jump abre el diálogo destino.
 
-### Texto en el lienzo y panel lateral
+### Nodos en el lienzo
 
-- Las líneas muestran el personaje y un campo de texto multilínea; las decisiones, el texto de cada respuesta junto a su salida. Se escribe en el idioma de origen y el texto se guarda en la tabla al perder el foco el campo. Escape descarta el cambio.
+- El lienzo no tiene campos editables: cada nodo muestra un resumen de solo lectura y todo se edita en el panel lateral. Las líneas muestran el personaje y hasta dos líneas de su texto en el idioma de origen; las decisiones, una línea por respuesta junto a su salida. El resumen quita las marcas de texto y se corta con "…" cuando no cabe, así que el texto nunca cambia el tamaño del nodo.
+- Todos los nodos de contenido tienen el mismo ancho. Las entradas quedan pegadas al borde izquierdo y las salidas al derecho, y las filas de respuestas de una decisión tienen todas la misma altura.
 - Los nodos muestran indicadores de lo que llevan (acciones, eventos, delays, vida y avance propios, temporizador, resumen de cada caso, destino y modo del salto).
-- El **panel lateral** (a la derecha) muestra las propiedades del nodo seleccionado con los mismos campos y selectores que el resto de herramientas, y los ajustes del diálogo (reloj, política de ambientales, permitir saltar) cuando no hay selección. Desde él se añaden, quitan y reordenan las respuestas de una decisión y los casos de una rama; sus salidas se rehacen solas.
+- **Start** y **End** son nodos compactos: solo el título y su conexión. Start (verde) tiene una salida y End (rojo) una entrada. Una salida sin conectar también termina el diálogo.
+- Las conexiones que vuelven atrás (el nodo destino está a la izquierda del origen o en la misma x, incluidas las de un nodo a sí mismo) se dibujan más tenues y finas. Significan lo mismo que las demás y se recalculan al mover nodos. En Play, una conexión recorrida se marca igual aunque vuelva atrás.
+
+### Panel lateral
+
+- Con un nodo seleccionado, la cabecera muestra el tipo de nodo con su color y un ID corto. Debajo hay secciones plegables, siempre en el mismo orden; la ventana recuerda durante la sesión cuáles están abiertas para cada tipo de nodo.
+  - **Line:** *Text* (personaje, texto, nota para traducción y nota de guion), *Translations*, *Timing* (delays antes y después, vida y avance propios), *Actions* (antes, al empezar y al terminar) y *Text Events*.
+  - **Choice:** *Timer* (usar temporizador, segundos y regla al agotarse) y *Options*, con un bloque plegable por respuesta titulado con su texto: texto y sus traducciones, motivo de bloqueo y sus traducciones, respuesta por defecto, estado tras elegir, etiquetas, condiciones de visibilidad y de disponibilidad, acciones al elegir y nota para traducción.
+  - **Branch:** un bloque por caso con sus condiciones. *Otherwise* se toma cuando ningún caso se cumple.
+  - **Actions** y **Jump:** sus campos, sin secciones. **Start** y **End:** una descripción.
+- Las respuestas de una decisión y los casos de una rama se añaden, quitan y reordenan desde el panel; sus salidas se rehacen solas.
+- El texto se escribe en el idioma de origen en el panel y se guarda en la tabla al escribir. Las traducciones se editan en *Translations* (ver **Localización**).
+- Sin selección, el panel muestra los ajustes del diálogo (reloj, política de ambientales y permitir saltar).
 
 ### Grupos y notas
 
@@ -137,7 +150,7 @@ La lista de la parte inferior se actualiza al abrir el diálogo y tras cada camb
 - En Play la ventana sigue las conversaciones en marcha: el nodo actual se ilumina y las conexiones recorridas en esa conversación quedan marcadas. Al terminar, la marca se mantiene hasta la siguiente conversación o hasta salir de Play.
 - El selector de la barra lista las conversaciones activas (la principal primero) y permite elegir cuál se sigue. Por defecto se sigue la principal. Una ventana sin diálogo abierto muestra el de la conversación que empiece.
 - Con **Follow** activado, la vista se centra sola en el nodo activo y cambia al diálogo al que salta la conversación (y vuelve al regresar de un Jump *Call And Return*). También cambia a una conversación principal de otro diálogo. Mover la vista a mano desactiva **Follow** hasta volver a pulsarlo.
-- En Play el lienzo y el panel lateral son de solo lectura: no se crean, borran, conectan ni mueven nodos.
+- En Play el lienzo y el panel lateral, traducciones incluidas, son de solo lectura: no se crean, borran, conectan ni mueven nodos.
 - Para integraciones propias, `Dialogue.NodeEntered` y `DialogueRun.NodeEntered` avisan de cada nodo en el que entra una conversación. El nodo Start se anuncia en la primera actualización de la conversación; si está en pausa, incluida la que aplica la política de ambientales de la principal, se anuncia cuando se reanuda.
 
 ## Ejecución
@@ -308,11 +321,12 @@ Las condiciones y acciones de `flags` (y cualquier otra) funcionan dentro de los
 
 ## Localización
 
-El texto de las líneas, las respuestas y los motivos de bloqueo se escribe en la ventana del graph (en el lienzo o en el panel lateral) en el **idioma de origen** (el de Settings; vacío usa el idioma del proyecto) y se guarda en String Tables de Unity Localization:
+El texto de las líneas, las respuestas y los motivos de bloqueo se escribe en el panel lateral de la ventana del graph en el **idioma de origen** (el de Settings; vacío usa el idioma del proyecto) y se guarda en String Tables de Unity Localization:
 
 - Cada diálogo tiene **su propia String Table Collection**, creada al escribir el primer texto en la carpeta de Settings (**Tables Folder**, por defecto `Assets/Localization/Dialogue`), con el nombre `Dialogue_<nombre del asset>` y una tabla por idioma del proyecto. El diálogo la enlaza por GUID: renombrar el asset o la colección no rompe nada.
 - Las **claves** se generan a partir del ID estable del nodo o la respuesta (el motivo de bloqueo añade `.locked`). Nunca se escriben a mano.
-- Bajo el campo del idioma de origen se ven los demás idiomas, de solo lectura, con un aviso si falta la traducción. Las traducciones se editan en las tablas.
+- La sección **Translations** del panel lista cada idioma del proyecto salvo el de origen, con un campo de texto por idioma para la línea, cada respuesta y cada motivo de bloqueo. Escribe en la tabla de ese idioma bajo la misma clave, crea la tabla o la entrada si faltan y se deshace con Ctrl+Z. Un idioma sin texto muestra *Not translated*.
+- Para revisar muchos textos a la vez sirve la ventana **Localization Tables** de Unity. La hoja de cálculo para traductores llega en el bloque 3.
 - El nombre de los personajes es un `LocalizedString` normal, en la tabla que se elija.
 
 Sin ningún idioma en el proyecto, el campo de texto muestra un aviso y no escribe nada.

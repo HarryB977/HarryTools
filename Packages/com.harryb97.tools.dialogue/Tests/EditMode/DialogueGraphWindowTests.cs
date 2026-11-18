@@ -23,6 +23,11 @@ namespace HarryTools.Dialogue.Tests {
         private const string TablesFolder = TempFolder + "/GraphWindowTables";
         private const string LocalesFolder = TempFolder + "/GraphWindowLocales";
         private const string SourceCode = "en";
+        private const string OtherCode = "es";
+        private const string Ellipsis = "…";
+        private const int MaxLayoutFrames = 200;
+        // Pixels a port connector may sit inside the node's border
+        private const float MaxPortInset = 4f;
 
         private readonly List<Locale> addedLocales = new List<Locale>();
         private LocalizationSettings createdSettings;
@@ -43,13 +48,17 @@ namespace HarryTools.Dialogue.Tests {
                 AssetDatabase.CreateAsset(createdSettings, TempFolder + "/GraphWindowLocalization.asset");
                 LocalizationEditorSettings.ActiveLocalizationSettings = createdSettings;
             }
-            if (LocalizationEditorSettings.GetLocale(SourceCode) == null) {
-                EnsureFolder(LocalesFolder);
-                Locale _locale = Locale.CreateLocale(SourceCode);
-                AssetDatabase.CreateAsset(_locale, LocalesFolder + "/" + SourceCode + ".asset");
-                LocalizationEditorSettings.AddLocale(_locale);
-                addedLocales.Add(_locale);
-            }
+            EnsureLocale(SourceCode);
+            EnsureLocale(OtherCode);
+        }
+
+        private void EnsureLocale(string _code) {
+            if (LocalizationEditorSettings.GetLocale(_code) != null) return;
+            EnsureFolder(LocalesFolder);
+            Locale _locale = Locale.CreateLocale(_code);
+            AssetDatabase.CreateAsset(_locale, LocalesFolder + "/" + _code + ".asset");
+            LocalizationEditorSettings.AddLocale(_locale);
+            addedLocales.Add(_locale);
         }
 
         [OneTimeTearDown]
@@ -109,13 +118,6 @@ namespace HarryTools.Dialogue.Tests {
                 AssetDatabase.DeleteAsset(AssetDatabase.GUIDToAssetPath(_guid));
             }
             AssetDatabase.DeleteAsset(TablesFolder);
-        }
-
-        /// <summary> Sends the event a text field gets when the user clicks elsewhere </summary>
-        private static void LoseFocus(VisualElement _field) {
-            using (FocusOutEvent _event = FocusOutEvent.GetPooled(_field, null, FocusChangeDirection.unspecified, _field.focusController)) {
-                _field.SendEvent(_event);
-            }
         }
 
         private static DialogueAsset NewAsset(string _name) {
@@ -360,72 +362,6 @@ namespace HarryTools.Dialogue.Tests {
             Assert.AreSame(_asset, window.Asset);
             Assert.AreNotSame(_before, window.View);
             AssertViewMatchesAsset(window.View, _asset);
-        }
-
-        [Test]
-        public void LineText_EditInCanvas_WritesSourceTable() {
-            DialogueAsset _asset = NewSample("LineText");
-            window = DialogueGraphWindow.Open(_asset);
-            LineNode _line = _asset.Nodes.OfType<LineNode>().First();
-            TextField _field = ((LineNodeView)window.View.FindNodeView(_line.Id)).TextField;
-
-            Undo.IncrementCurrentGroup();
-            _field.value = "First line\nsecond row";
-            // Typing alone writes nothing
-            Assert.IsNull(DialogueTables.GetSourceText(_line.Text));
-
-            LoseFocus(_field);
-
-            Assert.AreEqual("First line\nsecond row", DialogueTables.GetSourceText(_line.Text));
-            Assert.IsNotNull(DialogueTables.EnsureCollection(_asset).SharedData.GetEntry(_line.Id), "entry keyed by the node id");
-
-            // One undo step takes the whole edit back
-            Undo.PerformUndo();
-            Assert.IsNull(DialogueTables.GetSourceText(_line.Text));
-            Assert.AreEqual("", ((LineNodeView)window.View.FindNodeView(_line.Id)).TextField.value);
-        }
-
-        [Test]
-        public void LineText_UndoWhileTyping_KeepsPendingText() {
-            DialogueAsset _asset = NewSample("LineUndo");
-            window = DialogueGraphWindow.Open(_asset);
-            LineNode _line = _asset.Nodes.OfType<LineNode>().First();
-
-            // An earlier step for the undo to take back
-            Undo.IncrementCurrentGroup();
-            DialogueNode _created = window.View.CreateNode(typeof(EndNode), new Vector2(0f, 600f), null);
-            Undo.IncrementCurrentGroup();
-
-            ((LineNodeView)window.View.FindNodeView(_line.Id)).TextField.value = "Still typing";
-            Undo.PerformUndo();
-
-            Assert.IsNull(_asset.Find(_created.Id), "the undo took back the earlier step");
-            NodeTextField _field = ((LineNodeView)window.View.FindNodeView(_line.Id)).TextField;
-            Assert.AreEqual("Still typing", _field.value);
-            Assert.IsTrue(_field.HasPendingEdit);
-            Assert.IsNull(DialogueTables.GetSourceText(_line.Text), "nothing written during the undo");
-            Assert.IsNull(DialogueTables.EnsureCollection(_asset).SharedData.GetEntry(_line.Id));
-
-            LoseFocus(_field);
-            Assert.AreEqual("Still typing", DialogueTables.GetSourceText(_line.Text));
-        }
-
-        [Test]
-        public void OptionText_EditInCanvas_WritesSourceTable() {
-            DialogueAsset _asset = NewSample("OptionText");
-            window = DialogueGraphWindow.Open(_asset);
-            ChoiceNode _choice = _asset.Nodes.OfType<ChoiceNode>().First();
-            ChoiceNodeView _view = (ChoiceNodeView)window.View.FindNodeView(_choice.Id);
-            ChoiceOption _option = _choice.Options[1];
-
-            TextField _field = _view.OptionField(1);
-            _field.value = "Second answer";
-            Assert.IsNull(DialogueTables.GetSourceText(_option.Text));
-            LoseFocus(_field);
-
-            Assert.AreEqual("Second answer", DialogueTables.GetSourceText(_option.Text));
-            Assert.IsNotNull(DialogueTables.EnsureCollection(_asset).SharedData.GetEntry(_option.Id), "entry keyed by the option id");
-            Assert.IsNull(DialogueTables.GetSourceText(_choice.Options[0].Text));
         }
 
         [UnityTest]
@@ -725,7 +661,12 @@ namespace HarryTools.Dialogue.Tests {
         public void Window_GroupShortcut_IgnoredInTextField() {
             DialogueAsset _asset = NewSample("Shortcut");
             window = DialogueGraphWindow.Open(_asset);
+            DialogueNote _note = window.View.CreateNote(new Vector2(0f, 500f));
+            TextField _noteField = window.View.FindNoteView(_note.Id).Q<TextField>();
+            Assert.IsNotNull(_noteField, "the note has a text field");
+            // After the note: creating it rebuilt the node views
             LineNodeView _lineView = (LineNodeView)window.View.FindNodeView(_asset.Nodes.OfType<LineNode>().First().Id);
+            window.View.ClearSelection();
             window.View.AddToSelection(_lineView);
             void SendCtrlG(VisualElement _target) {
                 using (KeyDownEvent _event = KeyDownEvent.GetPooled('\0', KeyCode.G, EventModifiers.Control)) {
@@ -734,8 +675,8 @@ namespace HarryTools.Dialogue.Tests {
                 }
             }
 
-            SendCtrlG(_lineView.TextField.Q<TextElement>());
-            Assert.AreEqual(0, _asset.Groups.Count, "typing in a node field");
+            SendCtrlG(_noteField.Q<TextElement>());
+            Assert.AreEqual(0, _asset.Groups.Count, "typing in a note field");
 
             SendCtrlG(_lineView);
             Assert.AreEqual(1, _asset.Groups.Count, "on the canvas");
@@ -967,6 +908,228 @@ namespace HarryTools.Dialogue.Tests {
         }
         #endregion
 
+        // ==================== NODE CONTENT ====================
+        #region Node Content
+        [Test]
+        public void LinePreview_ShowsSourceTextWithoutEffectTags() {
+            DialogueAsset _asset = NewSample("LinePreview");
+            window = DialogueGraphWindow.Open(_asset);
+            LineNode _line = FirstLine(_asset);
+            LineNodeView _view = (LineNodeView)window.View.FindNodeView(_line.Id);
+            Assert.AreEqual("", _view.Preview.FullText, "no text yet");
+
+            // Written after the canvas was built: the preview follows the table
+            DialogueTables.SetSourceText(_asset, _line.Text, _line.Id, "Hello<pause=0.5> there<event=ping>");
+
+            Assert.AreEqual("Hello there", ((LineNodeView)window.View.FindNodeView(_line.Id)).Preview.FullText);
+            Assert.IsEmpty(window.View.FindNodeView(_line.Id).Query<TextField>().ToList(), "no text field on the canvas");
+        }
+
+        [Test]
+        public void OptionPreview_ShowsOptionText() {
+            DialogueAsset _asset = NewSample("OptionPreview");
+            ChoiceNode _choice = _asset.Nodes.OfType<ChoiceNode>().First();
+            DialogueTables.SetSourceText(_asset, _choice.Options[1].Text, _choice.Options[1].Id, "Second<speed=2> answer\nnext row");
+            window = DialogueGraphWindow.Open(_asset);
+            ChoiceNodeView _view = (ChoiceNodeView)window.View.FindNodeView(_choice.Id);
+
+            Assert.AreEqual("", _view.OptionPreview(0).FullText);
+            Assert.AreEqual("Second answer next row", _view.OptionPreview(1).FullText, "one line, without effect tags");
+            Assert.IsEmpty(_view.Query<TextField>().ToList(), "no text field on the canvas");
+        }
+
+        [UnityTest]
+        public IEnumerator LinePreview_LongText_ClippedNodeHeightUnchanged() {
+            DialogueAsset _asset = NewSample("LineClip");
+            LineNode _short = FirstLine(_asset);
+            LineNode _long = (LineNode)DialogueGraphOps.CreateNode(_asset, typeof(LineNode), new Vector2(200f, 300f));
+            DialogueTables.SetSourceText(_asset, _short.Text, _short.Id, "Short");
+            DialogueTables.SetSourceText(_asset, _long.Text, _long.Id, string.Join(" ", Enumerable.Repeat("A long sentence that keeps going", 12)));
+            window = DialogueGraphWindow.Open(_asset);
+            LineNodeView _shortView = (LineNodeView)window.View.FindNodeView(_short.Id);
+            LineNodeView _longView = (LineNodeView)window.View.FindNodeView(_long.Id);
+
+            for (int _i = 0; _i < MaxLayoutFrames && !(IsLaidOut(_shortView) && IsLaidOut(_longView) && _longView.Preview.text.EndsWith(Ellipsis)); _i++) yield return null;
+
+            StringAssert.EndsWith(Ellipsis, _longView.Preview.text, "cut with an ellipsis");
+            Assert.AreEqual("Short", _shortView.Preview.text);
+            Assert.AreEqual(_shortView.layout.height, _longView.layout.height, 0.5f, "the node does not grow");
+            Assert.AreEqual(_shortView.layout.width, _longView.layout.width, 0.5f, "same width");
+            Vector2 _twoLines = _longView.Preview.MeasureTextSize("A\nA", 0f, VisualElement.MeasureMode.Undefined, 0f, VisualElement.MeasureMode.Undefined);
+            Assert.LessOrEqual(_longView.Preview.MeasureTextSize(_longView.Preview.text, _longView.Preview.contentRect.width, VisualElement.MeasureMode.Exactly, 0f, VisualElement.MeasureMode.Undefined).y, _twoLines.y + 0.5f, "at most two lines");
+        }
+
+        [UnityTest]
+        public IEnumerator ChoiceRows_EqualHeight_InsideNode() {
+            DialogueAsset _asset = NewSample("ChoiceRows");
+            ChoiceNode _choice = _asset.Nodes.OfType<ChoiceNode>().First();
+            DialogueGraphOps.AddOption(_asset, _choice);
+            DialogueTables.SetSourceText(_asset, _choice.Options[0].Text, _choice.Options[0].Id, "Yes");
+            DialogueTables.SetSourceText(_asset, _choice.Options[2].Text, _choice.Options[2].Id, string.Join(" ", Enumerable.Repeat("A much longer answer", 10)));
+            window = DialogueGraphWindow.Open(_asset);
+            ChoiceNodeView _view = (ChoiceNodeView)window.View.FindNodeView(_choice.Id);
+            LineNodeView _lineView = (LineNodeView)window.View.FindNodeView(FirstLine(_asset).Id);
+
+            for (int _i = 0; _i < MaxLayoutFrames && !(IsLaidOut(_view) && IsLaidOut(_lineView) && _view.OptionPreview(2).text.EndsWith(Ellipsis)); _i++) yield return null;
+
+            Assert.AreEqual(4, _view.Outputs.Count);
+            StringAssert.EndsWith(Ellipsis, _view.OptionPreview(2).text);
+            // In the node's own space, so the camera zoom does not matter; the border is the edge the user sees
+            Rect _border = InNode(_view.Q("node-border"), _view);
+            float _height = InNode(_view.Outputs[0].Port, _view).height;
+            for (int _i = 0; _i < _view.Outputs.Count; _i++) {
+                Rect _row = InNode(_view.Outputs[_i].Port, _view);
+                Assert.AreEqual(_height, _row.height, 0.5f, "row " + _i + " height");
+                Assert.GreaterOrEqual(_row.yMin, _border.yMin - 0.5f, "row " + _i + " top");
+                Assert.LessOrEqual(_row.yMax, _border.yMax + 0.5f, "row " + _i + " bottom");
+                Assert.GreaterOrEqual(_row.xMin, _border.xMin - 0.5f, "row " + _i + " left");
+                Assert.LessOrEqual(_row.xMax, _border.xMax + 0.5f, "row " + _i + " right");
+                Rect _connector = InNode(_view.Outputs[_i].Port.Q("connector"), _view);
+                Assert.LessOrEqual(_border.xMax - _connector.xMax, MaxPortInset, "row " + _i + " connector against the right edge");
+            }
+            Rect _input = InNode(_view.Input.Q("connector"), _view);
+            Assert.LessOrEqual(_input.xMin - _border.xMin, MaxPortInset, "input connector against the left edge");
+            Assert.AreEqual(_lineView.layout.width, _view.layout.width, 0.5f, "content nodes share their width");
+        }
+
+        [Test]
+        public void StartAndEnd_CompactWithTooltips() {
+            DialogueAsset _asset = NewSample("Compact");
+            window = DialogueGraphWindow.Open(_asset);
+            DialogueNodeView _start = window.View.FindNodeView(_asset.Start.Id);
+            DialogueNodeView _end = window.View.FindNodeView(_asset.Nodes.OfType<EndNode>().First().Id);
+
+            Assert.IsTrue(_start.ClassListContains("dialogue-node--compact"));
+            Assert.IsNull(_start.Input);
+            Assert.AreEqual(1, _start.Outputs.Count);
+            Assert.AreEqual("Entry point of the dialogue", _start.tooltip);
+
+            Assert.IsTrue(_end.ClassListContains("dialogue-node--compact"));
+            Assert.IsNotNull(_end.Input);
+            Assert.AreEqual(0, _end.Outputs.Count);
+            Assert.AreEqual("Ends the dialogue here. An unconnected output also ends it.", _end.tooltip);
+        }
+
+        [Test]
+        public void Edge_PointingLeft_IsBackEdge() {
+            DialogueAsset _asset = NewSample("BackEdge");
+            LineNode _line = FirstLine(_asset);
+            ChoiceNode _choice = _asset.Nodes.OfType<ChoiceNode>().First();
+            window = DialogueGraphWindow.Open(_asset);
+
+            window.View.Connect(_choice.Options[1].Next.Id, _line.Id);
+
+            Assert.IsTrue(window.View.FindEdge(_choice.Options[1].Next.Id).IsBack, "choice to line points left");
+            Assert.IsFalse(window.View.FindEdge(_line.Next.Id).IsBack, "line to choice points right");
+            DialogueEdge _back = window.View.FindEdge(_choice.Options[1].Next.Id);
+            Assert.Less(_back.edgeControl.inputColor.a, 0.5f, "drawn dimmer");
+            Assert.AreEqual(1f, window.View.FindEdge(_line.Next.Id).edgeControl.inputColor.a, 0.01f);
+            _back.Traversed = true;
+            Assert.AreEqual(1f, _back.edgeControl.inputColor.a, 0.01f, "a traversed back edge is highlighted at full opacity");
+            _back.Traversed = false;
+            Assert.Less(_back.edgeControl.inputColor.a, 0.5f, "dim again once the run mark goes");
+
+            window.View.Connect(_choice.NoAnswer.Id, _choice.Id);
+            Assert.IsTrue(window.View.FindEdge(_choice.NoAnswer.Id).IsBack, "a self connection");
+
+            // Moving the line right of the choice turns the edges around
+            DialogueNodeView _lineView = window.View.FindNodeView(_line.Id);
+            _lineView.SetPosition(new Rect(800f, 0f, 0f, 0f));
+            window.View.graphViewChanged(new GraphViewChange { movedElements = new List<GraphElement> { _lineView } });
+
+            Assert.IsTrue(window.View.FindEdge(_line.Next.Id).IsBack, "line to choice after the move");
+            Assert.IsFalse(window.View.FindEdge(_choice.Options[1].Next.Id).IsBack, "choice to line after the move");
+        }
+
+        private static bool IsLaidOut(VisualElement _element) => !float.IsNaN(_element.layout.width) && _element.layout.width > 0f;
+
+        private static Rect InNode(VisualElement _element, VisualElement _node) => _element.ChangeCoordinatesTo(_node, new Rect(Vector2.zero, _element.layout.size));
+        #endregion
+
+        // ==================== PANEL ====================
+        #region Panel
+        [Test]
+        public void Panel_Sections_InOrderPerNodeType() {
+            DialogueAsset _asset = NewSample("Sections");
+            window = DialogueGraphWindow.Open(_asset);
+
+            window.View.SelectAndFrame(FirstLine(_asset).Id);
+            CollectionAssert.AreEqual(new[] { "Text", "Translations", "Timing", "Actions", "Text Events" }, window.Panel.SectionTitles);
+
+            window.View.SelectAndFrame(_asset.Nodes.OfType<ChoiceNode>().First().Id);
+            CollectionAssert.AreEqual(new[] { "Timer", "Options" }, window.Panel.SectionTitles);
+            Assert.AreEqual(2, window.Panel.ItemCount);
+
+            window.View.SelectAndFrame(_asset.Nodes.OfType<BranchNode>().First().Id);
+            Assert.AreEqual(1, window.Panel.ItemCount);
+
+            window.View.SelectAndFrame(_asset.Start.Id);
+            CollectionAssert.IsEmpty(window.Panel.SectionTitles);
+            Assert.IsNull(FindBoundField(window.Panel, "next"), "outputs are not shown");
+        }
+
+        [Test]
+        public void Panel_SectionState_RememberedPerNodeType() {
+            DialogueAsset _asset = NewSample("SectionState");
+            window = DialogueGraphWindow.Open(_asset);
+            LineNode _line = FirstLine(_asset);
+            string _key = DialogueInspectorPanel.SectionStateKey(typeof(LineNode), "Timing");
+            bool _hadKey = SessionState.GetInt(_key, -1) != -1;
+            bool _had = SessionState.GetBool(_key, false);
+            try {
+                window.View.SelectAndFrame(_line.Id);
+                Foldout _timing = window.Panel.Section("Timing");
+                _timing.value = !_timing.value;
+                bool _set = _timing.value;
+
+                window.View.SelectAndFrame(_asset.Nodes.OfType<ChoiceNode>().First().Id);
+                window.View.SelectAndFrame(_line.Id);
+
+                Assert.AreEqual(_set, window.Panel.Section("Timing").value);
+            } finally {
+                if (_hadKey) SessionState.SetBool(_key, _had);
+                else SessionState.EraseBool(_key);
+            }
+        }
+
+        [Test]
+        public void Panel_Translation_WritesLocaleTable() {
+            DialogueAsset _asset = NewSample("PanelTranslation");
+            LineNode _line = FirstLine(_asset);
+            DialogueTables.SetSourceText(_asset, _line.Text, _line.Id, "Hello");
+            window = DialogueGraphWindow.Open(_asset);
+            window.View.SelectAndFrame(_line.Id);
+
+            TextField _field = window.Panel.TranslationField(_line.Id, OtherCode);
+            Assert.IsNotNull(_field);
+            Assert.IsNull(window.Panel.TranslationField(_line.Id, SourceCode), "the source locale is edited above");
+            Assert.AreEqual("", _field.value);
+            Assert.AreEqual("Not translated", _field.textEdition.placeholder);
+
+            Undo.IncrementCurrentGroup();
+            _field.value = "Hola";
+
+            Assert.AreEqual("Hola", DialogueTables.GetText(_line.Text.TableReference, _line.Text.TableEntryReference, new LocaleIdentifier(OtherCode)));
+            Assert.AreEqual("Hello", DialogueTables.GetSourceText(_line.Text));
+            Undo.PerformUndo();
+            Assert.IsTrue(string.IsNullOrEmpty(DialogueTables.GetText(_line.Text.TableReference, _line.Text.TableEntryReference, new LocaleIdentifier(OtherCode))), "one undo takes it back");
+        }
+
+        [Test]
+        public void Panel_OptionTranslations_ForTextAndLockedReason() {
+            DialogueAsset _asset = NewSample("PanelOptionTranslation");
+            ChoiceNode _choice = _asset.Nodes.OfType<ChoiceNode>().First();
+            ChoiceOption _option = _choice.Options[0];
+            window = DialogueGraphWindow.Open(_asset);
+            window.View.SelectAndFrame(_choice.Id);
+
+            Assert.IsNotNull(window.Panel.TranslationField(_option.Id, OtherCode), "option text");
+            window.Panel.TranslationField(_option.Id + ChoiceOption.LockedSuffix, OtherCode).value = "Bloqueada";
+
+            Assert.AreEqual("Bloqueada", DialogueTables.GetText(_option.LockedReason.TableReference, _option.LockedReason.TableEntryReference, new LocaleIdentifier(OtherCode)));
+        }
+        #endregion
+
         // ==================== PLAY MODE ====================
         #region Play Mode
         /// <summary> Runs dialogues by hand, their lines held until advanced; undone in <see cref="TearDown"/> </summary>
@@ -1051,18 +1214,20 @@ namespace HarryTools.Dialogue.Tests {
 
             window.BeginPlayMode();
             LineNodeView _view = (LineNodeView)window.View.FindNodeView(_line.Id);
-            Assert.IsTrue(_view.TextField.isReadOnly, "canvas text");
             Assert.AreEqual((Capabilities)0, _view.capabilities & (Capabilities.Movable | Capabilities.Deletable));
             Assert.IsTrue(_view.Outputs.All(_output => _output.Port.edgeConnector == null), "no new connections");
             window.View.SelectAndFrame(_line.Id);
             Assert.IsTrue(window.Panel.Query<PropertyField>().ToList().All(_field => !_field.enabledSelf), "panel fields");
+            TextField _translation = window.Panel.TranslationField(_line.Id, OtherCode);
+            Assert.IsNotNull(_translation, "translation field");
+            Assert.IsFalse(_translation.enabledSelf, "translation fields");
             int _count = _asset.Nodes.Count;
             window.View.CreateNode(typeof(EndNode), Vector2.zero, null);
             Assert.AreEqual(_count, _asset.Nodes.Count, "no nodes created");
 
             window.EndPlayMode();
             _view = (LineNodeView)window.View.FindNodeView(_line.Id);
-            Assert.IsFalse(_view.TextField.isReadOnly);
+            Assert.IsTrue(window.Panel.TranslationField(_line.Id, OtherCode)?.enabledSelf ?? false, "translation fields editable again");
             Assert.AreNotEqual((Capabilities)0, _view.capabilities & Capabilities.Movable);
             Assert.IsTrue(window.Panel.Query<PropertyField>().ToList().Any(_field => _field.enabledSelf));
         }
@@ -1099,37 +1264,6 @@ namespace HarryTools.Dialogue.Tests {
             window.Panel.AddItem();
             Assert.AreEqual(_before, EditorJsonUtility.ToJson(_asset), "panel add option");
             Assert.IsNotNull(window.View.FindNodeView(_line.Id), "the canvas still shows the node");
-        }
-
-        [Test]
-        public void LineText_ExitingEditMode_WritesPendingText() {
-            DialogueAsset _asset = NewSample("ExitingEditMode");
-            window = DialogueGraphWindow.Open(_asset);
-            LineNode _line = FirstLine(_asset);
-            ((LineNodeView)window.View.FindNodeView(_line.Id)).TextField.value = "Typed before Play";
-            Assert.IsNull(DialogueTables.GetSourceText(_line.Text));
-
-            window.OnPlayModeStateChanged(PlayModeStateChange.ExitingEditMode);
-
-            Assert.AreEqual("Typed before Play", DialogueTables.GetSourceText(_line.Text));
-        }
-
-        [Test]
-        public void LineText_ReadOnly_FocusOutWritesNothing() {
-            DialogueAsset _asset = NewSample("ReadOnlyText");
-            window = DialogueGraphWindow.Open(_asset);
-            LineNode _line = FirstLine(_asset);
-            ((LineNodeView)window.View.FindNodeView(_line.Id)).TextField.value = "Not committed";
-
-            window.BeginPlayMode();
-            NodeTextField _field = ((LineNodeView)window.View.FindNodeView(_line.Id)).TextField;
-            Assert.IsFalse(_field.HasPendingEdit, "a read only canvas does not carry unwritten text");
-            LoseFocus(_field);
-            Assert.IsNull(DialogueTables.GetSourceText(_line.Text));
-
-            _field.value = "Typed in Play";
-            LoseFocus(_field);
-            Assert.IsNull(DialogueTables.GetSourceText(_line.Text), "a read only field writes nothing");
         }
 
         [Test]

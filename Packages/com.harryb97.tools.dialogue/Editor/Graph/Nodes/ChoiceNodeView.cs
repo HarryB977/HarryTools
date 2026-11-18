@@ -1,15 +1,15 @@
 using System.Collections.Generic;
 using UnityEditor.Experimental.GraphView;
-using UnityEngine.UIElements;
 
 namespace HarryTools.Dialogue.Editor {
-    /// <summary> Offers options: one output per option with its text editable next to it, then the no answer output </summary>
+    /// <summary> Offers options: one output per option with the start of its text next to it, then the no answer output </summary>
     internal sealed class ChoiceNodeView : DialogueNodeView {
         // ==================== VARIABLES ===================
         #region Private Variables
         private const string NoAnswerLabel = "No Answer";
+        private const string OptionPortClass = "dialogue-node__option";
 
-        private readonly List<NodeTextField> optionFields = new List<NodeTextField>();
+        private readonly List<(ChoiceOption Option, ClippedLabel Preview)> optionPreviews = new List<(ChoiceOption, ClippedLabel)>();
         #endregion
 
         #region Public Variables
@@ -24,10 +24,11 @@ namespace HarryTools.Dialogue.Editor {
             for (int _i = 0; _i < _node.Options.Count && _port < Outputs.Count - 1; _i++) {
                 ChoiceOption _option = _node.Options[_i];
                 if (_option == null) continue;
-                NodeTextField _field = CreateTextField(() => _option.Text, () => _option.Id);
-                _field.AddToClassList("dialogue-node__option");
-                Outputs[_port].Port.Add(_field);
-                optionFields.Add(_field);
+                ClippedLabel _preview = new ClippedLabel(1);
+                Outputs[_port].Port.AddToClassList(OptionPortClass);
+                Outputs[_port].Port.style.minWidth = 0f;
+                Outputs[_port].Port.Add(_preview);
+                optionPreviews.Add((_option, _preview));
                 _port++;
             }
         }
@@ -35,12 +36,12 @@ namespace HarryTools.Dialogue.Editor {
 
         // ==================== METHODS ====================
         #region Methods
-        /// <summary> The text field of the option at the index among the options shown </summary>
-        internal NodeTextField OptionField(int _index) => optionFields[_index];
+        /// <summary> The text shown next to the option at the index among the options shown </summary>
+        internal ClippedLabel OptionPreview(int _index) => optionPreviews[_index].Preview;
 
         internal override void Refresh() {
             base.Refresh();
-            for (int _i = 0; _i < optionFields.Count; _i++) optionFields[_i].Reload();
+            for (int _i = 0; _i < optionPreviews.Count; _i++) optionPreviews[_i].Preview.FullText = PreviewText(optionPreviews[_i].Option.Text, true);
         }
 
         protected override string Title => "Choice";
