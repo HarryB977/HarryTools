@@ -23,10 +23,14 @@ namespace HarryTools.Dialogue.Editor {
         // ==================== PRIVATE ====================
         #region Private Methods
         private static void OnLocaleAdded(Locale _locale) {
-            foreach (StringTableCollection _collection in LocalizationEditorSettings.GetStringTableCollections()) {
-                string _name = _collection.TableCollectionName;
-                if (DialogueTables.IsDialogueCollectionName(_name) || _name == CharactersCollectionName) DialogueTables.EnsureLocaleTables(_collection);
+            foreach (string _guid in AssetDatabase.FindAssets("t:DialogueAsset")) {
+                DialogueAsset _asset = AssetDatabase.LoadAssetAtPath<DialogueAsset>(AssetDatabase.GUIDToAssetPath(_guid));
+                if (_asset == null) continue;
+                StringTableCollection _linked = DialogueTables.Linked(_asset);
+                if (_linked != null) DialogueTables.EnsureLocaleTables(_linked);
             }
+            StringTableCollection _characters = LocalizationEditorSettings.GetStringTableCollection(CharactersCollectionName);
+            if (_characters != null) DialogueTables.EnsureLocaleTables(_characters);
         }
         #endregion
     }

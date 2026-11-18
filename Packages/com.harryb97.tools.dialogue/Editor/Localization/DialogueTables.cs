@@ -46,7 +46,10 @@ namespace HarryTools.Dialogue.Editor {
             if (_asset == null) return null;
 
             StringTableCollection _linked = Linked(_asset);
-            if (_linked != null) return _linked;
+            if (_linked != null) {
+                EnsureLocaleTables(_linked);
+                return _linked;
+            }
             if (LocalizationEditorSettings.GetLocales().Count == 0) return null;
 
             StringTableCollection _created = LocalizationEditorSettings.CreateStringTableCollection(UniqueName(_asset.name), DialogueSettings.Current.TablesFolder);
@@ -91,7 +94,9 @@ namespace HarryTools.Dialogue.Editor {
 
             for (int _e = 0; _e < _entries.Count; _e++) {
                 long _id = _entries[_e].Id;
-                for (int _t = 0; _t < _tables.Count; _t++) _tables[_t]?.Remove(_id);
+                for (int _t = 0; _t < _tables.Count; _t++) {
+                    if (_tables[_t] != null) _tables[_t].Remove(_id);
+                }
                 _shared.RemoveKey(_id);
             }
             for (int _r = 0; _r < _recorded.Count; _r++) EditorUtility.SetDirty(_recorded[_r]);
@@ -109,7 +114,7 @@ namespace HarryTools.Dialogue.Editor {
             List<string> _orphans = new List<string>();
             IReadOnlyList<SharedTableData.SharedTableEntry> _entries = _collection.SharedData.Entries;
             for (int _i = 0; _i < _entries.Count; _i++) {
-                if (!_owned.Contains(_entries[_i].Key)) _orphans.Add(_entries[_i].Key);
+                if (!string.IsNullOrEmpty(_entries[_i].Key) && !_owned.Contains(_entries[_i].Key)) _orphans.Add(_entries[_i].Key);
             }
             RemoveEntries(_asset, _orphans);
             return _orphans.Count;
@@ -136,11 +141,6 @@ namespace HarryTools.Dialogue.Editor {
             _keys.Add(_option.Id + KeySuffix(typeof(ChoiceOption), "text"));
             _keys.Add(_option.Id + KeySuffix(typeof(ChoiceOption), "lockedReason"));
             return _keys;
-        }
-
-        /// <summary> True when the collection name is one this package creates for dialogues </summary>
-        internal static bool IsDialogueCollectionName(string _name) {
-            return !string.IsNullOrEmpty(_name) && _name.StartsWith(CollectionPrefix, StringComparison.Ordinal);
         }
 
         /// <summary> Writes the text to the source locale table under the key, then points the target to that entry. False when there is no source locale </summary>
@@ -347,7 +347,7 @@ namespace HarryTools.Dialogue.Editor {
             return LocalizationEditorSettings.GetStringTableCollection(_guid);
         }
 
-        /// <summary> Every dialogue text of the asset with the key it belongs under </summary>
+        /// <summary> Every dialogue text of the asset with the key it belongs under. Every [DialogueText] field must be listed here, or CleanOrphans deletes its entries </summary>
         private static List<(LocalizedString, string)> Texts(DialogueAsset _asset) {
             List<(LocalizedString, string)> _texts = new List<(LocalizedString, string)>();
             for (int _i = 0; _i < _asset.Nodes.Count; _i++) {

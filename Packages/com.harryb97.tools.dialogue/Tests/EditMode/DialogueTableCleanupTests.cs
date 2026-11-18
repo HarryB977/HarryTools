@@ -17,7 +17,8 @@ namespace HarryTools.Dialogue.Tests {
         private const string TablesFolder = TempFolder + "/Tables";
         private const string SourceCode = "en";
         private const string OtherCode = "es";
-        private const string ThirdCode = "fr";
+        private static readonly string[] ThirdCandidates = { "fr", "de", "it", "pt", "ja", "ko", "pl" };
+        private string thirdCode;
 
         private readonly List<Locale> addedLocales = new List<Locale>();
         private DialogueSettings settings;
@@ -30,6 +31,11 @@ namespace HarryTools.Dialogue.Tests {
             EnsureFolder(TempFolder);
             EnsureLocale(SourceCode);
             EnsureLocale(OtherCode);
+            for (int _i = 0; _i < ThirdCandidates.Length; _i++) {
+                if (LocalizationEditorSettings.GetLocale(ThirdCandidates[_i]) != null) continue;
+                thirdCode = ThirdCandidates[_i];
+                break;
+            }
         }
 
         [OneTimeTearDown]
@@ -52,12 +58,21 @@ namespace HarryTools.Dialogue.Tests {
 
         [TearDown]
         public void TearDown() {
+            RemoveThird();
             DialogueSettings.ClearForTests();
             Object.DestroyImmediate(settings);
 
             DeleteContents(TablesFolder);
             if (AssetDatabase.IsValidFolder(TablesFolder)) AssetDatabase.DeleteAsset(TablesFolder);
             if (AssetDatabase.IsValidFolder(AssetsFolder)) AssetDatabase.DeleteAsset(AssetsFolder);
+        }
+
+        private void RemoveThird() {
+            for (int _i = addedLocales.Count - 1; _i >= 0; _i--) {
+                if (addedLocales[_i] == null || addedLocales[_i].Identifier.Code != thirdCode) continue;
+                LocalizationEditorSettings.RemoveLocale(addedLocales[_i]);
+                addedLocales.RemoveAt(_i);
+            }
         }
 
         private Locale EnsureLocale(string _code) {
@@ -180,27 +195,110 @@ namespace HarryTools.Dialogue.Tests {
         }
 
         [Test]
+        public void RemoveOption_UndoRestoresEntriesWithTexts() {
+            DialogueAsset _asset = NewAsset("CleanOptionUndo");
+            ChoiceNode _choice = _asset.AddNode<ChoiceNode>();
+            ChoiceOption _option = DialogueGraphOps.AddOption(_asset, _choice);
+            WriteBoth(_asset, _option.Text, _option.Id, "One", "Uno");
+            WriteBoth(_asset, _option.LockedReason, _option.Id + ".locked", "Closed", "Cerrado");
+            StringTableCollection _collection = DialogueTables.EnsureCollection(_asset);
+            string _id = _option.Id;
+
+            Undo.IncrementCurrentGroup();
+            DialogueGraphOps.RemoveOption(_asset, _choice, _id);
+            Assert.IsNull(_collection.SharedData.GetEntry(_id));
+
+            Undo.PerformUndo();
+
+            Assert.AreEqual(1, _choice.Options.Count);
+            Assert.AreEqual("Uno", TextOf(_collection, OtherCode, _id));
+            Assert.AreEqual("Closed", TextOf(_collection, SourceCode, _id + ".locked"));
+        }
+
+        [Test]
+        public void DeleteSeveralNodes_UndoneInOneStep() {
+            DialogueAsset _asset = NewAsset("CleanDeleteMany");
+            LineNode _a = _asset.AddNode<LineNode>();
+            LineNode _b = _asset.AddNode<LineNode>();
+            WriteBoth(_asset, _a.Text, _a.Id, "A", "Aa");
+            WriteBoth(_asset, _b.Text, _b.Id, "B", "Bb");
+            StringTableCollection _collection = DialogueTables.EnsureCollection(_asset);
+            string _idA = _a.Id;
+            string _idB = _b.Id;
+
+            Undo.IncrementCurrentGroup();
+            DialogueGraphOps.Delete(_asset, new[] { _idA, _idB });
+            Assert.AreEqual(0, _collection.SharedData.Entries.Count);
+
+            Undo.PerformUndo();
+
+            Assert.IsNotNull(_asset.Find(_idA));
+            Assert.IsNotNull(_asset.Find(_idB));
+            Assert.AreEqual("Aa", TextOf(_collection, OtherCode, _idA));
+            Assert.AreEqual("B", TextOf(_collection, SourceCode, _idB));
+        }
+
+        [Test]
+        public void LocaleAdded_CharactersCollectionGetsTable() {
+            if (LocalizationEditorSettings.GetStringTableCollection("DialogueCharacters") != null) Assert.Ignore("A characters collection already exists in the project.");
+            EnsureFolder(TablesFolder);
+            StringTableCollection _characters = LocalizationEditorSettings.CreateStringTableCollection("DialogueCharacters", TablesFolder);
+            Assert.IsNull(_characters.GetTable(new LocaleIdentifier(thirdCode)));
+
+            EnsureLocale(thirdCode);
+
+            Assert.IsNotNull(_characters.GetTable(new LocaleIdentifier(thirdCode)));
+        }
+
+        [Test]
+        public void LocaleAdded_RenamedLinkedCollectionGetsTable() {
+            DialogueAsset _asset = NewAsset("CleanRenamed");
+            StringTableCollection _collection = DialogueTables.EnsureCollection(_asset);
+            _collection.SharedData.TableCollectionName = "SomethingElse_" + _asset.name;
+            EditorUtility.SetDirty(_collection.SharedData);
+
+            EnsureLocale(thirdCode);
+
+            Assert.IsNotNull(_collection.GetTable(new LocaleIdentifier(thirdCode)));
+        }
+
+        [Test]
+        public void EnsureCollection_ExistingCollection_RepairsMissingLocaleTable() {
+            DialogueAsset _asset = NewAsset("CleanRepair");
+            StringTableCollection _collection = DialogueTables.EnsureCollection(_asset);
+            Locale _third = EnsureLocale(thirdCode);
+            StringTable _table = Table(_collection, thirdCode);
+            Assert.IsNotNull(_table);
+            _collection.RemoveTable(_table, true);
+            Assert.IsNull(_collection.GetTable(new LocaleIdentifier(thirdCode)));
+
+            DialogueTables.EnsureCollection(_asset);
+
+            Assert.IsNotNull(_collection.GetTable(_third.Identifier));
+        }
+
+        [Test]
         public void LocaleAdded_TablesCreated() {
             DialogueAsset _asset = NewAsset("CleanLocale");
             StringTableCollection _collection = DialogueTables.EnsureCollection(_asset);
-            Assert.IsNull(_collection.GetTable(new LocaleIdentifier(ThirdCode)));
+            Assert.IsNull(_collection.GetTable(new LocaleIdentifier(thirdCode)));
 
-            EnsureLocale(ThirdCode);
+            EnsureLocale(thirdCode);
 
-            Assert.IsNotNull(_collection.GetTable(new LocaleIdentifier(ThirdCode)));
+            Assert.IsNotNull(_collection.GetTable(new LocaleIdentifier(thirdCode)));
         }
 
         [Test]
         public void LocaleRemoved_KeepsTable() {
-            Locale _third = EnsureLocale(ThirdCode);
+            Locale _third = EnsureLocale(thirdCode);
             DialogueAsset _asset = NewAsset("CleanLocaleRemoved");
             StringTableCollection _collection = DialogueTables.EnsureCollection(_asset);
-            Assert.IsNotNull(_collection.GetTable(new LocaleIdentifier(ThirdCode)));
+            Assert.IsNotNull(_collection.GetTable(new LocaleIdentifier(thirdCode)));
 
             LocalizationEditorSettings.RemoveLocale(_third);
             addedLocales.Remove(_third);
 
-            Assert.IsNotNull(_collection.GetTable(new LocaleIdentifier(ThirdCode)));
+            Assert.IsNotNull(_collection.GetTable(new LocaleIdentifier(thirdCode)));
         }
         #endregion
     }
