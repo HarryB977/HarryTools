@@ -17,6 +17,7 @@ namespace HarryTools.Dialogue.Editor {
         private const string GuidTag = "GUID:";
         private const string IdField = "id";
         private const string UndoName = "Edit Dialogue Text";
+        private const string CleanUndoName = "Remove Dialogue Text Entries";
         #endregion
 
         #region Public Variables
@@ -54,7 +55,92 @@ namespace HarryTools.Dialogue.Editor {
             // The link is not recorded for undo: reverting an edit must not orphan the collection it created
             _asset.TableCollectionGuid = _created.SharedData.TableCollectionNameGuid.ToString("N");
             EditorUtility.SetDirty(_asset);
+            EnsureLocaleTables(_created);
             return _created;
+        }
+
+        /// <summary> Adds the empty table of every project locale the collection lacks </summary>
+        internal static void EnsureLocaleTables(StringTableCollection _collection) {
+            if (_collection == null) return;
+            IReadOnlyList<Locale> _locales = LocalizationEditorSettings.GetLocales();
+            for (int _i = 0; _i < _locales.Count; _i++) {
+                if (_locales[_i] == null || _collection.GetTable(_locales[_i].Identifier) != null) continue;
+                _collection.AddNewTable(_locales[_i].Identifier);
+            }
+        }
+
+        /// <summary> Removes the keys from the collection and from every one of its tables, with undo. Unknown keys are ignored </summary>
+        internal static void RemoveEntries(DialogueAsset _asset, IEnumerable<string> _keys) {
+            StringTableCollection _collection = _asset != null && _keys != null ? Linked(_asset) : null;
+            if (_collection == null) return;
+
+            SharedTableData _shared = _collection.SharedData;
+            List<SharedTableData.SharedTableEntry> _entries = new List<SharedTableData.SharedTableEntry>();
+            foreach (string _key in _keys) {
+                SharedTableData.SharedTableEntry _entry = string.IsNullOrEmpty(_key) ? null : _shared.GetEntry(_key);
+                if (_entry != null && !_entries.Contains(_entry)) _entries.Add(_entry);
+            }
+            if (_entries.Count == 0) return;
+
+            List<Object> _recorded = new List<Object> { _shared };
+            IReadOnlyList<StringTable> _tables = _collection.StringTables;
+            for (int _t = 0; _t < _tables.Count; _t++) {
+                if (_tables[_t] != null) _recorded.Add(_tables[_t]);
+            }
+            Undo.RecordObjects(_recorded.ToArray(), CleanUndoName);
+
+            for (int _e = 0; _e < _entries.Count; _e++) {
+                long _id = _entries[_e].Id;
+                for (int _t = 0; _t < _tables.Count; _t++) _tables[_t]?.Remove(_id);
+                _shared.RemoveKey(_id);
+            }
+            for (int _r = 0; _r < _recorded.Count; _r++) EditorUtility.SetDirty(_recorded[_r]);
+        }
+
+        /// <summary> Removes the entries of the dialogue collection whose key belongs to no node or option of the dialogue. Returns how many were removed </summary>
+        internal static int CleanOrphans(DialogueAsset _asset) {
+            StringTableCollection _collection = _asset != null ? Linked(_asset) : null;
+            if (_collection == null) return 0;
+
+            HashSet<string> _owned = new HashSet<string>();
+            List<(LocalizedString Target, string Key)> _texts = Texts(_asset);
+            for (int _i = 0; _i < _texts.Count; _i++) _owned.Add(_texts[_i].Key);
+
+            List<string> _orphans = new List<string>();
+            IReadOnlyList<SharedTableData.SharedTableEntry> _entries = _collection.SharedData.Entries;
+            for (int _i = 0; _i < _entries.Count; _i++) {
+                if (!_owned.Contains(_entries[_i].Key)) _orphans.Add(_entries[_i].Key);
+            }
+            RemoveEntries(_asset, _orphans);
+            return _orphans.Count;
+        }
+
+        /// <summary> The table keys of the texts of a node: its line, or the texts of its options </summary>
+        internal static List<string> KeysOf(DialogueNode _node) {
+            List<string> _keys = new List<string>();
+            switch (_node) {
+                case LineNode _line:
+                    _keys.Add(_line.Id + KeySuffix(typeof(LineNode), "text"));
+                    break;
+                case ChoiceNode _choice:
+                    for (int _i = 0; _i < _choice.Options.Count; _i++) _keys.AddRange(KeysOf(_choice.Options[_i]));
+                    break;
+            }
+            return _keys;
+        }
+
+        /// <summary> The table keys of the texts of an option: its text and its locked reason </summary>
+        internal static List<string> KeysOf(ChoiceOption _option) {
+            List<string> _keys = new List<string>();
+            if (_option == null) return _keys;
+            _keys.Add(_option.Id + KeySuffix(typeof(ChoiceOption), "text"));
+            _keys.Add(_option.Id + KeySuffix(typeof(ChoiceOption), "lockedReason"));
+            return _keys;
+        }
+
+        /// <summary> True when the collection name is one this package creates for dialogues </summary>
+        internal static bool IsDialogueCollectionName(string _name) {
+            return !string.IsNullOrEmpty(_name) && _name.StartsWith(CollectionPrefix, StringComparison.Ordinal);
         }
 
         /// <summary> Writes the text to the source locale table under the key, then points the target to that entry. False when there is no source locale </summary>

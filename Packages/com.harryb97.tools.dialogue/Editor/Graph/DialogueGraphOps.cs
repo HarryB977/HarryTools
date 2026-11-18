@@ -79,11 +79,15 @@ namespace HarryTools.Dialogue.Editor {
             if (_asset == null || _ids == null || _ids.Count == 0) return;
 
             Begin(_asset, DeleteUndo);
+            List<string> _keys = new List<string>();
             foreach (string _id in _ids) {
+                DialogueNode _node = _asset.Find(_id);
+                if (_node != null) _keys.AddRange(DialogueTables.KeysOf(_node));
                 _asset.RemoveNode(_id);
                 _asset.GroupList.RemoveAll(_group => _group != null && _group.Id == _id);
                 _asset.NoteList.RemoveAll(_note => _note != null && _note.Id == _id);
             }
+            DialogueTables.RemoveEntries(_asset, _keys);
             End(_asset);
         }
 
@@ -127,7 +131,9 @@ namespace HarryTools.Dialogue.Editor {
             if (_index < 0) return;
 
             Begin(_asset, OptionUndo);
+            List<string> _keys = DialogueTables.KeysOf(_node.Options[_index]);
             _node.Options.RemoveAt(_index);
+            DialogueTables.RemoveEntries(_asset, _keys);
             End(_asset);
         }
 

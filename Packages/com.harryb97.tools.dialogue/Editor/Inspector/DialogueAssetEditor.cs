@@ -39,6 +39,7 @@ namespace HarryTools.Dialogue.Editor {
                 EditorGUILayout.LabelField("Issues", IssueSummary(_asset));
                 EditorGUILayout.Space();
                 if (GUILayout.Button("Open Graph")) DialogueGraphWindow.Open(_asset);
+                if (GUILayout.Button("Clean orphan entries")) CleanOrphans(_asset);
             }
 
             serializedObject.ApplyModifiedProperties();
@@ -69,6 +70,11 @@ namespace HarryTools.Dialogue.Editor {
                 DialogueValidator.Validate(_asset, null, issues);
             }
             return DialogueIssueList.Summary(issues);
+        }
+
+        private static void CleanOrphans(DialogueAsset _asset) {
+            int _removed = DialogueTables.CleanOrphans(_asset);
+            Debug.Log("Dialogue " + _asset.name + ": removed " + _removed + " orphan table entries.", _asset);
         }
 
         private static int NodeCount(DialogueAsset _asset) {
