@@ -471,13 +471,28 @@ namespace HarryTools.Dialogue.Editor {
 
         // ==================== CLIPBOARD ====================
         #region Clipboard
+        private string testClipboard;
+
         /// <summary> Copies the selection to the system clipboard </summary>
         internal void CopySelection() {
+            if (testClipboard != null) {
+                testClipboard = SerializeElements(selection.OfType<GraphElement>());
+                return;
+            }
             CopySelectionCallback();
+        }
+
+        /// <summary> Makes copy and paste use a private buffer instead of the system clipboard, which an unfocused Editor cannot read. Only for tests </summary>
+        internal void UseTestClipboard() {
+            testClipboard = "";
         }
 
         /// <summary> Adds what the system clipboard holds under the mouse, or next to where it was copied from </summary>
         internal void Paste() {
+            if (testClipboard != null) {
+                if (CanPasteData(testClipboard)) PasteData("Paste", testClipboard);
+                return;
+            }
             PasteCallback();
         }
 

@@ -102,7 +102,7 @@ La ventana muestra un diálogo a la vez. Los cambios se escriben en el asset al 
 - Una salida admite una sola conexión; una entrada admite varias. Los ciclos están permitidos.
 - Borrar un nodo desconecta las salidas que lo apuntaban. El nodo Start no se puede borrar ni duplicar.
 - La salida *No Answer* de una decisión y *Otherwise* de una rama están siempre visibles.
-- **Auto Layout** (clic derecho) coloca los nodos por niveles de izquierda a derecha. Se ejecuta solo, una vez, al abrir un diálogo cuyos nodos están todos en el origen (por ejemplo, uno creado por código o con la versión anterior).
+- **Auto Layout** (clic derecho) coloca los nodos por niveles de izquierda a derecha. Se ejecuta solo, una vez, al abrir un diálogo cuyos nodos están todos en el origen.
 - Doble clic en un nodo Jump abre el diálogo destino.
 
 ### Texto en el lienzo y panel lateral

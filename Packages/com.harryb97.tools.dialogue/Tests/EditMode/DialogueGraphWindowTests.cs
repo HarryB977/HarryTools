@@ -601,11 +601,11 @@ namespace HarryTools.Dialogue.Tests {
 
         [Test]
         public void Window_CopyPaste_CreatesNewNodes() {
-            string _clipboard = EditorGUIUtility.systemCopyBuffer;
-            try {
+            {
                 DialogueAsset _asset = NewSample("Copy");
                 DialogueAsset _other = NewAsset("PasteTarget");
                 window = DialogueGraphWindow.Open(_asset);
+                window.View.UseTestClipboard();
                 LineNode _line = _asset.Nodes.OfType<LineNode>().First();
                 ChoiceNode _choice = _asset.Nodes.OfType<ChoiceNode>().First();
                 window.View.AddToSelection(window.View.FindNodeView(_line.Id));
@@ -637,8 +637,6 @@ namespace HarryTools.Dialogue.Tests {
                 Assert.AreEqual(3, _other.Nodes.Count);
                 Assert.AreEqual(9, _asset.Nodes.Count);
                 AssertViewMatchesAsset(window.View, _other);
-            } finally {
-                EditorGUIUtility.systemCopyBuffer = _clipboard;
             }
         }
 

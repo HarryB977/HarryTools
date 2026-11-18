@@ -14,7 +14,7 @@
 ### Cambiado
 - El Inspector del `DialogueAsset` deja de ser el editor de nodos: muestra los ajustes del diálogo, un resumen y **Open Graph**.
 
-## [1.0.0-beta.1] - Sin publicar
+## [1.0.0-beta.1] - 2026-11-17
 ### Añadido
 - `DialogueAsset` con nodos de inicio, línea, decisión, rama, acciones, salto a otro diálogo (continuar o entrar y volver) y fin, conectados por IDs estables. Ajustes por diálogo: tiempo propio, política de ambientales propia y permitir saltar.
 - `DialogueCharacter` (nombre localizado y voz de tecleo de `texteffects`) y `ChoiceTag`.
