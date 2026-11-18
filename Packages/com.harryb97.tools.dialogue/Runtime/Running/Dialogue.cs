@@ -201,7 +201,10 @@ namespace HarryTools.Dialogue {
         internal static void RaiseChoiceMade(DialogueRun _run, ChoiceOption _option) => choiceMadeHandlers?.Invoke(_run, _option);
 
         /// <summary> Drops every run without ending it, the handlers, the resolver, the choice view hooks and the driver </summary>
-        internal static void ClearForTests() {
+        internal static void ClearForTests() => Reset();
+
+        /// <summary> Drops every run without ending it, the handlers, the resolver, the choice view hooks and the driver. Run by the editor when Play ends </summary>
+        internal static void Reset() {
             active.Clear();
             activeSnapshot = null;
             tickBuffer.Clear();

@@ -15,13 +15,17 @@ namespace HarryTools.Dialogue.Editor {
         private const string RowClass = "dialogue-issues__row";
         private const string WarningRowClass = "dialogue-issues__row--warning";
         private const string SummaryRowClass = "dialogue-issues__row--summary";
+        // The dialogues launched as ambient, kept for the editor session as asset GUIDs after the marker
+        internal const string AmbientLaunchesKey = "HarryTools.Dialogue.AmbientLaunches";
+        private const string StoredMarker = "#";
+        private const char GuidSeparator = ';';
 
         private readonly List<DialogueIssue> issues = new List<DialogueIssue>();
         private readonly List<Entry> entries = new List<Entry>();
         private readonly Button toggle;
         private readonly ListView list;
 
-        // Found when the window opens and on "Revalidate all"; scanning prefabs on every change would be slow
+        // Found on the first validation of the editor session and on "Revalidate all"; scanning prefabs on every change, reload or Play would be slow
         private HashSet<DialogueAsset> ambientLaunches;
         private IVisualElementScheduledItem pending;
         private bool expanded = true;
@@ -139,7 +143,7 @@ namespace HarryTools.Dialogue.Editor {
         internal void RevalidateAll() {
             pending?.Pause();
             pending = null;
-            ambientLaunches = DialogueValidator.FindAmbientLaunches();
+            ambientLaunches = ScanAmbientLaunches();
 
             // The shown dialogue gets its own findings again, with the fresh launchers
             issues.Clear();
@@ -164,8 +168,37 @@ namespace HarryTools.Dialogue.Editor {
         }
 
         private HashSet<DialogueAsset> AmbientLaunches() {
-            if (ambientLaunches == null) ambientLaunches = DialogueValidator.FindAmbientLaunches();
+            if (ambientLaunches == null) ambientLaunches = LoadAmbientLaunches() ?? ScanAmbientLaunches();
             return ambientLaunches;
+        }
+
+        private static HashSet<DialogueAsset> ScanAmbientLaunches() {
+            HashSet<DialogueAsset> _found = DialogueValidator.FindAmbientLaunches();
+            StoreAmbientLaunches(_found);
+            return _found;
+        }
+
+        /// <summary> Keeps the dialogues launched as ambient for the rest of the editor session </summary>
+        internal static void StoreAmbientLaunches(HashSet<DialogueAsset> _launches) {
+            List<string> _guids = new List<string>();
+            foreach (DialogueAsset _asset in _launches) {
+                if (_asset != null && AssetDatabase.TryGetGUIDAndLocalFileIdentifier(_asset, out string _guid, out long _)) _guids.Add(_guid);
+            }
+            SessionState.SetString(AmbientLaunchesKey, StoredMarker + string.Join(GuidSeparator.ToString(), _guids));
+        }
+
+        /// <summary> The dialogues launched as ambient kept earlier in the editor session. Null when nothing was kept </summary>
+        internal static HashSet<DialogueAsset> LoadAmbientLaunches() {
+            string _stored = SessionState.GetString(AmbientLaunchesKey, "");
+            if (!_stored.StartsWith(StoredMarker, StringComparison.Ordinal)) return null;
+
+            HashSet<DialogueAsset> _launches = new HashSet<DialogueAsset>();
+            string[] _guids = _stored.Substring(StoredMarker.Length).Split(new[] { GuidSeparator }, StringSplitOptions.RemoveEmptyEntries);
+            for (int _i = 0; _i < _guids.Length; _i++) {
+                DialogueAsset _asset = AssetDatabase.LoadAssetAtPath<DialogueAsset>(AssetDatabase.GUIDToAssetPath(_guids[_i]));
+                if (_asset != null) _launches.Add(_asset);
+            }
+            return _launches;
         }
 
         private void ShowCurrent() {

@@ -15,6 +15,8 @@ namespace HarryTools.Dialogue.Editor {
             internal readonly Dictionary<DialogueAsset, DialogueNode> LastNodes = new Dictionary<DialogueAsset, DialogueNode>();
             internal DialogueAsset Asset;
             internal DialogueNode Node;
+            // The output of the option just chosen, which the next node entered is reached through
+            internal NodeOutput Chosen;
         }
 
         private readonly Dictionary<DialogueRun, RunPath> paths = new Dictionary<DialogueRun, RunPath>();
@@ -57,6 +59,7 @@ namespace HarryTools.Dialogue.Editor {
             Dialogue.Started += OnStarted;
             Dialogue.Ended += OnEnded;
             Dialogue.NodeEntered += OnNodeEntered;
+            Dialogue.ChoiceMade += OnChoiceMade;
 
             IReadOnlyList<DialogueRun> _active = Dialogue.Active;
             for (int _i = 0; _i < _active.Count; _i++) Track(_active[_i]);
@@ -69,6 +72,7 @@ namespace HarryTools.Dialogue.Editor {
             Dialogue.Started -= OnStarted;
             Dialogue.Ended -= OnEnded;
             Dialogue.NodeEntered -= OnNodeEntered;
+            Dialogue.ChoiceMade -= OnChoiceMade;
             paths.Clear();
             followed = null;
             Changed = null;
@@ -141,20 +145,30 @@ namespace HarryTools.Dialogue.Editor {
             RunPath _path = Track(_run);
             DialogueAsset _asset = _run.CurrentAsset;
             if (_asset != null && _path.LastNodes.TryGetValue(_asset, out DialogueNode _previous) && _previous != null) {
-                string _taken = OutputTo(_previous, _node.Id);
+                string _taken = OutputTo(_previous, _node.Id, _path.Chosen);
                 if (_taken != null) {
                     if (!_path.Outputs.TryGetValue(_asset, out HashSet<string> _outputs)) _path.Outputs[_asset] = _outputs = new HashSet<string>();
                     _outputs.Add(_taken);
                 }
             }
+            _path.Chosen = null;
             if (_asset != null) _path.LastNodes[_asset] = _node;
             _path.Asset = _asset;
             _path.Node = _node;
             if (_run == followed) Changed?.Invoke();
         }
 
-        /// <summary> Id of the first output of the node that leads to the target. Null when none does </summary>
-        private string OutputTo(DialogueNode _node, string _targetId) {
+        private void OnChoiceMade(DialogueRun _run, ChoiceOption _option) {
+            if (_option != null) Track(_run).Chosen = _option.Next;
+        }
+
+        /// <summary> Id of the output of the node that leads to the target: the chosen option's, else the no answer output of a choice left without one, else the first that does. Null when none does </summary>
+        private string OutputTo(DialogueNode _node, string _targetId, NodeOutput _chosen) {
+            if (_node is ChoiceNode _choice) {
+                if (_chosen != null && _chosen.Target == _targetId) return _chosen.Id;
+                // No option was chosen, so the choice was left through its no answer output
+                if (_chosen == null && _choice.NoAnswer.Target == _targetId) return _choice.NoAnswer.Id;
+            }
             outputBuffer.Clear();
             _node.CollectOutputs(outputBuffer);
             for (int _i = 0; _i < outputBuffer.Count; _i++) {

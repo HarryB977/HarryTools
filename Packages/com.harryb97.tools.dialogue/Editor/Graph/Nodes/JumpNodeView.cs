@@ -6,7 +6,6 @@ namespace HarryTools.Dialogue.Editor {
     /// <summary> Moves the conversation into another dialogue. Shows the target and the mode; a double click opens the target. Its output only exists on the canvas when it comes back </summary>
     internal sealed class JumpNodeView : DialogueNodeView {
         internal JumpNodeView(DialogueAsset _asset, JumpNode _node, IEdgeConnectorListener _listener) : base(_asset, _node, _listener) {
-            tooltip = "Double click to open the target dialogue";
             RegisterCallback<MouseDownEvent>(OnMouseDown);
         }
 
@@ -14,6 +13,8 @@ namespace HarryTools.Dialogue.Editor {
 
         protected override string Title => "Jump";
         protected override string TypeClass => "dialogue-node--jump";
+
+        protected override string BaseTooltip => "Double click to open the target dialogue";
 
         protected override bool ShowsOutput(NodeOutput _output) => NodeData.Mode == JumpMode.CallAndReturn;
 

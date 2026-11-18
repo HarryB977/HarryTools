@@ -49,6 +49,7 @@ namespace HarryTools.Dialogue.Editor {
             viewDataKey = _node.Id;
             AddToClassList(NodeClass);
             AddToClassList(TypeClass);
+            tooltip = BaseTooltip;
 
             if (HasInput) {
                 Input = DialoguePort.Create(Direction.Input, Port.Capacity.Multi, _listener);
@@ -115,11 +116,12 @@ namespace HarryTools.Dialogue.Editor {
             indicatorRow.style.display = indicators.Count > 0 ? DisplayStyle.Flex : DisplayStyle.None;
         }
 
-        /// <summary> Marks the node as having warnings, with their text as tooltip. Null or empty clears the mark </summary>
+        /// <summary> Marks the node as having warnings, with their text added to its tooltip. Null or empty clears the mark </summary>
         internal void SetWarnings(string _text) {
             bool _has = !string.IsNullOrEmpty(_text);
             EnableInClassList(WarningClass, _has);
-            tooltip = _has ? _text : "";
+            if (!_has) tooltip = BaseTooltip;
+            else tooltip = string.IsNullOrEmpty(BaseTooltip) ? _text : BaseTooltip + "\n" + _text;
         }
 
         /// <summary> Whether the node carries the warning mark </summary>
@@ -165,13 +167,16 @@ namespace HarryTools.Dialogue.Editor {
 
         // ==================== OVERRIDABLE ====================
         #region Overridable
-        // TypeClass, HasInput and ShowsOutput are read by the base constructor, so they may only use Data
+        // TypeClass, HasInput, ShowsOutput and BaseTooltip are read by the base constructor, so they may only use Data
         protected abstract string Title { get; }
 
         /// <summary> USS class of the node type, for its header color </summary>
         protected abstract string TypeClass { get; }
 
         protected virtual bool HasInput => true;
+
+        /// <summary> The tooltip of the node without warnings </summary>
+        protected virtual string BaseTooltip => "";
 
         /// <summary> Whether the output gets a port on the canvas </summary>
         protected virtual bool ShowsOutput(NodeOutput _output) => true;

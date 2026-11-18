@@ -17,6 +17,11 @@ namespace HarryTools.Dialogue.Editor {
         private static readonly List<TextIssue> textIssueBuffer = new List<TextIssue>();
         #endregion
 
+        #region Internal Variables
+        /// <summary> How many times <see cref="FindAmbientLaunches"/> ran in this domain </summary>
+        internal static int AmbientScanCount { get; private set; }
+        #endregion
+
         // ==================== METHODS ====================
         #region Public Methods
         /// <summary> Adds every problem of the dialogue. A null '_launchedAsAmbient' means no dialogue is known to start as ambient </summary>
@@ -37,29 +42,41 @@ namespace HarryTools.Dialogue.Editor {
 
             CheckReachability(_asset, _start, _byId, _into);
             bool _ambient = _launchedAsAmbient != null && _launchedAsAmbient.Contains(_asset);
+            // Made only when a line has no character, and shared by every such line
+            SerializedObject _serialized = null;
+            try {
+                for (int _i = 0; _i < _asset.NodeList.Count; _i++) {
+                    DialogueNode _node = _asset.NodeList[_i];
+                    if (_node == null) continue;
+                    CheckOutputs(_node, _node == _start, _byId, _into);
 
-            for (int _i = 0; _i < _asset.NodeList.Count; _i++) {
-                DialogueNode _node = _asset.NodeList[_i];
-                if (_node == null) continue;
-                CheckOutputs(_node, _node == _start, _byId, _into);
-
-                switch (_node) {
-                    case LineNode _line:
-                        CheckCharacter(_asset, _i, _line, _into);
-                        CheckText(_line.Text, _line.Id, "Line", true, _line.Events != null ? (Func<string, bool>)_line.Events.Contains : null, _into);
-                        break;
-                    case ChoiceNode _choice:
-                        CheckChoice(_choice, _ambient, _into);
-                        break;
-                    case JumpNode _jump:
-                        if (_jump.Target == null) Add(_into, DialogueIssueSeverity.Warning, _jump.Id, "Jump has no target.");
-                        break;
+                    switch (_node) {
+                        case LineNode _line:
+                            if (_line.Character == null) CheckCharacter(_serialized ?? (_serialized = new SerializedObject(_asset)), _i, _line, _into);
+                            CheckText(_line.Text, _line.Id, "Line", true, _line.Events != null ? (Func<string, bool>)_line.Events.Contains : null, _into);
+                            break;
+                        case ChoiceNode _choice:
+                            CheckChoice(_choice, _ambient, _into);
+                            break;
+                        case JumpNode _jump:
+                            if (_jump.Target == null) Add(_into, DialogueIssueSeverity.Warning, _jump.Id, "Jump has no target.");
+                            break;
+                    }
                 }
+            } finally {
+                _serialized?.Dispose();
             }
+        }
+
+        /// <summary> The outputs of the node that are in use. A jump that continues in its target has an output only on the data, not on the canvas </summary>
+        internal static void CollectUsedOutputs(DialogueNode _node, List<NodeOutput> _into) {
+            if (_node is JumpNode _jump && _jump.Mode == JumpMode.Continue) return;
+            _node.CollectOutputs(_into);
         }
 
         /// <summary> Dialogues started as ambient by a launcher in an open scene or in a prefab of the project. Jumps, actions and code are not followed </summary>
         internal static HashSet<DialogueAsset> FindAmbientLaunches() {
+            AmbientScanCount++;
             HashSet<DialogueAsset> _found = new HashSet<DialogueAsset>();
 
             for (int _s = 0; _s < SceneManager.sceneCount; _s++) {
@@ -104,7 +121,7 @@ namespace HarryTools.Dialogue.Editor {
             List<NodeOutput> _outputs = new List<NodeOutput>();
             while (_pending.Count > 0) {
                 _outputs.Clear();
-                _pending.Pop().CollectOutputs(_outputs);
+                CollectUsedOutputs(_pending.Pop(), _outputs);
                 for (int _o = 0; _o < _outputs.Count; _o++) {
                     NodeOutput _output = _outputs[_o];
                     if (_output == null || !_output.IsConnected || !_byId.TryGetValue(_output.Target, out DialogueNode _next)) continue;
@@ -121,7 +138,7 @@ namespace HarryTools.Dialogue.Editor {
         private static void CheckOutputs(DialogueNode _node, bool _isStart, Dictionary<string, DialogueNode> _byId, List<DialogueIssue> _into) {
             ChoiceNode _choice = _node as ChoiceNode;
             outputBuffer.Clear();
-            _node.CollectOutputs(outputBuffer);
+            CollectUsedOutputs(_node, outputBuffer);
 
             for (int _i = 0; _i < outputBuffer.Count; _i++) {
                 NodeOutput _output = outputBuffer[_i];
@@ -142,13 +159,10 @@ namespace HarryTools.Dialogue.Editor {
         }
 
         /// <summary> A character reference whose asset is gone: the field reads null but still holds the id of the missing object </summary>
-        private static void CheckCharacter(DialogueAsset _asset, int _index, LineNode _line, List<DialogueIssue> _into) {
-            if (_line.Character != null) return;
-            using (SerializedObject _object = new SerializedObject(_asset)) {
-                SerializedProperty _property = _object.FindProperty("nodes.Array.data[" + _index + "].character");
-                if (_property != null && _property.objectReferenceValue == null && _property.objectReferenceInstanceIDValue != 0) {
-                    Add(_into, DialogueIssueSeverity.Warning, _line.Id, "Character asset is missing.");
-                }
+        private static void CheckCharacter(SerializedObject _asset, int _index, LineNode _line, List<DialogueIssue> _into) {
+            SerializedProperty _property = _asset.FindProperty("nodes.Array.data[" + _index + "].character");
+            if (_property != null && _property.objectReferenceValue == null && _property.objectReferenceInstanceIDValue != 0) {
+                Add(_into, DialogueIssueSeverity.Warning, _line.Id, "Character asset is missing.");
             }
         }
 

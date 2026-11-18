@@ -491,6 +491,23 @@ namespace HarryTools.Dialogue.Tests {
         }
 
         [Test]
+        public void AutoLayout_ContinueJump_HiddenOutputNotFollowed() {
+            DialogueAsset _asset = NewAsset("LayoutContinueJump");
+            JumpNode _jump = (JumpNode)DialogueGraphOps.CreateConnected(_asset, typeof(JumpNode), Vector2.zero, _asset.Start.Next.Id);
+            LineNode _line = (LineNode)DialogueGraphOps.CreateNode(_asset, typeof(LineNode), Vector2.zero);
+            DialogueNode _end = DialogueGraphOps.CreateConnected(_asset, typeof(EndNode), Vector2.zero, _line.Next.Id);
+            // A link left from Call And Return mode, not shown while the jump continues
+            _jump.Next.Target = _line.Id;
+            Assert.AreEqual(JumpMode.Continue, _jump.Mode);
+
+            DialogueGraphOps.AutoLayout(_asset);
+
+            Assert.AreEqual(new Vector2(350f, 0f), _jump.Position);
+            Assert.AreEqual(new Vector2(700f, 0f), _line.Position, "unreached, in the last column");
+            Assert.AreEqual(new Vector2(700f, 200f), _end.Position);
+        }
+
+        [Test]
         public void NeedsAutoLayout_OnlyWhenEveryNodeAtOrigin() {
             DialogueAsset _asset = NewAsset("LayoutNeeds");
             Assert.IsFalse(DialogueGraphOps.NeedsAutoLayout(_asset), "a single node");

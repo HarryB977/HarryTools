@@ -113,7 +113,6 @@ namespace HarryTools.Dialogue.Editor {
             DialogueGraphOps.SetGroup(Asset, GroupId, _title, Data.Color);
         }
 
-        /// <summary> A change from the color picker. Dragging in the picker sends many, which make a single undo step </summary>
         /// <summary> False while the canvas holding the group is read only </summary>
         private bool CanWrite {
             get {
@@ -122,6 +121,7 @@ namespace HarryTools.Dialogue.Editor {
             }
         }
 
+        /// <summary> A change from the color picker. Dragging in the picker sends many, which make a single undo step </summary>
         private void PickColor(Color _color) {
             if (pickerUndoGroup < 0) {
                 Undo.IncrementCurrentGroup();

@@ -199,7 +199,8 @@ namespace HarryTools.Dialogue.Editor {
 
             RebuildViews(_selected);
 
-            if (_pending.Count == 0) return;
+            // A read only canvas cannot write it, so it is dropped
+            if (_pending.Count == 0 || ReadOnly) return;
             // A text whose node or option is gone after the rebuild is dropped
             this.Query<NodeTextField>().ForEach(_field => {
                 if (_field.Key == null || !_pending.TryGetValue(_field.Key, out string _text)) return;

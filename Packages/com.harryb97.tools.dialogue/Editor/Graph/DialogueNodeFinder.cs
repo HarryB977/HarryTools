@@ -175,7 +175,7 @@ namespace HarryTools.Dialogue.Editor {
             if (!string.IsNullOrWhiteSpace(field.value)) ShowResults();
         }
 
-        /// <summary> Forgets the query and its results, for example when another dialogue is shown </summary>
+        /// <summary> Forgets the query and its results </summary>
         internal void ClearQuery() {
             field.SetValueWithoutNotify("");
             results.Clear();

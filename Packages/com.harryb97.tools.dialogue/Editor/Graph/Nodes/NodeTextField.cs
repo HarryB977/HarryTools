@@ -47,9 +47,9 @@ namespace HarryTools.Dialogue.Editor {
 
         // ==================== METHODS ====================
         #region Methods
-        /// <summary> Writes the text when it changed since it was last read or written </summary>
+        /// <summary> Writes the text when it changed since it was last read or written. A read only field writes nothing </summary>
         internal void Commit() {
-            if (!HasPendingEdit) return;
+            if (isReadOnly || !HasPendingEdit) return;
             stored = value;
             write(stored);
         }

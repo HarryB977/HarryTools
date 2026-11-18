@@ -877,6 +877,91 @@ namespace HarryTools.Dialogue.Tests {
             Assert.IsTrue(window.IssueList.HasPending);
         }
 
+        [Test]
+        public void Window_Reopen_DoesNotScanPrefabsAgain() {
+            DialogueAsset _asset = NewSample("ScanOnce");
+            window = DialogueGraphWindow.Open(_asset);
+            int _scans = DialogueValidator.AmbientScanCount;
+
+            // What a domain reload or entering Play does to the window
+            window.OnDisable();
+            window.OnEnable();
+            window.IssueList.ValidateNow();
+            Assert.AreEqual(_scans, DialogueValidator.AmbientScanCount, "the launchers found before are reused");
+
+            window.IssueList.RevalidateAll();
+            Assert.AreEqual(_scans + 1, DialogueValidator.AmbientScanCount, "Revalidate all looks again");
+        }
+
+        [Test]
+        public void AmbientLaunches_KeptForTheSession() {
+            string _saved = SessionState.GetString(DialogueIssueList.AmbientLaunchesKey, "");
+            try {
+                DialogueAsset _asset = NewAsset("KeptAmbient");
+                DialogueIssueList.StoreAmbientLaunches(new HashSet<DialogueAsset> { _asset });
+                CollectionAssert.AreEquivalent(new[] { _asset }, DialogueIssueList.LoadAmbientLaunches());
+
+                DialogueIssueList.StoreAmbientLaunches(new HashSet<DialogueAsset>());
+                HashSet<DialogueAsset> _none = DialogueIssueList.LoadAmbientLaunches();
+                Assert.IsNotNull(_none, "a scan that found nothing is kept too");
+                Assert.IsEmpty(_none);
+            } finally {
+                SessionState.SetString(DialogueIssueList.AmbientLaunchesKey, _saved);
+            }
+        }
+
+        [Test]
+        public void Window_JumpTooltip_KeptWithWarnings() {
+            const string _doubleClick = "Double click to open the target dialogue";
+            DialogueAsset _asset = NewSample("JumpTooltip");
+            JumpNode _jump = (JumpNode)DialogueGraphOps.CreateNode(_asset, typeof(JumpNode), new Vector2(0f, 600f));
+            window = DialogueGraphWindow.Open(_asset);
+            window.IssueList.ValidateNow();
+            DialogueNodeView _view = window.View.FindNodeView(_jump.Id);
+
+            Assert.IsTrue(_view.HasWarningMark);
+            StringAssert.Contains(_doubleClick, _view.tooltip);
+            StringAssert.Contains("Jump has no target", _view.tooltip);
+
+            _view.SetWarnings(null);
+            Assert.AreEqual(_doubleClick, _view.tooltip);
+        }
+
+        [Test]
+        public void Window_CopyPaste_SameDialogue_TextHasItsOwnEntry() {
+            DialogueAsset _asset = NewSample("PasteSame");
+            LineNode _line = FirstLine(_asset);
+            Assert.IsTrue(DialogueTables.SetSourceText(_asset, _line.Text, _line.Id, "Original text"));
+            window = DialogueGraphWindow.Open(_asset);
+            window.View.UseTestClipboard();
+            window.View.SelectAndFrame(_line.Id);
+
+            window.View.CopySelection();
+            Undo.IncrementCurrentGroup();
+            window.View.Paste();
+
+            LineNode _copy = _asset.Nodes.Skip(5).OfType<LineNode>().Single();
+            Assert.AreNotEqual(_line.Id, _copy.Id);
+            Assert.IsNotNull(DialogueTables.EnsureCollection(_asset).SharedData.GetEntry(_copy.Id), "entry keyed by the new id");
+            Assert.AreEqual("Original text", DialogueTables.GetSourceText(_copy.Text));
+
+            Assert.IsTrue(DialogueTables.SetSourceText(_asset, _copy.Text, _copy.Id, "Edited copy"));
+            Assert.AreEqual("Edited copy", DialogueTables.GetSourceText(_copy.Text));
+            Assert.AreEqual("Original text", DialogueTables.GetSourceText(_line.Text), "the original keeps its text");
+        }
+
+        [Test]
+        public void Window_AssetRenamed_TitleFollows() {
+            DialogueAsset _asset = NewSample("BeforeRename");
+            window = DialogueGraphWindow.Open(_asset);
+            Assert.AreEqual("BeforeRename", window.titleContent.text);
+
+            Assert.IsEmpty(AssetDatabase.RenameAsset(AssetDatabase.GetAssetPath(_asset), "AfterRename"));
+            window.OnProjectChange();
+
+            Assert.AreEqual("AfterRename", window.titleContent.text);
+        }
+
         private static PropertyField FindBoundField(VisualElement _root, string _name) {
             return _root.Query<PropertyField>().Where(_field => _field.bindingPath != null && (_field.bindingPath == _name || _field.bindingPath.EndsWith("." + _name))).First();
         }
@@ -1014,6 +1099,37 @@ namespace HarryTools.Dialogue.Tests {
             window.Panel.AddItem();
             Assert.AreEqual(_before, EditorJsonUtility.ToJson(_asset), "panel add option");
             Assert.IsNotNull(window.View.FindNodeView(_line.Id), "the canvas still shows the node");
+        }
+
+        [Test]
+        public void LineText_ExitingEditMode_WritesPendingText() {
+            DialogueAsset _asset = NewSample("ExitingEditMode");
+            window = DialogueGraphWindow.Open(_asset);
+            LineNode _line = FirstLine(_asset);
+            ((LineNodeView)window.View.FindNodeView(_line.Id)).TextField.value = "Typed before Play";
+            Assert.IsNull(DialogueTables.GetSourceText(_line.Text));
+
+            window.OnPlayModeStateChanged(PlayModeStateChange.ExitingEditMode);
+
+            Assert.AreEqual("Typed before Play", DialogueTables.GetSourceText(_line.Text));
+        }
+
+        [Test]
+        public void LineText_ReadOnly_FocusOutWritesNothing() {
+            DialogueAsset _asset = NewSample("ReadOnlyText");
+            window = DialogueGraphWindow.Open(_asset);
+            LineNode _line = FirstLine(_asset);
+            ((LineNodeView)window.View.FindNodeView(_line.Id)).TextField.value = "Not committed";
+
+            window.BeginPlayMode();
+            NodeTextField _field = ((LineNodeView)window.View.FindNodeView(_line.Id)).TextField;
+            Assert.IsFalse(_field.HasPendingEdit, "a read only canvas does not carry unwritten text");
+            LoseFocus(_field);
+            Assert.IsNull(DialogueTables.GetSourceText(_line.Text));
+
+            _field.value = "Typed in Play";
+            LoseFocus(_field);
+            Assert.IsNull(DialogueTables.GetSourceText(_line.Text), "a read only field writes nothing");
         }
 
         [Test]

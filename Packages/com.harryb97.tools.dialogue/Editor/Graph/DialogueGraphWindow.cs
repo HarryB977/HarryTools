@@ -148,8 +148,10 @@ namespace HarryTools.Dialogue.Editor {
             View?.CommitPendingText();
         }
 
-        private void OnProjectChange() {
+        internal void OnProjectChange() {
             if (AssetWasDeleted) SetAsset(null);
+            // A renamed dialogue keeps its object, so only the title has to follow
+            else if (asset != null && titleContent.text != asset.name) titleContent = new GUIContent(asset.name);
         }
         #endregion
 
@@ -351,9 +353,11 @@ namespace HarryTools.Dialogue.Editor {
             ApplyRunMarks();
         }
 
-        private void OnPlayModeStateChanged(PlayModeStateChange _change) {
-            // Entering Play clears the runtime's handlers after a reload, so the tracker is made again once Play has started
-            if (_change == PlayModeStateChange.EnteredPlayMode) BeginPlayMode();
+        internal void OnPlayModeStateChanged(PlayModeStateChange _change) {
+            // Text typed on a node is written before Play, while the canvas can still write it
+            if (_change == PlayModeStateChange.ExitingEditMode) View?.CommitPendingText();
+            // The tracker is made once Play has started: entering Play resets the runtime's static handlers (the domain reload does, or [ClearOnReload] when there is none), which would drop one made earlier
+            else if (_change == PlayModeStateChange.EnteredPlayMode) BeginPlayMode();
             else if (_change == PlayModeStateChange.ExitingPlayMode) EndPlayMode();
         }
 

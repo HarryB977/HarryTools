@@ -157,6 +157,51 @@ namespace HarryTools.Dialogue.Tests {
             CollectionAssert.AreEquivalent(new[] { _asset.Start.Next.Id, _jump.Next.Id }, tracker.TraversedOutputIds(_asset));
         }
 
+        /// <summary> Start → choice whose two options and no answer output all lead to one line </summary>
+        private DialogueAsset ChoiceToOneLine(out ChoiceNode _choice, out LineNode _line) {
+            DialogueAsset _asset = NewAsset();
+            _choice = _asset.AddNode<ChoiceNode>();
+            _choice.Options.Add(new ChoiceOption());
+            _choice.Options.Add(new ChoiceOption());
+            _line = AddLine(_asset);
+            _asset.EnsureIds();
+            Link(_asset.Start.Next, _choice);
+            Link(_choice.Options[0].Next, _line);
+            Link(_choice.Options[1].Next, _line);
+            Link(_choice.NoAnswer, _line);
+            return _asset;
+        }
+
+        [Test]
+        public void Tracker_OptionsToSameNode_MarksTheChosenOne() {
+            DialogueAsset _asset = ChoiceToOneLine(out ChoiceNode _choice, out LineNode _line);
+            tracker = new DialogueRunTracker();
+            DialogueRun _run = Dialogue.Start(_asset);
+            Tick();
+
+            _run.CurrentChoice.Choose(1);
+            Tick();
+
+            Assert.AreEqual(_line.Id, tracker.CurrentNodeId);
+            CollectionAssert.AreEquivalent(new[] { _asset.Start.Next.Id, _choice.Options[1].Next.Id }, tracker.TraversedOutputIds(_asset));
+        }
+
+        [Test]
+        public void Tracker_NoAnswerToSameNode_MarksNoAnswer() {
+            DialogueAsset _asset = ChoiceToOneLine(out ChoiceNode _choice, out LineNode _line);
+            _choice.UseTimer = true;
+            _choice.TimerSeconds = 1f;
+            _choice.TimeoutRule = TimeoutRule.NoAnswer;
+            tracker = new DialogueRunTracker();
+            Dialogue.Start(_asset);
+            Tick();
+
+            Dialogue.TickAll(1.1f, 1.1f);
+
+            Assert.AreEqual(_line.Id, tracker.CurrentNodeId);
+            CollectionAssert.AreEquivalent(new[] { _asset.Start.Next.Id, _choice.NoAnswer.Id }, tracker.TraversedOutputIds(_asset));
+        }
+
         [Test]
         public void Tracker_RunEnds_KeepsPath() {
             DialogueAsset _asset = TwoLines(out LineNode _first, out _);

@@ -317,6 +317,27 @@ namespace HarryTools.Dialogue.Tests {
         }
 
         [Test]
+        public void ContinueJump_HiddenOutput_Ignored() {
+            DialogueAsset _asset = Clean("ContinueJump", out LineNode _line);
+            JumpNode _jump = _asset.AddNode<JumpNode>();
+            _asset.EnsureIds();
+            _jump.Target = _asset;
+            string _endId = _line.Next.Target;
+            _line.Next.Target = _jump.Id;
+
+            List<DialogueIssue> _found = Run(_asset);
+            Assert.IsFalse(Has(_found, _jump.Id, "Output is not connected"), "a jump that continues shows no output");
+
+            // A link left from Call And Return mode is not followed
+            _jump.Next.Target = _endId;
+            Assert.IsTrue(Has(Run(_asset), _endId, "not reachable", DialogueIssueSeverity.Warning));
+
+            _jump.Mode = JumpMode.CallAndReturn;
+            _jump.Next.Target = "";
+            Assert.IsTrue(Has(Run(_asset), _jump.Id, "Output is not connected", DialogueIssueSeverity.Info));
+        }
+
+        [Test]
         public void MissingTableEntry() {
             DialogueAsset _asset = Clean("Missing", out LineNode _line);
             StringTableCollection _collection = DialogueTables.EnsureCollection(_asset);

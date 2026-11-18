@@ -257,7 +257,7 @@ namespace HarryTools.Dialogue.Editor {
                 _columns[_depth].Add(_node);
 
                 _outputs.Clear();
-                _node.CollectOutputs(_outputs);
+                DialogueValidator.CollectUsedOutputs(_node, _outputs);
                 for (int _o = 0; _o < _outputs.Count; _o++) {
                     if (_outputs[_o] == null || !_outputs[_o].IsConnected) continue;
                     DialogueNode _target = _asset.Find(_outputs[_o].Target);
