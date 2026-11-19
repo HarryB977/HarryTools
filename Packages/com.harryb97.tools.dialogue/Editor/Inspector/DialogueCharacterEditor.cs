@@ -12,11 +12,9 @@ namespace HarryTools.Dialogue.Editor {
         // ==================== VARIABLES ===================
         #region Private Variables
         private const string MoveLabel = "Move to dialogue characters table";
-        private const string MarkReviewedLabel = "Mark as reviewed";
         private const string MarkAllReviewedLabel = "Mark all as reviewed";
         private const string NameLabel = "Name";
         private const string TranslationsLabel = "Translations";
-        private const string PreviousSourcePrefix = "Previous source: ";
 
         private SerializedProperty displayName;
         private SerializedProperty typingVoice;
@@ -52,8 +50,9 @@ namespace HarryTools.Dialogue.Editor {
         private void DrawOtherTable(DialogueCharacter _character) {
             EditorGUILayout.PropertyField(displayName);
             if (GUILayout.Button(MoveLabel)) {
+                serializedObject.ApplyModifiedProperties();
                 DialogueCharacterTables.MoveToOwnCollection(_character);
-                GUIUtility.ExitGUI();
+                serializedObject.Update();
             }
         }
 
@@ -64,7 +63,8 @@ namespace HarryTools.Dialogue.Editor {
                 return;
             }
 
-            string _id = DialogueCharacterTables.EnsureId(_character);
+            // Assigning a missing id saves the asset, which does not happen in play mode
+            string _id = EditorApplication.isPlaying ? _character.CharacterId : DialogueCharacterTables.EnsureId(_character);
             StringTableCollection _collection = DialogueCharacterTables.Find();
             string _current = DialogueTables.GetSourceText(_character.DisplayName) ?? "";
 
@@ -94,8 +94,8 @@ namespace HarryTools.Dialogue.Editor {
 
             if (DialogueTranslations.State(_collection, _id, _identifier) != TranslationState.Outdated) return false;
             string _previous = DialogueTranslations.PreviousSource(_collection, _id, _identifier);
-            EditorGUILayout.HelpBox("Outdated. " + PreviousSourcePrefix + (string.IsNullOrEmpty(_previous) ? "(empty)" : _previous), MessageType.Warning);
-            if (GUILayout.Button(MarkReviewedLabel)) DialogueTranslations.MarkReviewed(_collection, _id, _identifier);
+            EditorGUILayout.HelpBox("Outdated. " + DialogueTranslations.PreviousSourcePrefix + (string.IsNullOrEmpty(_previous) ? "(empty)" : _previous), MessageType.Warning);
+            if (GUILayout.Button(DialogueTranslations.MarkReviewedLabel)) DialogueTranslations.MarkReviewed(_collection, _id, _identifier);
             return true;
         }
 

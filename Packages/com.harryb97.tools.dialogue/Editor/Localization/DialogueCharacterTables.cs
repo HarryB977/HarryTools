@@ -21,14 +21,17 @@ namespace HarryTools.Dialogue.Editor {
         private const string UsedInPrefix = "Used in: ";
         private const string UsedInSeparator = ", ";
 
-        private static string collectionName = CollectionName;
+        private const string TestCollectionName = "DialogueCharactersTest";
         #endregion
 
         // ==================== METHODS ====================
         #region Methods
+        /// <summary> The name of the characters collection in use: <see cref="CollectionName"/>, or a test-only name while test settings are injected, so tests never reach the project's own collection </summary>
+        private static string ActiveName => DialogueSettings.IsTestInjected ? TestCollectionName : CollectionName;
+
         /// <summary> The characters collection. Null when it does not exist yet </summary>
         internal static StringTableCollection Find() {
-            return LocalizationEditorSettings.GetStringTableCollection(collectionName);
+            return LocalizationEditorSettings.GetStringTableCollection(ActiveName);
         }
 
         /// <summary> The characters collection, created in the settings tables folder with one table per project locale when missing. Null when the project has no locales </summary>
@@ -36,7 +39,7 @@ namespace HarryTools.Dialogue.Editor {
             StringTableCollection _collection = Find();
             if (_collection == null) {
                 if (LocalizationEditorSettings.GetLocales().Count == 0) return null;
-                _collection = LocalizationEditorSettings.CreateStringTableCollection(collectionName, DialogueSettings.Current.TablesFolder);
+                _collection = LocalizationEditorSettings.CreateStringTableCollection(ActiveName, DialogueSettings.Current.TablesFolder);
                 if (_collection == null) return null;
             }
             DialogueTables.EnsureLocaleTables(_collection);
@@ -82,6 +85,8 @@ namespace HarryTools.Dialogue.Editor {
 
             Locale _source = DialogueTables.SourceLocale();
             bool _isSource = _source != null && _source.Identifier == _locale;
+            Undo.IncrementCurrentGroup();
+            int _group = Undo.GetCurrentGroup();
             if (_isSource) DialogueTranslations.StampUnstamped(_collection, _id);
 
             SharedTableData _shared = _collection.SharedData;
@@ -93,6 +98,7 @@ namespace HarryTools.Dialogue.Editor {
             if (!_isSource) DialogueTranslations.Stamp(_collection, _id, _locale);
 
             PointTo(_character, _shared.TableCollectionNameGuid, _entry.Id, UndoName);
+            Undo.CollapseUndoOperations(_group);
             return true;
         }
 
@@ -164,11 +170,6 @@ namespace HarryTools.Dialogue.Editor {
             }
             if (_recorded) EditorUtility.SetDirty(_shared);
             return _recorded;
-        }
-
-        /// <summary> Makes the collection with the given name the characters collection, so tests never touch the one of the project. Pass null to go back to <see cref="CollectionName"/> </summary>
-        internal static void UseCollectionNameForTests(string _name) {
-            collectionName = string.IsNullOrEmpty(_name) ? CollectionName : _name;
         }
         #endregion
 

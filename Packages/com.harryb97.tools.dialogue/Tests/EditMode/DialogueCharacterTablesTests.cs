@@ -18,7 +18,7 @@ namespace HarryTools.Dialogue.Tests {
         private const string LocalesFolder = TempFolder + "/Locales";
         private const string AssetsFolder = TempFolder + "/CharacterAssets";
         private const string TablesFolder = TempFolder + "/CharacterTables";
-        // Never the project's own collection name: tests only ever create this one, under the temp folder
+        // Test settings make DialogueCharacterTables use this name instead of the project's own
         private const string TestCollectionName = "DialogueCharactersTest";
         private const string SourceCode = "en";
         private const string OtherCode = "es";
@@ -61,14 +61,12 @@ namespace HarryTools.Dialogue.Tests {
             settings.TablesFolder = TablesFolder;
             settings.SourceLocaleCode = SourceCode;
             DialogueSettings.UseForTests(settings);
-            DialogueCharacterTables.UseCollectionNameForTests(TestCollectionName);
             EnsureFolder(AssetsFolder);
             EnsureFolder(TablesFolder);
         }
 
         [TearDown]
         public void TearDown() {
-            DialogueCharacterTables.UseCollectionNameForTests(null);
             DialogueSettings.ClearForTests();
             Object.DestroyImmediate(settings);
 
@@ -151,6 +149,46 @@ namespace HarryTools.Dialogue.Tests {
             Assert.AreEqual("", AssetDatabase.MoveAsset(_pathA, _pathC));
             AssetDatabase.ImportAsset(_pathC, ImportAssetOptions.ForceUpdate);
             Assert.AreEqual(_guidA, AssetDatabase.LoadAssetAtPath<DialogueCharacter>(_pathC).CharacterId, "a moved character keeps its id");
+        }
+
+        [Test]
+        public void DuplicateCharacter_ForksItsNameEntry() {
+            DialogueCharacter _a = NewCharacter("ForkA");
+            Assert.IsTrue(DialogueCharacterTables.SetSourceName(_a, "Ada"));
+            Assert.IsTrue(DialogueCharacterTables.SetName(_a, Other, "Ada ES"));
+            string _pathA = AssetDatabase.GetAssetPath(_a);
+            string _pathB = AssetsFolder + "/ForkB.asset";
+            Assert.IsTrue(AssetDatabase.CopyAsset(_pathA, _pathB));
+            AssetDatabase.ImportAsset(_pathB, ImportAssetOptions.ForceUpdate);
+            DialogueCharacter _b = AssetDatabase.LoadAssetAtPath<DialogueCharacter>(_pathB);
+
+            DialogueAssetIdPostprocessor.ForkPendingCharacters();
+
+            Assert.AreNotEqual(_a.CharacterId, _b.CharacterId);
+            Assert.IsTrue(DialogueCharacterTables.IsOwnCollection(_b));
+            Assert.IsTrue(DialogueCharacterTables.IsOwnCollection(_a), "the original keeps its entry");
+            Assert.AreEqual("Ada", DialogueTables.GetSourceText(_b.DisplayName));
+            Assert.AreEqual("Ada ES", DialogueTables.GetText(_b.DisplayName.TableReference, _b.DisplayName.TableEntryReference, Other));
+
+            Assert.IsTrue(DialogueCharacterTables.SetSourceName(_b, "Bea"));
+            Assert.AreEqual("Ada", DialogueTables.GetSourceText(_a.DisplayName), "renaming the copy leaves the original");
+        }
+
+        [Test]
+        public void SaveUnderTestSettings_DoesNotTouchCollectionNamedLikeTheProjectOne() {
+            StringTableCollection _decoy = LocalizationEditorSettings.CreateStringTableCollection(DialogueCharacterTables.CollectionName, TablesFolder);
+            DialogueCharacter _character = NewCharacter("Decoy");
+            SharedTableData.SharedTableEntry _entry = _decoy.SharedData.AddKey(_character.CharacterId);
+            DialogueAsset _asset = NewDialogue("DecoyDialogue");
+            _asset.AddNode<LineNode>().Character = _character;
+            EditorUtility.SetDirty(_asset);
+            EditorUtility.SetDirty(_character);
+            AssetDatabase.SaveAssets();
+
+            Assert.IsFalse(DialogueCharacterTables.Refresh());
+            Assert.IsNull(_decoy.SharedData.GetEntry(_character.CharacterId).Metadata.GetMetadata<Comment>(), "no comment written to the decoy");
+            Assert.AreNotSame(_decoy, DialogueCharacterTables.Find());
+            Assert.AreEqual(1, _decoy.SharedData.Entries.Count);
         }
 
         [Test]

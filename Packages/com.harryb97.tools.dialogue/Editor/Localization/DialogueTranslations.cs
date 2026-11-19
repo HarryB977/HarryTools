@@ -16,6 +16,11 @@ namespace HarryTools.Dialogue.Editor {
     internal static class DialogueTranslations {
         // ==================== VARIABLES ===================
         #region Private Variables
+        /// <summary> Prefix of the note that shows the source text a translation was written against </summary>
+        internal const string PreviousSourcePrefix = "Previous source: ";
+        /// <summary> Label of the button that accepts a translation as it is </summary>
+        internal const string MarkReviewedLabel = "Mark as reviewed";
+
         private const string StampUndoName = "Stamp Translation";
         private const string ReviewUndoName = "Mark Translation as Reviewed";
         #endregion

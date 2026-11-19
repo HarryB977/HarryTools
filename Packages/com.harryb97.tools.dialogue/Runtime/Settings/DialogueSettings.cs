@@ -66,6 +66,7 @@ namespace HarryTools.Dialogue {
 
         #region Private Variables
         [ClearOnReload] private static DialogueSettings current;
+        [ClearOnReload] private static bool testInjected;
 
         [Tooltip("Clock used by dialogues that do not set their own"), SerializeField]
         private DialogueTime defaultTime = DialogueTime.Unscaled;
@@ -103,12 +104,17 @@ namespace HarryTools.Dialogue {
 
         // ==================== INTERNAL ====================
         #region Internal
+        /// <summary> True while settings injected by a test are in use </summary>
+        internal static bool IsTestInjected => testInjected;
+
         internal static void UseForTests(DialogueSettings _settings) {
             current = _settings;
+            testInjected = _settings != null;
         }
 
         internal static void ClearForTests() {
             current = null;
+            testInjected = false;
         }
 
         /// <summary> When Current holds the in-memory defaults, drops them so the next read loads the asset </summary>

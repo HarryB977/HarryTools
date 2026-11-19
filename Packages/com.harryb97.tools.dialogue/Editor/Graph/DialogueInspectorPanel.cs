@@ -33,8 +33,6 @@ namespace HarryTools.Dialogue.Editor {
         private const string OutdatedClass = "dialogue-panel__outdated";
         private const string OutdatedLabel = "Outdated";
         private const string OutdatedMarkClass = "dialogue-panel__outdated-mark";
-        private const string PreviousSourcePrefix = "Previous source: ";
-        private const string MarkReviewedLabel = "Mark as reviewed";
         private const string MarkAllReviewedLabel = "Mark all as reviewed";
         private const int ShortIdLength = 8;
         private const int MaxTitleLength = 32;
@@ -539,7 +537,7 @@ namespace HarryTools.Dialogue.Editor {
             _mark.AddToClassList(OutdatedMarkClass);
             _box.Add(_mark);
             _box.Add(new Label());
-            _box.Add(new Button(() => MarkReviewed(_key, _locale)) { text = MarkReviewedLabel });
+            _box.Add(new Button(() => MarkReviewed(_key, _locale)) { text = DialogueTranslations.MarkReviewedLabel });
             _box.style.display = DisplayStyle.None;
             return _box;
         }
@@ -564,7 +562,7 @@ namespace HarryTools.Dialogue.Editor {
                 _other.Outdated.style.display = _outdated ? DisplayStyle.Flex : DisplayStyle.None;
                 if (_outdated) {
                     string _previous = DialogueTranslations.PreviousSource(_collection, _other.Key, _other.Locale);
-                    _other.Outdated.Query<Label>().ToList()[1].text = PreviousSourcePrefix + (string.IsNullOrEmpty(_previous) ? "(empty)" : _previous);
+                    _other.Outdated.Query<Label>().ToList()[1].text = DialogueTranslations.PreviousSourcePrefix + (string.IsNullOrEmpty(_previous) ? "(empty)" : _previous);
                 }
             }
             if (_translation.MarkAll != null) _translation.MarkAll.style.display = _any ? DisplayStyle.Flex : DisplayStyle.None;

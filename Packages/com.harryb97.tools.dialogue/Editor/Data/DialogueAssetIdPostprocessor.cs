@@ -9,6 +9,8 @@ namespace HarryTools.Dialogue.Editor {
         #region Private Variables
         // GUIDs of duplicates whose texts still live in the original's collection
         [ClearOnReload] private static List<string> pendingTexts;
+        // GUIDs of duplicated characters whose name still is the original's entry
+        [ClearOnReload] private static List<string> pendingForks;
         #endregion
 
         // ==================== PROCESSING ====================
@@ -16,13 +18,14 @@ namespace HarryTools.Dialogue.Editor {
         private static void OnPostprocessAllAssets(string[] _imported, string[] _deleted, string[] _moved, string[] _movedFrom) {
             for (int _i = 0; _i < _imported.Length; _i++) {
                 if (!_imported[_i].EndsWith(".asset")) continue;
-                DialogueAsset _asset = AssetDatabase.LoadAssetAtPath<DialogueAsset>(_imported[_i]);
-                if (_asset != null) {
-                    Sync(_asset, _imported[_i]);
-                    continue;
+                System.Type _type = AssetDatabase.GetMainAssetTypeAtPath(_imported[_i]);
+                if (_type == typeof(DialogueAsset)) {
+                    DialogueAsset _asset = AssetDatabase.LoadAssetAtPath<DialogueAsset>(_imported[_i]);
+                    if (_asset != null) Sync(_asset, _imported[_i]);
+                } else if (_type == typeof(DialogueCharacter)) {
+                    DialogueCharacter _character = AssetDatabase.LoadAssetAtPath<DialogueCharacter>(_imported[_i]);
+                    if (_character != null) Sync(_character, _imported[_i]);
                 }
-                DialogueCharacter _character = AssetDatabase.LoadAssetAtPath<DialogueCharacter>(_imported[_i]);
-                if (_character != null) Sync(_character, _imported[_i]);
             }
         }
 
@@ -46,14 +49,17 @@ namespace HarryTools.Dialogue.Editor {
             return true;
         }
 
-        /// <summary> Writes the GUID of the asset at the given path into the character id when they differ. A character whose old id belongs to another existing character is a duplicate and gets the new one; characters that had no id get theirs here too </summary>
+        /// <summary> Makes the character id equal to the GUID of the asset at the given path. That covers a character that had no id yet and a duplicate, which arrives with the id of the original. A duplicate whose name is the original's entry in the characters collection gets its own copy of it once the import has finished </summary>
         internal static bool Sync(DialogueCharacter _character, string _path) {
             string _guid = AssetDatabase.AssetPathToGUID(_path);
-            if (string.IsNullOrEmpty(_guid) || _character.CharacterId == _guid) return false;
+            string _previous = _character.CharacterId;
+            if (string.IsNullOrEmpty(_guid) || _previous == _guid) return false;
 
             _character.CharacterId = _guid;
             EditorUtility.SetDirty(_character);
             AssetDatabase.SaveAssetIfDirty(_character);
+
+            if (!string.IsNullOrEmpty(_previous) && PointsToEntry(_character, _previous)) ScheduleFork(_guid);
             return true;
         }
         #endregion
@@ -65,6 +71,34 @@ namespace HarryTools.Dialogue.Editor {
             if (pendingTexts.Contains(_guid)) return;
             pendingTexts.Add(_guid);
             if (pendingTexts.Count == 1) EditorApplication.update += AdoptPendingTexts;
+        }
+
+        private static bool PointsToEntry(DialogueCharacter _character, string _key) {
+            if (_character.DisplayName == null || _character.DisplayName.IsEmpty) return false;
+            UnityEditor.Localization.StringTableCollection _collection = UnityEditor.Localization.LocalizationEditorSettings.GetStringTableCollection(_character.DisplayName.TableReference);
+            return _collection != null && _collection.SharedData != null && _collection.SharedData.GetEntryFromReference(_character.DisplayName.TableEntryReference)?.Key == _key;
+        }
+
+        private static void ScheduleFork(string _guid) {
+            if (pendingForks == null) pendingForks = new List<string>();
+            if (pendingForks.Contains(_guid)) return;
+            pendingForks.Add(_guid);
+            if (pendingForks.Count == 1) EditorApplication.update += ForkPendingCharacters;
+        }
+
+        /// <summary> Gives every pending duplicated character its own copy of the name. Runs on its own once the Editor is idle </summary>
+        internal static void ForkPendingCharacters() {
+            if (EditorApplication.isUpdating || EditorApplication.isCompiling) return;
+            EditorApplication.update -= ForkPendingCharacters;
+            if (pendingForks == null) return;
+
+            string[] _guids = pendingForks.ToArray();
+            pendingForks.Clear();
+            for (int _i = 0; _i < _guids.Length; _i++) {
+                DialogueCharacter _character = AssetDatabase.LoadAssetAtPath<DialogueCharacter>(AssetDatabase.GUIDToAssetPath(_guids[_i]));
+                if (_character != null) DialogueCharacterTables.MoveToOwnCollection(_character);
+            }
+            AssetDatabase.SaveAssets();
         }
 
         // An update callback rather than delayCall, which does not run while the Editor is in the background
