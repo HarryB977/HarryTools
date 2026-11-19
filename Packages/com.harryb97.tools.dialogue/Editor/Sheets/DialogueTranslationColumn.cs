@@ -6,13 +6,15 @@ using UnityEngine.Localization;
 using UnityEngine.Localization.Tables;
 
 namespace HarryTools.Dialogue.Editor {
-    /// <summary> Sheet column of the translation into one locale that is not the source locale. Pulling writes a changed cell and records the source text it was written against; an empty cell never clears the local translation </summary>
+    /// <summary> Sheet column of the translation into one locale that is not the source locale. Each translation remembers the text of its last sync, so a pull only takes a cell the sheet changed since then; when both sides changed, the sheet wins and the case is counted. An empty cell never clears the local translation </summary>
     internal sealed class DialogueTranslationColumn : SheetColumn {
         // ==================== VARIABLES ===================
         #region Private Variables
         private const string PullUndoName = "Pull Translation";
+        private const string PushUndoName = "Push Translation";
 
-        private int pushTableIndex = -1;
+        private StringTable pushTable;
+        private readonly List<(long Id, string Text)> pushed = new List<(long, string)>();
         private StringTableCollection pullCollection;
         private StringTable pullTable;
         #endregion
@@ -20,6 +22,9 @@ namespace HarryTools.Dialogue.Editor {
         #region Public Variables
         /// <summary> The locale of the translation </summary>
         public LocaleIdentifier LocaleIdentifier { get; set; }
+
+        /// <summary> Translations of the last pull that had changed both locally and in the sheet since their last sync, and took the sheet text. Reset when a pull begins </summary>
+        public int Conflicts { get; private set; }
 
         /// <inheritdoc/>
         public override PushFields PushFields => PushFields.Value;
@@ -29,12 +34,13 @@ namespace HarryTools.Dialogue.Editor {
         #region Push
         /// <inheritdoc/>
         public override void PushBegin(StringTableCollection _collection) {
-            pushTableIndex = -1;
+            pushTable = null;
+            pushed.Clear();
             if (_collection == null) return;
             IReadOnlyList<StringTable> _tables = _collection.StringTables;
             for (int _i = 0; _i < _tables.Count; _i++) {
                 if (_tables[_i] != null && _tables[_i].LocaleIdentifier == LocaleIdentifier) {
-                    pushTableIndex = _i;
+                    pushTable = _tables[_i];
                     return;
                 }
             }
@@ -46,11 +52,24 @@ namespace HarryTools.Dialogue.Editor {
             _headerNote = null;
         }
 
-        /// <inheritdoc/>
+        /// <summary> The local translation. It is only recorded as synced by <see cref="CommitPush"/>, once the push succeeded </summary>
         public override void PushCellData(SharedTableData.SharedTableEntry _keyEntry, IList<StringTableEntry> _tableEntries, out string _value, out string _note) {
-            StringTableEntry _entry = pushTableIndex >= 0 && pushTableIndex < _tableEntries.Count ? _tableEntries[pushTableIndex] : null;
+            StringTableEntry _entry = pushTable != null && _keyEntry != null ? pushTable.GetEntry(_keyEntry.Id) : null;
             _value = _entry?.Value;
             _note = null;
+            if (_entry != null) pushed.Add((_keyEntry.Id, _value));
+        }
+
+        /// <summary> Records the pushed texts as the last synced ones, with undo. Call it only after the push reached the sheet </summary>
+        internal void CommitPush() {
+            if (pushTable == null || pushed.Count == 0) return;
+            Undo.RecordObject(pushTable, PushUndoName);
+            for (int _i = 0; _i < pushed.Count; _i++) {
+                StringTableEntry _entry = pushTable.GetEntry(pushed[_i].Id);
+                if (_entry != null) SetSynced(_entry, pushed[_i].Text);
+            }
+            EditorUtility.SetDirty(pushTable);
+            pushed.Clear();
         }
         #endregion
 
@@ -60,19 +79,37 @@ namespace HarryTools.Dialogue.Editor {
         public override void PullBegin(StringTableCollection _collection) {
             pullCollection = _collection;
             pullTable = null;
+            Conflicts = 0;
             if (_collection == null || DialogueTables.SourceLocale()?.Identifier == LocaleIdentifier) return;
             pullTable = _collection.GetTable(LocaleIdentifier) as StringTable;
         }
 
-        /// <summary> Writes the cell when it has text that differs from the local translation, then stamps it, with undo. Empty cells and unknown entries are ignored </summary>
+        /// <summary> Takes the cell when the sheet changed it since the last sync, then stamps it, with undo. A cell equal to the local text or to the last synced text keeps the local one. Blank cells and unknown entries are ignored </summary>
         public override void PullCellData(SharedTableData.SharedTableEntry _keyEntry, string _cellValue, string _cellNote) {
-            if (pullTable == null || string.IsNullOrEmpty(_cellValue) || !DialogueSheetColumns.Belongs(pullCollection, _keyEntry)) return;
+            if (pullTable == null || DialogueSheetColumns.IsBlank(_cellValue) || !DialogueSheetColumns.Belongs(pullCollection, _keyEntry)) return;
 
             StringTableEntry _entry = pullTable.GetEntry(_keyEntry.Id);
-            if (_entry != null && _entry.Value == _cellValue) return;
+            string _cell = DialogueSheetColumns.Normalize(_cellValue);
+            string _local = _entry != null ? DialogueSheetColumns.Normalize(_entry.Value) : "";
+            string _synced = _entry?.GetMetadata<SheetSyncSnapshot>()?.SyncedText;
+            if (_synced != null) _synced = DialogueSheetColumns.Normalize(_synced);
+
+            if (_cell == _local) {
+                if (_synced != _cell) {
+                    Undo.RecordObject(pullTable, PullUndoName);
+                    SetSynced(_entry, _cellValue);
+                    EditorUtility.SetDirty(pullTable);
+                }
+                return;
+            }
+            // The sheet kept the synced text: any difference is a local edit
+            if (_cell == _synced) return;
+
+            if (_local.Length > 0 && (_synced == null || _local != _synced)) Conflicts++;
 
             Undo.RecordObject(pullTable, PullUndoName);
-            pullTable.AddEntry(_keyEntry.Id, _cellValue);
+            _entry = pullTable.AddEntry(_keyEntry.Id, _cellValue);
+            SetSynced(_entry, _cellValue);
             EditorUtility.SetDirty(pullTable);
             DialogueTranslations.Stamp(pullCollection, _keyEntry.Key, LocaleIdentifier);
         }
@@ -81,6 +118,15 @@ namespace HarryTools.Dialogue.Editor {
         public override void PullEnd() {
             pullCollection = null;
             pullTable = null;
+        }
+        #endregion
+
+        // ==================== PRIVATE ====================
+        #region Private Methods
+        private static void SetSynced(StringTableEntry _entry, string _text) {
+            SheetSyncSnapshot _snapshot = _entry.GetMetadata<SheetSyncSnapshot>();
+            if (_snapshot == null) _entry.AddMetadata(new SheetSyncSnapshot { SyncedText = _text ?? "" });
+            else _snapshot.SyncedText = _text ?? "";
         }
         #endregion
     }

@@ -119,7 +119,7 @@ namespace HarryTools.Dialogue.Editor {
                 connectionMessage = null;
             }
 
-            if (_sheets.Provider != null && AssetDatabase.GetAssetPath(_sheets.Provider).Contains("/Resources/")) {
+            if (_sheets.Provider != null && AssetDatabase.GetAssetPath(_sheets.Provider).IndexOf("/Resources/", StringComparison.OrdinalIgnoreCase) >= 0) {
                 EditorGUILayout.HelpBox("The service provider is inside a Resources folder, so its credentials would be included in builds.", MessageType.Warning);
             }
 
@@ -141,7 +141,7 @@ namespace HarryTools.Dialogue.Editor {
                 _type = MessageType.Info;
                 return "Connected. The spreadsheet has " + _tabs + (_tabs == 1 ? " tab." : " tabs.");
             } catch (Exception _exception) {
-                return "Connection failed: " + _exception.Message;
+                return "Connection failed: " + _exception.GetBaseException().Message;
             }
         }
         #endregion

@@ -61,11 +61,11 @@ namespace HarryTools.Dialogue.Editor {
             collection = _collection;
         }
 
-        /// <summary> Marks the translation as reviewed when its mark was cleared in the sheet: the cell is empty, the translation is outdated, and the note shows the mark was pushed against the current source text. A mark that was never pushed cannot have been cleared, so a translation that became outdated after the last push keeps its state </summary>
+        /// <summary> Marks the translation as reviewed when its mark was cleared in the sheet: the cell is blank, the translation is outdated, and the note shows the mark was pushed against the current source text. A mark that was never pushed cannot have been cleared, so a translation that became outdated after the last push keeps its state </summary>
         public override void PullCellData(SharedTableData.SharedTableEntry _keyEntry, string _cellValue, string _cellNote) {
-            if (!string.IsNullOrEmpty(_cellValue) || _cellNote == null || !DialogueSheetColumns.Belongs(collection, _keyEntry)) return;
+            if (!DialogueSheetColumns.IsBlank(_cellValue) || _cellNote == null || !DialogueSheetColumns.Belongs(collection, _keyEntry)) return;
             if (DialogueTranslations.State(collection, _keyEntry.Key, LocaleIdentifier) != TranslationState.Outdated) return;
-            if (_cellNote != DialogueTranslations.SourceTextOf(collection, _keyEntry.Key)) return;
+            if (DialogueSheetColumns.Normalize(_cellNote) != DialogueSheetColumns.Normalize(DialogueTranslations.SourceTextOf(collection, _keyEntry.Key))) return;
 
             DialogueTranslations.MarkReviewed(collection, _keyEntry.Key, LocaleIdentifier);
         }
