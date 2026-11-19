@@ -332,14 +332,14 @@ El texto de las líneas, las respuestas y los motivos de bloqueo se escribe en e
 
 ### Comentarios y orden
 
-- Cada entrada lleva un comentario para quien traduce, en inglés, con el tipo de texto (`Line`, `Option` o `Locked reason`), el diálogo, el personaje de origen (solo en líneas), de dónde viene en el recorrido (tras el inicio, tras una respuesta, caso de una rama u "Otherwise") y la nota de guion si la hay. Si un texto se alcanza desde varios sitios, los orígenes se separan con `; `.
+- Cada entrada lleva un comentario para quien traduce, en inglés, con el tipo de texto (`Line`, `Option` o `Locked reason`), el diálogo, el personaje de origen (solo en líneas), de dónde viene en el recorrido (tras el inicio, tras una respuesta, caso de una rama u "Otherwise") y la nota para traducción si la hay. La nota de guion no sale nunca. Si un texto se alcanza desde varios sitios, los orígenes se separan con `; `.
 - Las entradas se ordenan por el recorrido del diálogo desde Start, siguiendo las salidas en orden, una decisión seguida de sus respuestas y sus motivos de bloqueo; lo que Start no alcanza va al final. Las claves y los IDs no cambian nunca.
 - Comentarios y orden se actualizan al guardar el diálogo, antes de subir a la hoja y después de bajar (bajar cambia el orden). Se ven en la ventana **Localization Tables** de Unity.
 
 ### Borrado
 
-- Borrar un nodo, una respuesta o un caso borra sus entradas en todas las tablas de la colección, en el mismo paso de Undo. Deshacer las recupera con sus textos. Pegar y duplicar crean entradas nuevas.
-- **Clean orphan entries**, en el Inspector del `DialogueAsset`, quita de la colección las entradas cuyo dueño ya no existe. Sirve para restos anteriores a esta versión.
+- Borrar un nodo o una respuesta borra sus entradas en todas las tablas de la colección, en el mismo paso de Undo. Deshacer las recupera con sus textos. Pegar y duplicar crean entradas nuevas.
+- **Clean orphan entries**, en el Inspector del `DialogueAsset`, quita de la colección las entradas cuyo dueño ya no existe y a las que ningún texto del diálogo apunta, tras pedir confirmación con el número de entradas. Sirve para restos anteriores a esta versión.
 
 ### Idiomas nuevos
 
@@ -356,8 +356,8 @@ El texto de las líneas, las respuestas y los motivos de bloqueo se escribe en e
 
 - La herramienta mantiene una colección propia, `DialogueCharacters`, en la carpeta de tablas de Settings. Cada `DialogueCharacter` tiene un ID estable que es la clave de su entrada.
 - El nombre se escribe en el Inspector del personaje, en el idioma de origen, con sus traducciones y las mismas marcas y botones de revisión que las líneas.
-- Un personaje cuyo nombre apunta a otra tabla se muestra tal cual y no se cambia sin pedirlo: el botón **Move to dialogue characters table** lo pasa a la colección propia.
-- Al duplicar un personaje, su nombre se copia a una entrada nueva, de modo que los dos no comparten texto por accidente.
+- Un personaje cuyo nombre apunta a otra tabla se muestra tal cual y no se cambia sin pedirlo: el botón **Move to dialogue characters table** copia el nombre, en todos los idiomas, a una entrada propia de la colección y apunta el personaje a ella. La entrada original se queda como estaba.
+- Al duplicar un personaje cuyo nombre es su propia entrada de `DialogueCharacters`, el nombre se copia a una entrada nueva, de modo que los dos no comparten texto por accidente. Un nombre que apunta a otra tabla se queda compartido hasta que se pulse el botón.
 - Los personajes se suben y se bajan como la pestaña `Characters`.
 
 ### Validación
@@ -368,6 +368,8 @@ Además de lo descrito en la ventana del graph, el validador informa de la local
 - **Outdated in:** aviso, con la lista de idiomas con la traducción desactualizada.
 - **Translation (código):** aviso cuando una traducción difiere del original en marcas de texto o eventos, según las reglas de `texteffects`.
 - **Speaker name untranslated in:** nota informativa, una por personaje en su primera línea, con los idiomas en los que su nombre no tiene texto.
+
+En una respuesta, estos mensajes empiezan por `Option: `, salvo los de **Translation** de su motivo de bloqueo, que empiezan por `Locked reason: `.
 
 ## Google Sheets
 
@@ -382,7 +384,7 @@ La sincronización con una hoja de Google es opcional y usa la extensión de Goo
    - Crea un ID de cliente OAuth de tipo "Aplicación de escritorio" y copia su ID y su secreto.
    - Una clave de API solo permite bajar de hojas accesibles con ella; subir y crear pestañas exigen OAuth.
 4. **Asset de servicio.**
-   - Crea un asset **Sheets Service Provider** fuera de cualquier carpeta `Resources`, para que las credenciales nunca entren en una build. Si está dentro, Settings lo avisa.
+   - Crea un asset **Sheets Service Provider** (**Assets > Create > Localization > Google Sheets Service**) fuera de cualquier carpeta `Resources`, para que las credenciales nunca entren en una build. Si está dentro, Settings lo avisa.
    - Elige la autenticación OAuth, introduce el ID y el secreto del cliente y autoriza el acceso desde el propio asset en el navegador.
 5. **Hoja.** Crea una hoja en Google Drive y copia su ID, la parte de la URL entre `/d/` y `/edit`.
 6. **Configuración.** En **Project Settings > HarryTools > Dialogue**, sección Google Sheets, asigna el asset de servicio y el ID. Se guardan en `ProjectSettings`, fuera de `Resources` y de las builds.
@@ -392,8 +394,10 @@ La sincronización con una hoja de Google es opcional y usa la extensión de Goo
 ### Qué se sincroniza
 
 - Cada diálogo tiene su pestaña, que se crea si no existe y se sigue usando aunque se renombre el diálogo. Se titula con el nombre del diálogo y los seis primeros caracteres de su ID, porque Google exige títulos únicos. Los personajes van en la pestaña `Characters`.
-- Las columnas son la clave, su comentario y, por cada idioma, el texto y una columna `<código> Status`. Se rehacen al añadir idiomas.
-- Se lanza desde **Window > HarryTools > Dialogue > Push all / Pull all** y los botones equivalentes de Settings (también para los personajes), y desde **Push** y **Pull** de la barra del graph para el diálogo abierto. Cada diálogo se sincroniza entero o no se toca. "Todos" sigue con el resto si uno falla y al final da un resumen.
+- La pestaña de cada colección se recuerda por hoja. Con otro **Spreadsheet ID** no se reutiliza ninguna pestaña de la hoja anterior: se busca una con el mismo título o se crea.
+- Las columnas son la clave, su comentario, el texto del idioma de origen y, por cada otro idioma, su texto y una columna `<código> Status`. Se rehacen al añadir idiomas. No insertes columnas entre ellas: la subida las escribe por posición.
+- Se lanza desde **Window > HarryTools > Dialogue > Push all / Pull all** y los botones equivalentes de Settings (también para los personajes), y desde **Push** y **Pull** de la barra del graph para el diálogo abierto. "Todos" sigue con el resto si uno falla y al final da un resumen.
+- Si la subida falla, la hoja no cambia, pero lo que la bajada previa trajo se queda en las tablas. Si una bajada falla a mitad, las celdas que ya había tomado se quedan en las tablas sin guardar.
 
 ### Reglas de la bajada y la subida
 
@@ -401,17 +405,19 @@ La sincronización con una hoja de Google es opcional y usa la extensión de Goo
 - **Bajar** solo actualiza los idiomas que no son el de origen y nunca toca la columna de origen ni el texto escrito en el graph.
 - Una traducción local solo se sustituye si la hoja cambió desde la última sincronización. **Si la misma traducción cambió en los dos sitios desde entonces, gana la hoja** y se cuenta y avisa como conflicto.
 - **Una celda vacía nunca borra una traducción local.**
-- Las filas desconocidas (de nodos borrados, añadidas a mano o con la clave editada) se ignoran y se cuentan. Bajar no crea ni renombra claves ni borra entradas locales que no estén en la hoja.
+- Las filas desconocidas (de nodos borrados, añadidas a mano, con la clave editada o vacía, o con una clave repetida a partir de su segunda fila) se conservan al final y no se importan, y se cuentan. Al subir se vuelven a escribir debajo de las demás con sus valores y sus notas, así que nada escrito en ellas se pierde. Bajar no crea ni renombra claves ni borra entradas locales que no estén en la hoja.
 - Si hay filas desconocidas o conflictos, se avisa en consola y en el resumen.
+- Bajar un diálogo que aún no tiene colección no crea nada.
+- Lo que la herramienta recuerda de cada sincronización vive en las tablas, así que Ctrl+Z tras una bajada también lo deshace: la siguiente bajada vuelve a tomar el texto de la hoja. Ninguna traducción se pierde por ello.
 - Con **clave de API** solo se puede bajar: subir y crear pestañas necesitan OAuth y fallan antes de enviar nada.
-- Las columnas se localizan por el **título de su cabecera**, así que no hay que renombrarlas. Un idioma cuya cabecera falta se salta, y si falta la de la clave no se baja nada.
+- Las columnas se localizan por el **título de su cabecera**, así que no hay que renombrarlas. La de cada idioma se reconoce por el código entre paréntesis del final, sin distinguir mayúsculas, aunque cambie el nombre del idioma que lo precede. Un idioma cuya cabecera falta se salta, y si falta la de la clave no se baja nada.
 - Los errores (sin conexión, sin permisos, hoja inexistente) salen en un diálogo y en consola.
 
 ### Trabajar con quien traduce
 
 - Quien traduce edita solo las columnas de texto de su idioma. La clave y los comentarios no se tocan, y la columna de origen no se baja nunca.
 - La columna `<código> Status` marca con **Outdated** y el texto de origen anterior las traducciones desactualizadas. Para darla por revisada, quien traduce **borra el contenido de esa celda, pero conserva su nota de celda**, y se baja. Si el original cambió después de la última subida, la marca no se quita.
-- Las notas para quien traduce o revisa van en **notas de celda** de Google Sheets, no en las columnas de comentario, que son de la herramienta y se reescriben al subir.
+- Las notas para quien traduce o revisa van en **notas de celda** de Google Sheets, en la celda de la clave o en la del texto de un idioma, no en las columnas de comentario, que son de la herramienta y se reescriben al subir. Al subir, cada nota vuelve a la fila de su clave y a la columna de su idioma, aunque las filas o las columnas cambien de sitio. Las notas de las celdas de comentario y de la columna de origen no se mueven con su fila.
 
 ## Settings
 
@@ -432,6 +438,7 @@ La sincronización con una hoja de Google es opcional y usa la extensión de Goo
 - Sin voz por línea con el paquete `audio`; la vida `ByVoice` se comporta como `ByTextLength` (bloque 4).
 - Sin Sample con prefabs de interfaz (bloque 4).
 - La estructura del graph no se edita en Play.
+- Las traducciones guardan en sus entradas el texto de origen con el que se escribieron (`SourceSnapshot`) y el texto de la última sincronización (`SheetSyncSnapshot`). Son metadatos de las tablas, así que también llegan a las builds.
 
 ## Notas
 
