@@ -27,6 +27,9 @@ namespace HarryTools.Dialogue.Editor {
 
         // ==================== METHODS ====================
         #region Methods
+        /// <summary> True with an API key, which can only read public spreadsheets </summary>
+        public bool IsReadOnly => provider != null && provider.Authentication != AuthenticationType.OAuth;
+
         /// <summary> Why the provider and spreadsheet ID cannot be used, or null when both are set </summary>
         internal static string ConfigurationError(SheetsServiceProvider _provider, string _spreadsheetId) {
             if (_provider == null) return "Set a Sheets Service Provider in Project Settings > HarryTools > Dialogue first.";
@@ -44,12 +47,15 @@ namespace HarryTools.Dialogue.Editor {
         /// <inheritdoc/>
         public int AddSheet(string _title) {
             GoogleSheets _google = Connect();
+            if (IsReadOnly) throw new InvalidOperationException(SheetConnection.ReadOnlyMessage);
             return _google.AddSheet(_title, provider.NewSheetProperties ?? new NewSheetProperties());
         }
 
         /// <inheritdoc/>
         public void Push(int _sheetId, StringTableCollection _collection, IList<SheetColumn> _columns) {
-            Connect().PushStringTableCollection(_sheetId, _collection, _columns);
+            GoogleSheets _google = Connect();
+            if (IsReadOnly) throw new InvalidOperationException(SheetConnection.ReadOnlyMessage);
+            _google.PushStringTableCollection(_sheetId, _collection, _columns);
         }
 
         /// <summary> Every cell of the tab. With OAuth only the tab is requested; an API key cannot use a data filter, so the whole spreadsheet is requested and the tab picked from it </summary>
@@ -102,15 +108,14 @@ namespace HarryTools.Dialogue.Editor {
             return _grid;
         }
 
-        /// <summary> Reads the tab list of the spreadsheet. Null when it worked, otherwise the reason it did not </summary>
-        public string Test() {
+        /// <summary> Reads the tab list of the spreadsheet. With an API key the connection is reported as read only </summary>
+        public SheetConnection Test() {
             string _error = ConfigurationError(provider, spreadsheetId);
-            if (_error != null) return _error;
+            if (_error != null) return SheetConnection.Failed(_error);
             try {
-                GetSheets();
-                return null;
+                return SheetConnection.Reached(GetSheets().Count, IsReadOnly);
             } catch (Exception _exception) {
-                return "Connection failed: " + _exception.GetBaseException().Message;
+                return SheetConnection.Failed("Connection failed: " + DialogueSheetSync.Describe(_exception));
             }
         }
         #endregion

@@ -125,9 +125,9 @@ namespace HarryTools.Dialogue.Editor {
 
             using (new EditorGUI.DisabledScope(EditorApplication.isPlayingOrWillChangePlaymode)) {
                 if (GUILayout.Button("Test connection")) {
-                    string _error = DialogueSheetMenu.TestConnection();
-                    connectionMessage = _error ?? "Connected.";
-                    connectionMessageType = _error == null ? MessageType.Info : MessageType.Error;
+                    SheetConnection _connection = DialogueSheetMenu.TestConnection();
+                    connectionMessage = _connection.Message;
+                    connectionMessageType = !_connection.Connected ? MessageType.Error : _connection.ReadOnly ? MessageType.Warning : MessageType.Info;
                 }
 
                 // Run after this repaint, so their dialogs and progress bar stay out of the settings layout

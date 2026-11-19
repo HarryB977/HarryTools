@@ -12,6 +12,7 @@
         "GUID:976ab130102fdc04c9bbc3159f83ad15",
         "GUID:eec0964c48f6f4e40bc3ec2257ccf8c5",
         "GUID:2e77701fe0ceda44fb763f03ee704c37",
+        "GUID:69448af7b92c7f342b298e06a37122aa",
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner"
     ],
@@ -20,7 +21,8 @@
     "allowUnsafeCode": false,
     "overrideReferences": true,
     "precompiledReferences": [
-        "nunit.framework.dll"
+        "nunit.framework.dll",
+        "Unity.Localization.ThirdParty.Editor.dll"
     ],
     "autoReferenced": false,
     "defineConstraints": [

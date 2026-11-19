@@ -348,6 +348,16 @@ namespace HarryTools.Dialogue.Editor {
             return LocalizationEditorSettings.GetStringTableCollection(_guid);
         }
 
+        /// <summary> Every dialogue asset of the project </summary>
+        internal static List<DialogueAsset> ProjectDialogues() {
+            List<DialogueAsset> _dialogues = new List<DialogueAsset>();
+            foreach (string _guid in AssetDatabase.FindAssets("t:DialogueAsset")) {
+                DialogueAsset _asset = AssetDatabase.LoadAssetAtPath<DialogueAsset>(AssetDatabase.GUIDToAssetPath(_guid));
+                if (_asset != null) _dialogues.Add(_asset);
+            }
+            return _dialogues;
+        }
+
         /// <summary> Every dialogue text of the asset with the key it belongs under. Every [DialogueText] field must be listed here, or CleanOrphans deletes its entries </summary>
         internal static List<(LocalizedString, string)> Texts(DialogueAsset _asset) {
             List<(LocalizedString, string)> _texts = new List<(LocalizedString, string)>();

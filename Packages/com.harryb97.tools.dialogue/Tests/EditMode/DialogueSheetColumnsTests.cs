@@ -444,7 +444,7 @@ namespace HarryTools.Dialogue.Tests {
             StringTableCollection _collection = DialogueTables.Linked(_asset);
             LocaleIdentifier _extra = new LocaleIdentifier("zz");
             Assert.IsNull(LocalizationEditorSettings.GetLocale("zz"), "not a project locale");
-            _collection.AddNewTable(_extra);
+            TestAddressables.AddForeignTable(_collection, _extra);
             Assert.IsTrue(DialogueTables.SetText(_asset, _lines[0].Text, _lines[0].Id, Other, "Hola"));
             Assert.IsTrue(DialogueTables.SetText(_asset, _lines[0].Text, _lines[0].Id, _extra, "Zz text"));
 

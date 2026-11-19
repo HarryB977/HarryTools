@@ -38,8 +38,8 @@ namespace HarryTools.Dialogue.Editor {
             return _error == null ? new DialogueSheetSync(new GoogleSheetGateway(_settings.Provider, _settings.SpreadsheetId), _settings) : null;
         }
 
-        /// <summary> Null when the spreadsheet of the project's sheet settings can be reached, otherwise the reason it cannot </summary>
-        internal static string TestConnection() {
+        /// <summary> Tries to reach the spreadsheet of the project's sheet settings </summary>
+        internal static SheetConnection TestConnection() {
             DialogueSheetsSettings _settings = DialogueSheetsSettings.instance;
             IDialogueSheetGateway _gateway = new GoogleSheetGateway(_settings.Provider, _settings.SpreadsheetId);
             return _gateway.Test();

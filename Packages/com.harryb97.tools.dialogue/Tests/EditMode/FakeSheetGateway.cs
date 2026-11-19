@@ -26,6 +26,12 @@ namespace HarryTools.Dialogue.Tests {
         /// <summary> Pushes throw after the columns produced their cells, as when the request is rejected </summary>
         public bool FailPushes;
 
+        /// <summary> Reports an access that can only read, as an API key does </summary>
+        public bool IsReadOnly { get; set; }
+
+        /// <summary> Calls to AddSheet or Push, made or refused </summary>
+        public int WriteAttempts { get; private set; }
+
         public int AddSheetCalls { get; private set; }
         public int PushCalls { get; private set; }
         public int ReadCalls { get; private set; }
@@ -42,6 +48,8 @@ namespace HarryTools.Dialogue.Tests {
         }
 
         public int AddSheet(string _title) {
+            WriteAttempts++;
+            if (IsReadOnly) throw new InvalidOperationException(SheetConnection.ReadOnlyMessage);
             ThrowIfFailing(_title);
             if (sheets.Exists(_tab => _tab.Title == _title)) throw new InvalidOperationException("A tab named " + _title + " already exists.");
             AddSheetCalls++;
@@ -51,6 +59,8 @@ namespace HarryTools.Dialogue.Tests {
         }
 
         public void Push(int _sheetId, StringTableCollection _collection, IList<SheetColumn> _columns) {
+            WriteAttempts++;
+            if (IsReadOnly) throw new InvalidOperationException(SheetConnection.ReadOnlyMessage);
             Tab _tab = Get(_sheetId);
             ThrowIfFailing(_tab.Title);
 
@@ -74,6 +84,17 @@ namespace HarryTools.Dialogue.Tests {
                 }
                 _row++;
             }
+            // Each column is sent as one update from row 1 with no end, which clears its fields in the rows below the written ones
+            int _height = _grid.RowCount;
+            foreach (SheetColumn _column in _columns) {
+                for (int _below = _row; _below < _height; _below++) {
+                    switch (_column.PushFields) {
+                        case PushFields.Value: _grid.SetValue(_below, _column.ColumnIndex, null); break;
+                        case PushFields.Note: _grid.SetNote(_below, _column.ColumnIndex, null); break;
+                        default: _grid.Set(_below, _column.ColumnIndex, null, null); break;
+                    }
+                }
+            }
             foreach (SheetColumn _column in _columns) _column.PushEnd();
 
             if (FailPushes) throw new InvalidOperationException("The push was rejected.");
@@ -88,8 +109,8 @@ namespace HarryTools.Dialogue.Tests {
             return _tab.Grid.Copy();
         }
 
-        public string Test() {
-            return FailAll;
+        public SheetConnection Test() {
+            return FailAll != null ? SheetConnection.Failed(FailAll) : SheetConnection.Reached(sheets.Count, IsReadOnly);
         }
         #endregion
 

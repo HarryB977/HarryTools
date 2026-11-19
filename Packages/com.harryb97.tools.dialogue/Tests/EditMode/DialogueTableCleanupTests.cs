@@ -287,7 +287,7 @@ namespace HarryTools.Dialogue.Tests {
             StringTableCollection _collection = DialogueTables.EnsureCollection(_asset);
             LocaleIdentifier _gone = new LocaleIdentifier("zz");
             Assert.IsNull(LocalizationEditorSettings.GetLocale("zz"), "not a project locale");
-            _collection.AddNewTable(_gone);
+            TestAddressables.AddForeignTable(_collection, _gone);
 
             DialogueTables.EnsureLocaleTables(_collection);
             DialogueTables.EnsureCollection(_asset);

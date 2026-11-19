@@ -5,20 +5,53 @@ using UnityEditor.Localization.Plugins.Google.Columns;
 namespace HarryTools.Dialogue.Editor {
     /// <summary> The only way the dialogue tools reach the spreadsheet. Every call may throw when the spreadsheet cannot be reached </summary>
     internal interface IDialogueSheetGateway {
+        /// <summary> True when the access can only read, as with an API key: adding tabs and pushing are refused without a request </summary>
+        bool IsReadOnly { get; }
+
         /// <summary> The ID and title of every tab of the spreadsheet </summary>
         IReadOnlyList<(int Id, string Title)> GetSheets();
 
         /// <summary> Adds a tab with the title and returns its ID </summary>
         int AddSheet(string _title);
 
-        /// <summary> Writes the columns of the collection to the tab, header row included. Other columns of the tab are kept </summary>
+        /// <summary> Writes the header and one row per entry of the collection to the tab, in the given columns only. In those columns, the rows below the written ones are cleared; other columns of the tab are kept </summary>
         void Push(int _sheetId, StringTableCollection _collection, IList<SheetColumn> _columns);
 
         /// <summary> Every cell of the tab, header row included, with its value and note </summary>
         SheetGrid Read(int _sheetId);
 
-        /// <summary> Null when the spreadsheet can be reached, otherwise the reason it cannot </summary>
-        string Test();
+        /// <summary> Tries to reach the spreadsheet and describes the outcome </summary>
+        SheetConnection Test();
+    }
+
+    /// <summary> The outcome of a connection test </summary>
+    internal readonly struct SheetConnection {
+        /// <summary> Message for a read-only access </summary>
+        internal const string ReadOnlyMessage = "An API key can only pull. Pushing and creating tabs need OAuth.";
+
+        /// <summary> True when the spreadsheet was reached </summary>
+        public bool Connected { get; }
+
+        /// <summary> True when it was reached with an access that can only read </summary>
+        public bool ReadOnly { get; }
+
+        /// <summary> The outcome in words </summary>
+        public string Message { get; }
+
+        private SheetConnection(bool _connected, bool _readOnly, string _message) {
+            Connected = _connected;
+            ReadOnly = _readOnly;
+            Message = _message;
+        }
+
+        internal static SheetConnection Reached(int _tabs, bool _readOnly) {
+            string _count = "The spreadsheet has " + _tabs + (_tabs == 1 ? " tab." : " tabs.");
+            return new SheetConnection(true, _readOnly, _readOnly ? "Connected with an API key: pull only. " + _count + " Pushing and creating tabs need OAuth." : "Connected. " + _count);
+        }
+
+        internal static SheetConnection Failed(string _message) {
+            return new SheetConnection(false, false, _message);
+        }
     }
 
     /// <summary> The cells of a spreadsheet tab by row and column, from row 0, the header row. Cells outside the filled area read as null </summary>
@@ -68,6 +101,17 @@ namespace HarryTools.Dialogue.Editor {
             if (rows.Count == 0) return _headers;
             for (int _i = 0; _i < rows[0].Count; _i++) _headers.Add(rows[0][_i].Value);
             return _headers;
+        }
+
+        /// <summary> True when a row from the given one down has a cell with a value or a note </summary>
+        public bool HasCells(int _fromRow) {
+            for (int _row = System.Math.Max(0, _fromRow); _row < rows.Count; _row++) {
+                for (int _column = 0; _column < rows[_row].Count; _column++) {
+                    Cell _cell = rows[_row][_column];
+                    if (!string.IsNullOrWhiteSpace(_cell.Value) || !string.IsNullOrEmpty(_cell.Note)) return true;
+                }
+            }
+            return false;
         }
 
         /// <summary> A separate grid with the same cells </summary>

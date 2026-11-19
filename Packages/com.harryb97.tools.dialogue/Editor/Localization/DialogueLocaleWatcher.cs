@@ -65,16 +65,7 @@ namespace HarryTools.Dialogue.Editor {
         #region Private Methods
         private static void OnLocaleAdded(Locale _locale) {
             if (suspended) return;
-            AddLocaleTables(_locale, Targets(ProjectDialogues(), CharactersCollection()));
-        }
-
-        private static List<DialogueAsset> ProjectDialogues() {
-            List<DialogueAsset> _dialogues = new List<DialogueAsset>();
-            foreach (string _guid in AssetDatabase.FindAssets("t:DialogueAsset")) {
-                DialogueAsset _asset = AssetDatabase.LoadAssetAtPath<DialogueAsset>(AssetDatabase.GUIDToAssetPath(_guid));
-                if (_asset != null) _dialogues.Add(_asset);
-            }
-            return _dialogues;
+            AddLocaleTables(_locale, Targets(DialogueTables.ProjectDialogues(), CharactersCollection()));
         }
         #endregion
     }

@@ -1,11 +1,14 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Net;
+using System.Reflection;
 using System.Text.RegularExpressions;
 using HarryTools.Dialogue.Editor;
 using NUnit.Framework;
 using UnityEditor;
 using UnityEditor.Localization;
+using UnityEditor.Localization.Plugins.Google;
 using UnityEngine;
 using UnityEngine.Localization;
 using UnityEngine.Localization.Settings;
@@ -336,7 +339,7 @@ namespace HarryTools.Dialogue.Tests {
             LocaleIdentifier _extra = new LocaleIdentifier("zz");
             Assert.IsNull(LocalizationEditorSettings.GetLocale("zz"));
             StringTableCollection _collection = DialogueTables.Linked(_asset);
-            _collection.AddNewTable(_extra);
+            TestAddressables.AddForeignTable(_collection, _extra);
             Assert.IsTrue(DialogueTables.SetText(_asset, _lines[0].Text, _lines[0].Id, _extra, "Zz text"));
             AssertDone(sync.Push(_asset));
 
@@ -437,8 +440,9 @@ namespace HarryTools.Dialogue.Tests {
         [Test]
         public void Gateway_NotConfigured_ClearMessage_NoRequest() {
             GoogleSheetGateway _google = new GoogleSheetGateway(null, null);
-            string _message = _google.Test();
-            StringAssert.Contains("Sheets Service Provider", _message);
+            SheetConnection _connection = _google.Test();
+            Assert.IsFalse(_connection.Connected);
+            StringAssert.Contains("Sheets Service Provider", _connection.Message);
             Assert.Throws<InvalidOperationException>(() => _google.GetSheets());
 
             DialogueSheetSync _sync = new DialogueSheetSync(_google, tabs);
@@ -446,6 +450,166 @@ namespace HarryTools.Dialogue.Tests {
             SyncResult _result = _sync.Push(_asset);
             Assert.IsFalse(_result.Succeeded);
             StringAssert.Contains("Sheets Service Provider", _result.Error);
+        }
+
+        [Test]
+        public void Pull_EmptyCell_KeepsLocalTranslation() {
+            DialogueAsset _asset = NewDialogue("EmptyCells", out List<LineNode> _lines, "Hello", "Bye");
+            Translate(_asset, _lines[0], "Hola");
+            Translate(_asset, _lines[1], "Adios");
+            AssertDone(sync.Push(_asset));
+            string _title = DialogueSheetSync.TabTitle(_asset);
+
+            // The first row has a blank translation; the second has only its key, as a sheet returns a row whose trailing cells are empty
+            SheetGrid _old = gateway.Grid(_title);
+            SheetGrid _grid = new SheetGrid();
+            List<string> _headers = _old.Headers();
+            for (int _column = 0; _column < _headers.Count; _column++) _grid.Set(0, _column, _headers[_column], null);
+            int _key = FakeSheetGateway.ColumnOf(_old, KeyHeader);
+            int _other = FakeSheetGateway.ColumnOf(_old, Other.ToString());
+            Assert.Greater(_other, _key);
+            _grid.Set(1, _key, _lines[0].Id, null);
+            _grid.Set(1, _other, "   ", null);
+            _grid.Set(2, _key, _lines[1].Id, null);
+            gateway.Replace(_title, _grid);
+
+            SyncResult _result = sync.Pull(_asset);
+            AssertDone(_result);
+            Assert.AreEqual(0, _result.UnknownRows);
+            Assert.AreEqual(0, _result.Conflicts);
+            Assert.AreEqual("Hola", Text(_asset, _lines[0], Other));
+            Assert.AreEqual("Adios", Text(_asset, _lines[1], Other));
+        }
+
+        [Test]
+        public void Push_LocaleColumnsShifted_PullNoCrossWrite() {
+            DialogueAsset _asset = NewDialogue("Shifted", out List<LineNode> _lines, "Hello");
+            Translate(_asset, _lines[0], "Hola");
+            AssertDone(sync.Push(_asset));
+            string _title = DialogueSheetSync.TabTitle(_asset);
+            StringTableCollection _collection = DialogueTables.Linked(_asset);
+
+            // A new locale's table goes before the es table, so the es columns move right on the next push
+            LocaleIdentifier _extra = new LocaleIdentifier("zz");
+            TestAddressables.AddForeignTable(_collection, _extra);
+            StringTable _otherTable = _collection.GetTable(Other) as StringTable;
+            _collection.RemoveTable(_otherTable);
+            _collection.AddTable(_otherTable);
+            Assert.IsTrue(DialogueTables.SetText(_asset, _lines[0].Text, _lines[0].Id, _extra, "Zz text"));
+            AssertDone(sync.Push(_asset));
+
+            CollectionAssert.AreEqual(new[] { KeyHeader, "Key Comments", Source.ToString(), _extra.ToString(), "zz Status", Other.ToString(), "es Status" }, gateway.Grid(_title).Headers());
+            Assert.AreEqual("Hola", gateway.Cell(_title, _lines[0].Id, Other.ToString()));
+            Assert.AreEqual("Zz text", gateway.Cell(_title, _lines[0].Id, _extra.ToString()));
+
+            gateway.SetCell(_title, _lines[0].Id, Other.ToString(), "Hola hoja");
+            gateway.SetCell(_title, _lines[0].Id, _extra.ToString(), "Zz sheet");
+            AssertDone(sync.Pull(_asset));
+            Assert.AreEqual("Hola hoja", Text(_asset, _lines[0], Other));
+            Assert.AreEqual("Zz sheet", Text(_asset, _lines[0], _extra));
+            Assert.AreEqual("Hello", Text(_asset, _lines[0], Source));
+        }
+
+        [Test]
+        public void Push_ApiKey_FailsEarly_NoRequest() {
+            DialogueAsset _asset = NewDialogue("ApiKeyPush", out List<LineNode> _lines, "Hello");
+            Translate(_asset, _lines[0], "Hola");
+            gateway.IsReadOnly = true;
+
+            SyncResult _result = sync.Push(_asset);
+            Assert.IsFalse(_result.Succeeded);
+            Assert.AreEqual(SheetConnection.ReadOnlyMessage, _result.Error);
+            Assert.AreEqual(0, gateway.WriteAttempts);
+            Assert.AreEqual(0, gateway.ReadCalls);
+
+            SyncResult _characters = sync.PushCharacters();
+            Assert.IsFalse(_characters.Succeeded);
+            Assert.AreEqual(0, gateway.WriteAttempts);
+        }
+
+        [Test]
+        public void Pull_ApiKey_NoTab_NothingToPull() {
+            DialogueAsset _asset = NewDialogue("ApiKeyNoTab", out _, "Hello");
+            gateway.IsReadOnly = true;
+
+            AssertDone(sync.Pull(_asset));
+            Assert.AreEqual(0, gateway.WriteAttempts, "No tab is created");
+            Assert.AreEqual(0, gateway.ReadCalls);
+            Assert.IsFalse(tabs.TryGetTab(Guid(DialogueTables.Linked(_asset)), out _));
+        }
+
+        [Test]
+        public void Pull_ApiKey_ExistingTab_Pulls() {
+            DialogueAsset _asset = NewDialogue("ApiKeyPull", out List<LineNode> _lines, "Hello");
+            Translate(_asset, _lines[0], "Hola");
+            AssertDone(sync.Push(_asset));
+            string _title = DialogueSheetSync.TabTitle(_asset);
+            gateway.SetCell(_title, _lines[0].Id, Other.ToString(), "Hola hoja");
+
+            gateway.IsReadOnly = true;
+            AssertDone(sync.Pull(_asset));
+            Assert.AreEqual("Hola hoja", Text(_asset, _lines[0], Other));
+        }
+
+        [Test]
+        public void Gateway_ApiKey_WritesRefusedWithoutRequest() {
+            SheetsServiceProvider _provider = ScriptableObject.CreateInstance<SheetsServiceProvider>();
+            try {
+                _provider.SetApiKey("not-a-real-key");
+                GoogleSheetGateway _google = new GoogleSheetGateway(_provider, "not-a-real-spreadsheet");
+                Assert.IsTrue(_google.IsReadOnly);
+
+                InvalidOperationException _add = Assert.Throws<InvalidOperationException>(() => _google.AddSheet("Tab"));
+                Assert.AreEqual(SheetConnection.ReadOnlyMessage, _add.Message);
+                DialogueAsset _asset = NewDialogue("ApiKeyGateway", out _, "Hello");
+                StringTableCollection _collection = DialogueTables.Linked(_asset);
+                InvalidOperationException _push = Assert.Throws<InvalidOperationException>(() => _google.Push(0, _collection, DialogueSheetColumns.ForPush(_collection)));
+                Assert.AreEqual(SheetConnection.ReadOnlyMessage, _push.Message);
+
+                StringAssert.StartsWith("Connected with an API key: pull only.", SheetConnection.Reached(3, true).Message);
+                Assert.AreEqual("Connected. The spreadsheet has 1 tab.", SheetConnection.Reached(1, false).Message);
+            } finally {
+                Object.DestroyImmediate(_provider);
+            }
+        }
+
+        [Test]
+        public void Pull_BlankHeaderRowWithData_Fails() {
+            DialogueAsset _asset = NewDialogue("NoHeaders", out List<LineNode> _lines, "Hello");
+            AssertDone(sync.Push(_asset));
+            string _title = DialogueSheetSync.TabTitle(_asset);
+
+            SheetGrid _grid = gateway.Grid(_title);
+            List<string> _headers = _grid.Headers();
+            for (int _column = 0; _column < _headers.Count; _column++) _grid.SetValue(0, _column, "");
+
+            SyncResult _result = sync.Pull(_asset);
+            Assert.IsFalse(_result.Succeeded);
+            StringAssert.Contains("no headers", _result.Error);
+        }
+
+        [Test]
+        public void Pull_SheetEdit_TablesSaved() {
+            DialogueAsset _asset = NewDialogue("Saved", out List<LineNode> _lines, "Hello");
+            Translate(_asset, _lines[0], "Hola");
+            AssertDone(sync.Push(_asset));
+            gateway.SetCell(DialogueSheetSync.TabTitle(_asset), _lines[0].Id, Other.ToString(), "Hola hoja");
+
+            AssertDone(sync.Pull(_asset));
+            StringTableCollection _collection = DialogueTables.Linked(_asset);
+            Assert.AreEqual("Hola hoja", Text(_asset, _lines[0], Other));
+            Assert.IsFalse(EditorUtility.IsDirty(_collection.GetTable(Other)));
+            Assert.IsFalse(EditorUtility.IsDirty(_collection.SharedData));
+        }
+
+        [Test]
+        public void Describe_UnwrapsAndHintsNotFound() {
+            Exception _wrapped = new AggregateException(new TargetInvocationException(new InvalidOperationException("Inner reason.")));
+            Assert.AreEqual("Inner reason.", DialogueSheetSync.Describe(_wrapped));
+            Assert.AreEqual("Outer reason.", DialogueSheetSync.Describe(new InvalidOperationException("Outer reason.", new Exception("inner"))), "Other exceptions keep their own message");
+
+            Google.GoogleApiException _notFound = new Google.GoogleApiException("Sheets", "Requested entity was not found.") { HttpStatusCode = HttpStatusCode.NotFound };
+            StringAssert.EndsWith("Check the spreadsheet ID.", DialogueSheetSync.Describe(new AggregateException(_notFound)));
         }
         #endregion
     }

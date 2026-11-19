@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Net;
+using System.Reflection;
 using System.Text;
 using UnityEditor;
 using UnityEditor.Localization;
@@ -48,7 +50,7 @@ namespace HarryTools.Dialogue.Editor {
             return Sync(_asset.name, () => DialogueTables.EnsureCollection(_asset), TabTitle(_asset), () => DialogueTableLayout.Refresh(_asset), false);
         }
 
-        /// <summary> Pulls the dialogue, then writes its table to the sheet. Nothing is written when the pull fails </summary>
+        /// <summary> Pulls the dialogue and puts its entries in script order, then writes its table to the sheet. Nothing is written when the pull or the reorder fails, or when the access can only read </summary>
         public SyncResult Push(DialogueAsset _asset) {
             if (_asset == null) return SyncResult.Failed("", "There is no dialogue to push.");
             return Sync(_asset.name, () => DialogueTables.EnsureCollection(_asset), TabTitle(_asset), () => DialogueTableLayout.Refresh(_asset), true);
@@ -59,19 +61,32 @@ namespace HarryTools.Dialogue.Editor {
             return Sync(CharactersName, DialogueCharacterTables.EnsureCollection, CharactersTabTitle, DialogueCharacterTables.Refresh, false);
         }
 
-        /// <summary> Pulls the character names, then writes them to the sheet </summary>
+        /// <summary> Pulls the character names and puts them in name order, then writes them to the sheet. Nothing is written when the pull or the reorder fails, or when the access can only read </summary>
         public SyncResult PushCharacters() {
             return Sync(CharactersName, DialogueCharacterTables.EnsureCollection, CharactersTabTitle, DialogueCharacterTables.Refresh, true);
         }
 
         /// <summary> Pulls every dialogue of the project and the characters </summary>
         public SyncSummary PullAll() {
-            return PullAll(ProjectDialogues());
+            return PullAll(DialogueTables.ProjectDialogues());
         }
 
         /// <summary> Pushes every dialogue of the project and the characters </summary>
         public SyncSummary PushAll() {
-            return PushAll(ProjectDialogues());
+            return PushAll(DialogueTables.ProjectDialogues());
+        }
+
+        /// <summary> The message of the exception, from inside the wrappers of tasks and reflection calls, with a hint when the spreadsheet was not found </summary>
+        internal static string Describe(Exception _exception) {
+            while (_exception is AggregateException || _exception is TargetInvocationException) {
+                Exception _inner = _exception is AggregateException _aggregate && _aggregate.InnerExceptions.Count > 0 ? _aggregate.InnerExceptions[0] : _exception.InnerException;
+                if (_inner == null) break;
+                _exception = _inner;
+            }
+            if (_exception == null) return "Unknown error.";
+            string _message = _exception.Message;
+            if (_exception is Google.GoogleApiException _google && _google.HttpStatusCode == HttpStatusCode.NotFound) _message += " Check the spreadsheet ID.";
+            return _message;
         }
 
         /// <summary> Pulls the given dialogues and the characters, going on when one fails </summary>
@@ -113,30 +128,39 @@ namespace HarryTools.Dialogue.Editor {
         }
 
         private SyncResult Sync(string _name, Func<StringTableCollection> _getCollection, string _title, Func<bool> _refresh, bool _push) {
-            bool _pulled = false;
+            if (_push && gateway.IsReadOnly) return SyncResult.Failed(_name, SheetConnection.ReadOnlyMessage);
+
+            // Set once the pull and the reorder are done: a failure before that pushed nothing
+            bool _pushing = false;
             try {
                 StringTableCollection _collection = _getCollection();
                 if (_collection == null) return SyncResult.Failed(_name, "There is no table to sync: the project has no locales.");
 
                 int _sheetId = ResolveTab(_collection, _title);
-                string _error = PullInto(_sheetId, _collection, out int _unknownRows, out int _conflicts);
-                if (_error != null) return SyncResult.Failed(_name, _push ? NothingPushed(_error) : _error);
-                _pulled = true;
+                int _unknownRows = 0;
+                int _conflicts = 0;
+                // Without a tab, a read-only access has nothing to pull
+                if (_sheetId >= 0) {
+                    string _error = PullInto(_sheetId, _collection, out _unknownRows, out _conflicts);
+                    if (_error != null) return SyncResult.Failed(_name, _push ? NothingPushed(_error) : _error);
+                }
                 _refresh();
 
                 if (_push) {
+                    _pushing = true;
                     List<SheetColumn> _columns = DialogueSheetColumns.ForPush(_collection);
                     gateway.Push(_sheetId, _collection, _columns);
                     // Only now did the texts reach the sheet
                     DialogueSheetColumns.CommitPush(_columns);
                 }
+                SaveTables(_collection);
 
                 SyncResult _result = SyncResult.Done(_name, _unknownRows, _conflicts);
                 if (_unknownRows > 0 || _conflicts > 0) Debug.LogWarning((_push ? "Pushed " : "Pulled ") + _name + ". " + _result.Counts());
                 return _result;
             } catch (Exception _exception) {
-                string _message = _exception.GetBaseException().Message;
-                return SyncResult.Failed(_name, _push && !_pulled ? NothingPushed(_message) : _message);
+                string _message = Describe(_exception);
+                return SyncResult.Failed(_name, _push && !_pushing ? NothingPushed(_message) : _message);
             }
         }
 
@@ -144,7 +168,16 @@ namespace HarryTools.Dialogue.Editor {
             return "The pull failed, so nothing was pushed. " + _reason;
         }
 
-        /// <summary> The tab of the collection: the recorded one while the spreadsheet still has it, else a tab with the title, else a new one. The result is recorded </summary>
+        /// <summary> Writes the shared data and the tables of the collection to disk when they changed, as the pull of the Localization package does. The collection asset itself is left to the next project save: importing it makes Localization recreate any missing locale of its tables </summary>
+        private static void SaveTables(StringTableCollection _collection) {
+            if (_collection.SharedData != null) AssetDatabase.SaveAssetIfDirty(_collection.SharedData);
+            IReadOnlyList<StringTable> _tables = _collection.StringTables;
+            for (int _i = 0; _i < _tables.Count; _i++) {
+                if (_tables[_i] != null) AssetDatabase.SaveAssetIfDirty(_tables[_i]);
+            }
+        }
+
+        /// <summary> The tab of the collection: the recorded one while the spreadsheet still has it, else a tab with the title, else a new one. The result is recorded. -1 when there is none and the access can only read </summary>
         private int ResolveTab(StringTableCollection _collection, string _title) {
             string _guid = _collection.SharedData.TableCollectionNameGuid.ToString("N");
             IReadOnlyList<(int Id, string Title)> _sheets = gateway.GetSheets();
@@ -159,6 +192,7 @@ namespace HarryTools.Dialogue.Editor {
                     break;
                 }
             }
+            if (_found < 0 && gateway.IsReadOnly) return -1;
             _sheetId = _found >= 0 ? _found : gateway.AddSheet(_title);
             tabs.SetTab(_guid, _sheetId);
             tabs.Save();
@@ -179,7 +213,10 @@ namespace HarryTools.Dialogue.Editor {
 
             SheetGrid _grid = gateway.Read(_sheetId);
             List<string> _headers = _grid.Headers();
-            if (_headers.TrueForAll(DialogueSheetColumns.IsBlank)) return null;
+            if (_headers.TrueForAll(DialogueSheetColumns.IsBlank)) {
+                // A tab never pushed to is empty; rows under a blank first row cannot be matched to columns
+                return _grid.HasCells(1) ? "The tab has rows but its first row has no headers, so its columns cannot be matched." : null;
+            }
 
             List<SheetColumn> _columns = DialogueSheetColumns.ForPull(_collection, _headers, out string _error);
             if (_columns == null) return _error;
@@ -212,15 +249,6 @@ namespace HarryTools.Dialogue.Editor {
             }
             LocalizationEditorSettings.EditorEvents.RaiseCollectionModified(this, _collection);
             return null;
-        }
-
-        private static List<DialogueAsset> ProjectDialogues() {
-            List<DialogueAsset> _dialogues = new List<DialogueAsset>();
-            foreach (string _guid in AssetDatabase.FindAssets("t:DialogueAsset")) {
-                DialogueAsset _asset = AssetDatabase.LoadAssetAtPath<DialogueAsset>(AssetDatabase.GUIDToAssetPath(_guid));
-                if (_asset != null) _dialogues.Add(_asset);
-            }
-            return _dialogues;
         }
         #endregion
     }
@@ -267,8 +295,13 @@ namespace HarryTools.Dialogue.Editor {
 
         /// <summary> The unknown rows and the conflicts, in words </summary>
         public string Counts() {
-            return UnknownRows + (UnknownRows == 1 ? " unknown row ignored, " : " unknown rows ignored, ")
-                + Conflicts + (Conflicts == 1 ? " conflict where the sheet text replaced a local edit." : " conflicts where the sheet text replaced a local edit.");
+            return CountsText(UnknownRows, Conflicts);
+        }
+
+        /// <summary> Unknown rows and conflicts, in words </summary>
+        internal static string CountsText(int _unknownRows, int _conflicts) {
+            return _unknownRows + (_unknownRows == 1 ? " unknown row ignored, " : " unknown rows ignored, ")
+                + _conflicts + (_conflicts == 1 ? " conflict where the sheet text replaced a local edit." : " conflicts where the sheet text replaced a local edit.");
         }
         #endregion
     }
@@ -340,8 +373,7 @@ namespace HarryTools.Dialogue.Editor {
 
             StringBuilder _text = new StringBuilder();
             _text.Append(IsPush ? "Pushed " : "Pulled ").Append(results.Count - Failures).Append(" of ").Append(results.Count).Append(results.Count == 1 ? " table." : " tables.");
-            _text.Append("\n").Append(UnknownRows).Append(UnknownRows == 1 ? " unknown row ignored, " : " unknown rows ignored, ")
-                .Append(Conflicts).Append(Conflicts == 1 ? " conflict where the sheet text replaced a local edit." : " conflicts where the sheet text replaced a local edit.");
+            _text.Append("\n").Append(SyncResult.CountsText(UnknownRows, Conflicts));
 
             for (int _i = 0; _i < results.Count; _i++) {
                 SyncResult _result = results[_i];
