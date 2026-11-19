@@ -5,9 +5,21 @@ using UnityEditor.Localization.Plugins.Google;
 using UnityEngine;
 
 namespace HarryTools.Dialogue.Editor {
+    /// <summary> The record of the spreadsheet tab of each collection </summary>
+    internal interface IDialogueSheetTabs {
+        /// <summary> The tab recorded for the collection. False when none was recorded </summary>
+        bool TryGetTab(string _collectionGuid, out int _sheetId);
+
+        /// <summary> Records the tab of the collection, replacing any previous one </summary>
+        void SetTab(string _collectionGuid, int _sheetId);
+
+        /// <summary> Persists the records </summary>
+        void Save();
+    }
+
     /// <summary> Editor-only Google Sheets setup of the dialogue tables: the service provider, the spreadsheet and the tab of each collection. Stored in ProjectSettings, so it never reaches a build </summary>
     [FilePath("ProjectSettings/HarryToolsDialogueSheets.asset", FilePathAttribute.Location.ProjectFolder)]
-    internal sealed class DialogueSheetsSettings : ScriptableSingleton<DialogueSheetsSettings> {
+    internal sealed class DialogueSheetsSettings : ScriptableSingleton<DialogueSheetsSettings>, IDialogueSheetTabs {
         // ==================== VARIABLES ===================
         #region Private Variables
         [SerializeField] private SheetsServiceProvider provider;

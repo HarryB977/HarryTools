@@ -123,26 +123,24 @@ namespace HarryTools.Dialogue.Editor {
                 EditorGUILayout.HelpBox("The service provider is inside a Resources folder, so its credentials would be included in builds.", MessageType.Warning);
             }
 
-            if (GUILayout.Button("Test connection")) {
-                connectionMessage = TestConnection(_sheets, out connectionMessageType);
+            using (new EditorGUI.DisabledScope(EditorApplication.isPlayingOrWillChangePlaymode)) {
+                if (GUILayout.Button("Test connection")) {
+                    string _error = DialogueSheetMenu.TestConnection();
+                    connectionMessage = _error ?? "Connected.";
+                    connectionMessageType = _error == null ? MessageType.Info : MessageType.Error;
+                }
+
+                // Run after this repaint, so their dialogs and progress bar stay out of the settings layout
+                using (new EditorGUILayout.HorizontalScope()) {
+                    if (GUILayout.Button(new GUIContent("Push all", "Pull, then push every dialogue and the characters"))) EditorApplication.delayCall += () => DialogueSheetMenu.SyncAll(true);
+                    if (GUILayout.Button(new GUIContent("Pull all", "Pull every dialogue and the characters"))) EditorApplication.delayCall += () => DialogueSheetMenu.SyncAll(false);
+                }
+                using (new EditorGUILayout.HorizontalScope()) {
+                    if (GUILayout.Button(new GUIContent("Push characters", "Pull, then push the character names"))) EditorApplication.delayCall += () => DialogueSheetMenu.SyncCharacters(true);
+                    if (GUILayout.Button(new GUIContent("Pull characters", "Pull the character names"))) EditorApplication.delayCall += () => DialogueSheetMenu.SyncCharacters(false);
+                }
             }
             if (!string.IsNullOrEmpty(connectionMessage)) EditorGUILayout.HelpBox(connectionMessage, connectionMessageType);
-        }
-
-        /// <summary> Reads the tab list of the spreadsheet and describes the outcome </summary>
-        private static string TestConnection(DialogueSheetsSettings _sheets, out MessageType _type) {
-            _type = MessageType.Error;
-            if (_sheets.Provider == null) return "Set a Sheets Service Provider first.";
-            if (string.IsNullOrEmpty(_sheets.SpreadsheetId)) return "Set the spreadsheet ID first.";
-
-            try {
-                GoogleSheets _google = new GoogleSheets(_sheets.Provider) { SpreadSheetId = _sheets.SpreadsheetId };
-                int _tabs = _google.GetSheets().Count;
-                _type = MessageType.Info;
-                return "Connected. The spreadsheet has " + _tabs + (_tabs == 1 ? " tab." : " tabs.");
-            } catch (Exception _exception) {
-                return "Connection failed: " + _exception.GetBaseException().Message;
-            }
         }
         #endregion
     }

@@ -11,7 +11,6 @@ namespace HarryTools.Dialogue.Editor {
         // ==================== VARIABLES ===================
         #region Private Variables
         private const string PullUndoName = "Pull Translation";
-        private const string PushUndoName = "Push Translation";
 
         private StringTable pushTable;
         private readonly List<(long Id, string Text)> pushed = new List<(long, string)>();
@@ -23,7 +22,7 @@ namespace HarryTools.Dialogue.Editor {
         /// <summary> The locale of the translation </summary>
         public LocaleIdentifier LocaleIdentifier { get; set; }
 
-        /// <summary> Translations of the last pull that had changed both locally and in the sheet since their last sync, and took the sheet text. Reset when a pull begins </summary>
+        /// <summary> Translations of the last pull that had changed both locally and in the sheet since their last sync, and took the sheet text. A translation cleared locally counts too. Reset when a pull begins </summary>
         public int Conflicts { get; private set; }
 
         /// <inheritdoc/>
@@ -60,10 +59,9 @@ namespace HarryTools.Dialogue.Editor {
             if (_entry != null) pushed.Add((_keyEntry.Id, _value));
         }
 
-        /// <summary> Records the pushed texts as the last synced ones, with undo. Call it only after the push reached the sheet </summary>
+        /// <summary> Records the pushed texts as the last synced ones. This is sync bookkeeping, so it is not undoable. Call it only after the push reached the sheet </summary>
         internal void CommitPush() {
             if (pushTable == null || pushed.Count == 0) return;
-            Undo.RecordObject(pushTable, PushUndoName);
             for (int _i = 0; _i < pushed.Count; _i++) {
                 StringTableEntry _entry = pushTable.GetEntry(pushed[_i].Id);
                 if (_entry != null) SetSynced(_entry, pushed[_i].Text);
@@ -95,8 +93,8 @@ namespace HarryTools.Dialogue.Editor {
             if (_synced != null) _synced = DialogueSheetColumns.Normalize(_synced);
 
             if (_cell == _local) {
+                // Sync bookkeeping only, so it is not undoable
                 if (_synced != _cell) {
-                    Undo.RecordObject(pullTable, PullUndoName);
                     SetSynced(_entry, _cellValue);
                     EditorUtility.SetDirty(pullTable);
                 }
@@ -105,7 +103,8 @@ namespace HarryTools.Dialogue.Editor {
             // The sheet kept the synced text: any difference is a local edit
             if (_cell == _synced) return;
 
-            if (_local.Length > 0 && (_synced == null || _local != _synced)) Conflicts++;
+            // A local edit since the last sync is lost to the sheet text, including a translation cleared locally
+            if (_synced != null ? _local != _synced : _local.Length > 0) Conflicts++;
 
             Undo.RecordObject(pullTable, PullUndoName);
             _entry = pullTable.AddEntry(_keyEntry.Id, _cellValue);

@@ -34,6 +34,10 @@ namespace HarryTools.Dialogue.Editor {
         [System.NonSerialized] private DialogueAsset framedAsset;
         private ToolbarMenu runMenu;
         private ToolbarToggle followToggle;
+
+        // Google Sheets
+        private ToolbarButton pushButton;
+        private ToolbarButton pullButton;
         #endregion
 
         #region Public Variables
@@ -139,6 +143,8 @@ namespace HarryTools.Dialogue.Editor {
             assetField = null;
             runMenu = null;
             followToggle = null;
+            pushButton = null;
+            pullButton = null;
             asset = null;
         }
 
@@ -164,6 +170,7 @@ namespace HarryTools.Dialogue.Editor {
         private void ShowAsset() {
             titleContent = new GUIContent(asset != null ? asset.name : WindowTitle);
             assetField?.SetValueWithoutNotify(asset);
+            RefreshSheetButtons();
             Finder?.ClearQuery();
             View?.Load(asset);
             Panel?.Show(asset, View?.SelectedNodeId);
@@ -236,6 +243,11 @@ namespace HarryTools.Dialogue.Editor {
             followToggle.style.display = DisplayStyle.None;
             followToggle.RegisterValueChangedCallback(_event => Follow = _event.newValue);
             Toolbar.Add(followToggle);
+
+            pushButton = new ToolbarButton(() => DialogueSheetMenu.SyncOne(asset, true)) { text = "Push", tooltip = "Pull this dialogue from its Google Sheets tab, then push it" };
+            Toolbar.Add(pushButton);
+            pullButton = new ToolbarButton(() => DialogueSheetMenu.SyncOne(asset, false)) { text = "Pull", tooltip = "Pull the translations of this dialogue from its Google Sheets tab" };
+            Toolbar.Add(pullButton);
 
             Toolbar.Add(new ToolbarSpacer { flex = true });
             IssueCountLabel = new Label { tooltip = "Warnings of the shown dialogue" };
@@ -332,6 +344,7 @@ namespace HarryTools.Dialogue.Editor {
             framedNodeId = null;
             framedAsset = null;
             SetPlayControlsVisible(true);
+            RefreshSheetButtons();
             if (Panel != null) Panel.ReadOnly = true;
             if (View != null) View.ReadOnly = true;
             OnRunChanged();
@@ -341,6 +354,7 @@ namespace HarryTools.Dialogue.Editor {
         internal void EndPlayMode() {
             DisposeTracker();
             SetPlayControlsVisible(false);
+            RefreshSheetButtons();
             if (Panel != null) Panel.ReadOnly = false;
             if (View != null) View.ReadOnly = false;
             ApplyRunMarks();
@@ -361,6 +375,13 @@ namespace HarryTools.Dialogue.Editor {
             DisplayStyle _display = _visible ? DisplayStyle.Flex : DisplayStyle.None;
             if (runMenu != null) runMenu.style.display = _display;
             if (followToggle != null) followToggle.style.display = _display;
+        }
+
+        /// <summary> Push and Pull work on the shown dialogue, outside Play only </summary>
+        private void RefreshSheetButtons() {
+            bool _enabled = asset != null && tracker == null;
+            pushButton?.SetEnabled(_enabled);
+            pullButton?.SetEnabled(_enabled);
         }
 
         private void OnRunChanged() {

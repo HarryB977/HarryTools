@@ -1,0 +1,355 @@
+using System;
+using System.Collections.Generic;
+using System.Text;
+using UnityEditor;
+using UnityEditor.Localization;
+using UnityEditor.Localization.Plugins.Google.Columns;
+using UnityEngine;
+using UnityEngine.Localization.Tables;
+
+namespace HarryTools.Dialogue.Editor {
+    /// <summary> Pushes and pulls the tables of the dialogues and of the characters, each collection in a tab of its own. A push always pulls first, so sheet edits are never overwritten </summary>
+    internal sealed class DialogueSheetSync {
+        // ==================== VARIABLES ===================
+        #region Private Variables
+        private const string CharactersTabTitle = "Characters";
+        private const string CharactersName = "Characters";
+        private const string ProgressTitle = "Google Sheets";
+        private const int TabIdLength = 6;
+
+        private readonly IDialogueSheetGateway gateway;
+        private readonly IDialogueSheetTabs tabs;
+        #endregion
+
+        // ==================== CONSTRUCTOR ====================
+        #region Constructor
+        /// <summary> A sync through the gateway that records the tabs in the project's sheet settings </summary>
+        public DialogueSheetSync(IDialogueSheetGateway _gateway) : this(_gateway, DialogueSheetsSettings.instance) { }
+
+        /// <summary> A sync through the gateway that records the tabs in the given store </summary>
+        internal DialogueSheetSync(IDialogueSheetGateway _gateway, IDialogueSheetTabs _tabs) {
+            gateway = _gateway ?? throw new ArgumentNullException(nameof(_gateway));
+            tabs = _tabs ?? throw new ArgumentNullException(nameof(_tabs));
+        }
+        #endregion
+
+        // ==================== METHODS ====================
+        #region Methods
+        /// <summary> The title of the tab of the dialogue: its name, then the start of its asset ID, since tab titles must be unique </summary>
+        public static string TabTitle(DialogueAsset _asset) {
+            if (_asset == null) return "";
+            string _id = _asset.AssetId ?? "";
+            return _asset.name + " (" + (_id.Length > TabIdLength ? _id.Substring(0, TabIdLength) : _id) + ")";
+        }
+
+        /// <summary> Takes the sheet edits of the dialogue's translations, then puts its table entries in script order </summary>
+        public SyncResult Pull(DialogueAsset _asset) {
+            if (_asset == null) return SyncResult.Failed("", "There is no dialogue to pull.");
+            return Sync(_asset.name, () => DialogueTables.EnsureCollection(_asset), TabTitle(_asset), () => DialogueTableLayout.Refresh(_asset), false);
+        }
+
+        /// <summary> Pulls the dialogue, then writes its table to the sheet. Nothing is written when the pull fails </summary>
+        public SyncResult Push(DialogueAsset _asset) {
+            if (_asset == null) return SyncResult.Failed("", "There is no dialogue to push.");
+            return Sync(_asset.name, () => DialogueTables.EnsureCollection(_asset), TabTitle(_asset), () => DialogueTableLayout.Refresh(_asset), true);
+        }
+
+        /// <summary> Takes the sheet edits of the character name translations </summary>
+        public SyncResult PullCharacters() {
+            return Sync(CharactersName, DialogueCharacterTables.EnsureCollection, CharactersTabTitle, DialogueCharacterTables.Refresh, false);
+        }
+
+        /// <summary> Pulls the character names, then writes them to the sheet </summary>
+        public SyncResult PushCharacters() {
+            return Sync(CharactersName, DialogueCharacterTables.EnsureCollection, CharactersTabTitle, DialogueCharacterTables.Refresh, true);
+        }
+
+        /// <summary> Pulls every dialogue of the project and the characters </summary>
+        public SyncSummary PullAll() {
+            return PullAll(ProjectDialogues());
+        }
+
+        /// <summary> Pushes every dialogue of the project and the characters </summary>
+        public SyncSummary PushAll() {
+            return PushAll(ProjectDialogues());
+        }
+
+        /// <summary> Pulls the given dialogues and the characters, going on when one fails </summary>
+        internal SyncSummary PullAll(IReadOnlyList<DialogueAsset> _dialogues) {
+            return RunAll(_dialogues, false);
+        }
+
+        /// <summary> Pushes the given dialogues and the characters, going on when one fails </summary>
+        internal SyncSummary PushAll(IReadOnlyList<DialogueAsset> _dialogues) {
+            return RunAll(_dialogues, true);
+        }
+        #endregion
+
+        // ==================== PRIVATE ====================
+        #region Private Methods
+        private SyncSummary RunAll(IReadOnlyList<DialogueAsset> _dialogues, bool _push) {
+            SyncSummary _summary = new SyncSummary(_push);
+            int _count = _dialogues != null ? _dialogues.Count : 0;
+            bool _characters = DialogueCharacterTables.Find() != null;
+            float _total = _count + (_characters ? 1 : 0);
+            string _verb = _push ? "Pushing " : "Pulling ";
+
+            try {
+                for (int _i = 0; _i < _count; _i++) {
+                    DialogueAsset _asset = _dialogues[_i];
+                    if (_asset == null) continue;
+                    EditorUtility.DisplayProgressBar(ProgressTitle, _verb + _asset.name, _i / _total);
+                    _summary.Add(_push ? Push(_asset) : Pull(_asset));
+                }
+                // Without the collection there are no names to sync
+                if (_characters) {
+                    EditorUtility.DisplayProgressBar(ProgressTitle, _verb + CharactersName.ToLowerInvariant(), _count / _total);
+                    _summary.Add(_push ? PushCharacters() : PullCharacters());
+                }
+            } finally {
+                EditorUtility.ClearProgressBar();
+            }
+            return _summary;
+        }
+
+        private SyncResult Sync(string _name, Func<StringTableCollection> _getCollection, string _title, Func<bool> _refresh, bool _push) {
+            bool _pulled = false;
+            try {
+                StringTableCollection _collection = _getCollection();
+                if (_collection == null) return SyncResult.Failed(_name, "There is no table to sync: the project has no locales.");
+
+                int _sheetId = ResolveTab(_collection, _title);
+                string _error = PullInto(_sheetId, _collection, out int _unknownRows, out int _conflicts);
+                if (_error != null) return SyncResult.Failed(_name, _push ? NothingPushed(_error) : _error);
+                _pulled = true;
+                _refresh();
+
+                if (_push) {
+                    List<SheetColumn> _columns = DialogueSheetColumns.ForPush(_collection);
+                    gateway.Push(_sheetId, _collection, _columns);
+                    // Only now did the texts reach the sheet
+                    DialogueSheetColumns.CommitPush(_columns);
+                }
+
+                SyncResult _result = SyncResult.Done(_name, _unknownRows, _conflicts);
+                if (_unknownRows > 0 || _conflicts > 0) Debug.LogWarning((_push ? "Pushed " : "Pulled ") + _name + ". " + _result.Counts());
+                return _result;
+            } catch (Exception _exception) {
+                string _message = _exception.GetBaseException().Message;
+                return SyncResult.Failed(_name, _push && !_pulled ? NothingPushed(_message) : _message);
+            }
+        }
+
+        private static string NothingPushed(string _reason) {
+            return "The pull failed, so nothing was pushed. " + _reason;
+        }
+
+        /// <summary> The tab of the collection: the recorded one while the spreadsheet still has it, else a tab with the title, else a new one. The result is recorded </summary>
+        private int ResolveTab(StringTableCollection _collection, string _title) {
+            string _guid = _collection.SharedData.TableCollectionNameGuid.ToString("N");
+            IReadOnlyList<(int Id, string Title)> _sheets = gateway.GetSheets();
+            bool _recorded = tabs.TryGetTab(_guid, out int _sheetId);
+
+            if (_recorded && Has(_sheets, _sheetId)) return _sheetId;
+
+            int _found = -1;
+            for (int _i = 0; _i < _sheets.Count; _i++) {
+                if (_sheets[_i].Title == _title) {
+                    _found = _sheets[_i].Id;
+                    break;
+                }
+            }
+            _sheetId = _found >= 0 ? _found : gateway.AddSheet(_title);
+            tabs.SetTab(_guid, _sheetId);
+            tabs.Save();
+            return _sheetId;
+        }
+
+        private static bool Has(IReadOnlyList<(int Id, string Title)> _sheets, int _sheetId) {
+            for (int _i = 0; _i < _sheets.Count; _i++) {
+                if (_sheets[_i].Id == _sheetId) return true;
+            }
+            return false;
+        }
+
+        /// <summary> Reads the tab and gives each row to the pull columns, every cell taken from the column where its header is. An empty tab has nothing to pull. Returns why the pull cannot run, or null </summary>
+        private string PullInto(int _sheetId, StringTableCollection _collection, out int _unknownRows, out int _conflicts) {
+            _unknownRows = 0;
+            _conflicts = 0;
+
+            SheetGrid _grid = gateway.Read(_sheetId);
+            List<string> _headers = _grid.Headers();
+            if (_headers.TrueForAll(DialogueSheetColumns.IsBlank)) return null;
+
+            List<SheetColumn> _columns = DialogueSheetColumns.ForPull(_collection, _headers, out string _error);
+            if (_columns == null) return _error;
+            DialogueKeyColumn _key = (DialogueKeyColumn)_columns[0];
+
+            for (int _i = 0; _i < _columns.Count; _i++) _columns[_i].PullBegin(_collection);
+            try {
+                HashSet<long> _pulled = new HashSet<long>();
+                for (int _row = 1; _row < _grid.RowCount; _row++) {
+                    string _keyValue = _grid.Value(_row, _key.ColumnIndex);
+                    string _keyNote = _grid.Note(_row, _key.ColumnIndex);
+                    if (DialogueSheetColumns.IsBlank(_keyValue) && string.IsNullOrEmpty(_keyNote)) continue;
+
+                    SharedTableData.SharedTableEntry _entry = _key.PullKey(_keyValue, _keyNote);
+                    // A repeated key keeps the first row
+                    if (_entry == null || !_pulled.Add(_entry.Id)) continue;
+
+                    for (int _i = 1; _i < _columns.Count; _i++) {
+                        int _column = _columns[_i].ColumnIndex;
+                        _columns[_i].PullCellData(_entry, _grid.Value(_row, _column), _grid.Note(_row, _column));
+                    }
+                }
+            } finally {
+                for (int _i = 0; _i < _columns.Count; _i++) _columns[_i].PullEnd();
+            }
+
+            _unknownRows = _key.UnknownRows;
+            for (int _i = 0; _i < _columns.Count; _i++) {
+                if (_columns[_i] is DialogueTranslationColumn _translation) _conflicts += _translation.Conflicts;
+            }
+            LocalizationEditorSettings.EditorEvents.RaiseCollectionModified(this, _collection);
+            return null;
+        }
+
+        private static List<DialogueAsset> ProjectDialogues() {
+            List<DialogueAsset> _dialogues = new List<DialogueAsset>();
+            foreach (string _guid in AssetDatabase.FindAssets("t:DialogueAsset")) {
+                DialogueAsset _asset = AssetDatabase.LoadAssetAtPath<DialogueAsset>(AssetDatabase.GUIDToAssetPath(_guid));
+                if (_asset != null) _dialogues.Add(_asset);
+            }
+            return _dialogues;
+        }
+        #endregion
+    }
+
+    /// <summary> The outcome of syncing one collection </summary>
+    internal sealed class SyncResult {
+        // ==================== VARIABLES ===================
+        #region Public Variables
+        /// <summary> The dialogue name, or the characters </summary>
+        public string Name { get; }
+
+        /// <summary> Why the sync failed. Null when it worked </summary>
+        public string Error { get; }
+
+        /// <summary> True when the sync worked </summary>
+        public bool Succeeded => Error == null;
+
+        /// <summary> Sheet rows whose key matched no entry, so they were ignored </summary>
+        public int UnknownRows { get; }
+
+        /// <summary> Translations changed both locally and in the sheet since their last sync, which took the sheet text </summary>
+        public int Conflicts { get; }
+        #endregion
+
+        // ==================== CONSTRUCTOR ====================
+        #region Constructor
+        private SyncResult(string _name, string _error, int _unknownRows, int _conflicts) {
+            Name = _name ?? "";
+            Error = _error;
+            UnknownRows = _unknownRows;
+            Conflicts = _conflicts;
+        }
+        #endregion
+
+        // ==================== METHODS ====================
+        #region Methods
+        internal static SyncResult Done(string _name, int _unknownRows, int _conflicts) {
+            return new SyncResult(_name, null, _unknownRows, _conflicts);
+        }
+
+        internal static SyncResult Failed(string _name, string _message) {
+            return new SyncResult(_name, string.IsNullOrEmpty(_message) ? "Unknown error." : _message, 0, 0);
+        }
+
+        /// <summary> The unknown rows and the conflicts, in words </summary>
+        public string Counts() {
+            return UnknownRows + (UnknownRows == 1 ? " unknown row ignored, " : " unknown rows ignored, ")
+                + Conflicts + (Conflicts == 1 ? " conflict where the sheet text replaced a local edit." : " conflicts where the sheet text replaced a local edit.");
+        }
+        #endregion
+    }
+
+    /// <summary> The outcome of syncing several collections </summary>
+    internal sealed class SyncSummary {
+        // ==================== VARIABLES ===================
+        #region Private Variables
+        private readonly List<SyncResult> results = new List<SyncResult>();
+        #endregion
+
+        #region Public Variables
+        /// <summary> True for a push, false for a pull </summary>
+        public bool IsPush { get; }
+
+        /// <summary> Why nothing was synced at all. Null when the collections were tried </summary>
+        public string Error { get; }
+
+        /// <summary> The result of each collection, in the order they were synced </summary>
+        public IReadOnlyList<SyncResult> Results => results;
+
+        /// <summary> Collections that failed </summary>
+        public int Failures {
+            get {
+                int _failures = 0;
+                for (int _i = 0; _i < results.Count; _i++) {
+                    if (!results[_i].Succeeded) _failures++;
+                }
+                return _failures;
+            }
+        }
+
+        /// <summary> Unknown rows over every collection </summary>
+        public int UnknownRows {
+            get {
+                int _total = 0;
+                for (int _i = 0; _i < results.Count; _i++) _total += results[_i].UnknownRows;
+                return _total;
+            }
+        }
+
+        /// <summary> Conflicts over every collection </summary>
+        public int Conflicts {
+            get {
+                int _total = 0;
+                for (int _i = 0; _i < results.Count; _i++) _total += results[_i].Conflicts;
+                return _total;
+            }
+        }
+        #endregion
+
+        // ==================== CONSTRUCTOR ====================
+        #region Constructor
+        internal SyncSummary(bool _isPush, string _error = null) {
+            IsPush = _isPush;
+            Error = _error;
+        }
+        #endregion
+
+        // ==================== METHODS ====================
+        #region Methods
+        internal void Add(SyncResult _result) {
+            if (_result != null) results.Add(_result);
+        }
+
+        /// <summary> How many collections were synced, the counts, then each failure with its reason </summary>
+        public string Describe() {
+            if (Error != null) return Error;
+
+            StringBuilder _text = new StringBuilder();
+            _text.Append(IsPush ? "Pushed " : "Pulled ").Append(results.Count - Failures).Append(" of ").Append(results.Count).Append(results.Count == 1 ? " table." : " tables.");
+            _text.Append("\n").Append(UnknownRows).Append(UnknownRows == 1 ? " unknown row ignored, " : " unknown rows ignored, ")
+                .Append(Conflicts).Append(Conflicts == 1 ? " conflict where the sheet text replaced a local edit." : " conflicts where the sheet text replaced a local edit.");
+
+            for (int _i = 0; _i < results.Count; _i++) {
+                SyncResult _result = results[_i];
+                if (_result.Succeeded && _result.UnknownRows == 0 && _result.Conflicts == 0) continue;
+                _text.Append("\n- ").Append(_result.Name).Append(": ").Append(_result.Succeeded ? _result.Counts() : "failed. " + _result.Error);
+            }
+            return _text.ToString();
+        }
+        #endregion
+    }
+}
