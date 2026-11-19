@@ -38,7 +38,7 @@ namespace HarryTools.Dialogue.Tests {
                 EnsureFolder(LocalesFolder);
                 Locale _locale = Locale.CreateLocale(SourceCode);
                 AssetDatabase.CreateAsset(_locale, LocalesFolder + "/" + SourceCode + ".asset");
-                LocalizationEditorSettings.AddLocale(_locale);
+                DialogueLocaleWatcher.AddLocaleForTests(_locale);
                 addedLocales.Add(_locale);
             }
         }

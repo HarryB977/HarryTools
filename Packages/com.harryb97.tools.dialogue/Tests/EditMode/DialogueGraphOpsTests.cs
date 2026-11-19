@@ -80,7 +80,7 @@ namespace HarryTools.Dialogue.Tests {
             EnsureFolder(LocalesFolder);
             Locale _locale = Locale.CreateLocale(_code);
             AssetDatabase.CreateAsset(_locale, LocalesFolder + "/" + _code + ".asset");
-            LocalizationEditorSettings.AddLocale(_locale);
+            DialogueLocaleWatcher.AddLocaleForTests(_locale);
             addedLocales.Add(_locale);
         }
 

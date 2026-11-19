@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEditor;
 using UnityEditor.Localization;
 using UnityEngine.Localization;
@@ -10,6 +11,7 @@ namespace HarryTools.Dialogue.Editor {
         // ==================== VARIABLES ===================
         #region Private Variables
         private const string CharactersCollectionName = "DialogueCharacters";
+        private static bool suspended;
         #endregion
 
         // ==================== UNITY ====================
@@ -20,17 +22,60 @@ namespace HarryTools.Dialogue.Editor {
         }
         #endregion
 
+        // ==================== METHODS ====================
+        #region Methods
+        /// <summary> Adds the empty table of the locale to every given collection that lacks it </summary>
+        internal static void AddLocaleTables(Locale _locale, IEnumerable<StringTableCollection> _collections) {
+            if (_locale == null || _collections == null) return;
+            foreach (StringTableCollection _collection in _collections) {
+                if (_collection == null || _collection.GetTable(_locale.Identifier) != null) continue;
+                _collection.AddNewTable(_locale.Identifier);
+            }
+        }
+
+        /// <summary> The collections linked to the dialogues plus the characters collection, without repeats </summary>
+        internal static List<StringTableCollection> Targets(IEnumerable<DialogueAsset> _dialogues, StringTableCollection _characters) {
+            List<StringTableCollection> _targets = new List<StringTableCollection>();
+            if (_dialogues != null) {
+                foreach (DialogueAsset _asset in _dialogues) {
+                    StringTableCollection _linked = _asset != null ? DialogueTables.Linked(_asset) : null;
+                    if (_linked != null && !_targets.Contains(_linked)) _targets.Add(_linked);
+                }
+            }
+            if (_characters != null && !_targets.Contains(_characters)) _targets.Add(_characters);
+            return _targets;
+        }
+
+        /// <summary> The characters collection of the project. Null when it does not exist </summary>
+        internal static StringTableCollection CharactersCollection() {
+            return LocalizationEditorSettings.GetStringTableCollection(CharactersCollectionName);
+        }
+
+        /// <summary> Adds the locale to the project without creating its tables in the project collections </summary>
+        internal static void AddLocaleForTests(Locale _locale) {
+            suspended = true;
+            try {
+                LocalizationEditorSettings.AddLocale(_locale);
+            } finally {
+                suspended = false;
+            }
+        }
+        #endregion
+
         // ==================== PRIVATE ====================
         #region Private Methods
         private static void OnLocaleAdded(Locale _locale) {
+            if (suspended) return;
+            AddLocaleTables(_locale, Targets(ProjectDialogues(), CharactersCollection()));
+        }
+
+        private static List<DialogueAsset> ProjectDialogues() {
+            List<DialogueAsset> _dialogues = new List<DialogueAsset>();
             foreach (string _guid in AssetDatabase.FindAssets("t:DialogueAsset")) {
                 DialogueAsset _asset = AssetDatabase.LoadAssetAtPath<DialogueAsset>(AssetDatabase.GUIDToAssetPath(_guid));
-                if (_asset == null) continue;
-                StringTableCollection _linked = DialogueTables.Linked(_asset);
-                if (_linked != null) DialogueTables.EnsureLocaleTables(_linked);
+                if (_asset != null) _dialogues.Add(_asset);
             }
-            StringTableCollection _characters = LocalizationEditorSettings.GetStringTableCollection(CharactersCollectionName);
-            if (_characters != null) DialogueTables.EnsureLocaleTables(_characters);
+            return _dialogues;
         }
         #endregion
     }
