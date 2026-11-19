@@ -1,6 +1,21 @@
 # Changelog
 
-## [1.0.0-beta.2] - Sin publicar
+## [1.0.0-beta.3] - 2026-11-19
+### Añadido
+- Comentario de contexto en cada entrada de las tablas, para quien traduce: tipo de texto, diálogo, personaje de origen, de dónde viene en el recorrido y nota de guion.
+- Orden de las entradas por el recorrido del diálogo. Comentarios y orden se actualizan al guardar el diálogo, antes de subir a la hoja y después de bajar.
+- Las entradas se borran de todas las tablas al borrar un nodo, una respuesta o un caso, en el mismo paso de Undo, y **Clean orphan entries** limpia las que quedaron huérfanas.
+- Las colecciones de diálogo y la de personajes reciben su tabla al añadir un idioma al proyecto.
+- Traducciones desactualizadas: cada traducción guarda el texto de origen con el que se escribió o revisó (`SourceSnapshot`). Se marcan como **Outdated** en el panel lateral, con el texto anterior, y se dan por revisadas con **Mark as reviewed** y **Mark all as reviewed**.
+- Colección propia `DialogueCharacters` para los nombres de los personajes, con ID estable por personaje, traducciones y marcas de revisión en su Inspector, y el botón **Move to dialogue characters table** para los que usan otra tabla. Un personaje duplicado copia su nombre a una entrada nueva.
+- Sincronización con Google Sheets: pestaña por diálogo y pestaña `Characters`, columnas de clave, comentarios, texto por idioma y `<código> Status`, **Push all / Pull all**, botones **Push** y **Pull** en la barra del graph, **Test connection** y configuración solo de editor fuera de las builds. Subir baja siempre primero, la hoja gana solo si la misma traducción cambió en los dos sitios, una celda vacía nunca borra una traducción y las filas desconocidas se ignoran y se cuentan. Con una clave de API solo se puede bajar.
+- Avisos del validador: textos sin traducir, traducciones desactualizadas, diferencias de marcas o eventos entre el original y una traducción, y nombre de personaje sin traducir.
+- Guía de Google Sheets desde cero en el README.
+
+### Cambiado
+- Las columnas de la hoja se localizan por el título de su cabecera.
+
+## [1.0.0-beta.2] - 2026-11-18
 ### Añadido
 - Ventana del graph (**Window > HarryTools > Dialogue Graph**, doble clic en el asset o **Open Graph** en el Inspector) para crear, conectar y editar todos los nodos, con deshacer y sin botón de guardar.
 - Creación rápida de nodos con Espacio o clic derecho, y al soltar una conexión en un hueco vacío. Los nodos muestran un resumen de solo lectura (personaje y texto cortado con "…", sin marcas de texto) con un ancho común; Start y End son compactos, y las conexiones que vuelven atrás se dibujan más tenues.

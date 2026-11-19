@@ -10,7 +10,7 @@ Diálogos con decisiones, ramas, memoria persistente y presentación configurabl
 - Texto con las marcas de `texteffects` (pausas, efectos, eventos, voces) y eventos de texto que ejecutan `ActionList`.
 - Saltar una conversación ejecutando igualmente sus acciones y cambios de flags.
 - Historial opcional de lo mostrado y lo elegido.
-- Texto localizado automáticamente: cada diálogo tiene su propia String Table Collection y sus claves se generan solas.
+- Texto localizado automáticamente: cada diálogo tiene su propia String Table Collection, con comentarios para traductores, orden de lectura, avisos de traducciones sin hacer o desactualizadas y sincronización opcional con Google Sheets.
 
 > **Beta:** la API aún puede cambiar antes de la 1.0.0.
 
@@ -321,15 +321,97 @@ Las condiciones y acciones de `flags` (y cualquier otra) funcionan dentro de los
 
 ## Localización
 
-El texto de las líneas, las respuestas y los motivos de bloqueo se escribe en el panel lateral de la ventana del graph en el **idioma de origen** (el de Settings; vacío usa el idioma del proyecto) y se guarda en String Tables de Unity Localization:
+El texto de las líneas, las respuestas y los motivos de bloqueo se escribe en el panel lateral de la ventana del graph en el **idioma de origen** (el de Settings; vacío usa el idioma del proyecto) y se guarda en String Tables de Unity Localization.
+
+### Tablas y claves
 
 - Cada diálogo tiene **su propia String Table Collection**, creada al escribir el primer texto en la carpeta de Settings (**Tables Folder**, por defecto `Assets/Localization/Dialogue`), con el nombre `Dialogue_<nombre del asset>` y una tabla por idioma del proyecto. El diálogo la enlaza por GUID: renombrar el asset o la colección no rompe nada.
-- Las **claves** se generan a partir del ID estable del nodo o la respuesta (el motivo de bloqueo añade `.locked`). Nunca se escriben a mano.
+- Las **claves** se generan a partir del ID estable del nodo o la respuesta (el motivo de bloqueo añade `.locked`). Nunca se escriben a mano ni se renombran.
 - La sección **Translations** del panel lista cada idioma del proyecto salvo el de origen, con un campo de texto por idioma para la línea, cada respuesta y cada motivo de bloqueo. Escribe en la tabla de ese idioma bajo la misma clave, crea la tabla o la entrada si faltan y se deshace con Ctrl+Z. Un idioma sin texto muestra *Not translated*.
-- Para revisar muchos textos a la vez sirve la ventana **Localization Tables** de Unity. La hoja de cálculo para traductores llega en el bloque 3.
-- El nombre de los personajes es un `LocalizedString` normal, en la tabla que se elija.
+- Sin ningún idioma en el proyecto, el campo de texto muestra un aviso y no escribe nada.
 
-Sin ningún idioma en el proyecto, el campo de texto muestra un aviso y no escribe nada.
+### Comentarios y orden
+
+- Cada entrada lleva un comentario para quien traduce, en inglés, con el tipo de texto (`Line`, `Option` o `Locked reason`), el diálogo, el personaje de origen (solo en líneas), de dónde viene en el recorrido (tras el inicio, tras una respuesta, caso de una rama u "Otherwise") y la nota de guion si la hay. Si un texto se alcanza desde varios sitios, los orígenes se separan con `; `.
+- Las entradas se ordenan por el recorrido del diálogo desde Start, siguiendo las salidas en orden, una decisión seguida de sus respuestas y sus motivos de bloqueo; lo que Start no alcanza va al final. Las claves y los IDs no cambian nunca.
+- Comentarios y orden se actualizan al guardar el diálogo, antes de subir a la hoja y después de bajar (bajar cambia el orden). Se ven en la ventana **Localization Tables** de Unity.
+
+### Borrado
+
+- Borrar un nodo, una respuesta o un caso borra sus entradas en todas las tablas de la colección, en el mismo paso de Undo. Deshacer las recupera con sus textos. Pegar y duplicar crean entradas nuevas.
+- **Clean orphan entries**, en el Inspector del `DialogueAsset`, quita de la colección las entradas cuyo dueño ya no existe. Sirve para restos anteriores a esta versión.
+
+### Idiomas nuevos
+
+- Al añadir un idioma al proyecto, cada colección de diálogo y la de personajes reciben su tabla vacía. En la hoja, las columnas de ese idioma aparecen en la siguiente subida.
+- Al quitar un idioma no se borra nada: su tabla se queda en la colección y sus columnas en la hoja.
+
+### Traducciones desactualizadas
+
+- Cada traducción guarda el texto de origen que había cuando se escribió o se revisó. Si el original cambia, la traducción pasa a **Outdated**. "Sin traducir" es otra cosa: la entrada no existe o está vacía.
+- Se ve en el campo del idioma del panel (la marca y el texto de origen anterior), en la validación y en la hoja.
+- Una traducción deja de estar desactualizada cuando cambia su texto, cuando el original vuelve a como estaba, con **Mark as reviewed** (por idioma) o **Mark all as reviewed** (todos los idiomas de ese texto), o cuando quien traduce la da por revisada en la hoja. Nunca se vacía ni se borra una traducción por estar desactualizada.
+
+### Nombres de personajes
+
+- La herramienta mantiene una colección propia, `DialogueCharacters`, en la carpeta de tablas de Settings. Cada `DialogueCharacter` tiene un ID estable que es la clave de su entrada.
+- El nombre se escribe en el Inspector del personaje, en el idioma de origen, con sus traducciones y las mismas marcas y botones de revisión que las líneas.
+- Un personaje cuyo nombre apunta a otra tabla se muestra tal cual y no se cambia sin pedirlo: el botón **Move to dialogue characters table** lo pasa a la colección propia.
+- Al duplicar un personaje, su nombre se copia a una entrada nueva, de modo que los dos no comparten texto por accidente.
+- Los personajes se suben y se bajan como la pestaña `Characters`.
+
+### Validación
+
+Además de lo descrito en la ventana del graph, el validador informa de la localización:
+
+- **Untranslated in:** nota informativa, una por línea, respuesta o motivo de bloqueo (el texto y el motivo de una respuesta cuentan juntos), con la lista de idiomas sin texto.
+- **Outdated in:** aviso, con la lista de idiomas con la traducción desactualizada.
+- **Translation (código):** aviso cuando una traducción difiere del original en marcas de texto o eventos, según las reglas de `texteffects`.
+- **Speaker name untranslated in:** nota informativa, una por personaje en su primera línea, con los idiomas en los que su nombre no tiene texto.
+
+## Google Sheets
+
+La sincronización con una hoja de Google es opcional y usa la extensión de Google Sheets de Unity Localization. Las llamadas bloquean el editor y no se lanzan en Play.
+
+### Guía desde cero
+
+1. **Proyecto de Google Cloud.** En la consola de Google Cloud crea un proyecto nuevo o elige uno existente.
+2. **Sheets API.** En ese proyecto, abre las APIs y servicios y habilita la Google Sheets API.
+3. **Credenciales OAuth.**
+   - Configura la pantalla de consentimiento y añade tu cuenta de Google como usuario de prueba.
+   - Crea un ID de cliente OAuth de tipo "Aplicación de escritorio" y copia su ID y su secreto.
+   - Una clave de API solo permite bajar de hojas accesibles con ella; subir y crear pestañas exigen OAuth.
+4. **Asset de servicio.**
+   - Crea un asset **Sheets Service Provider** fuera de cualquier carpeta `Resources`, para que las credenciales nunca entren en una build. Si está dentro, Settings lo avisa.
+   - Elige la autenticación OAuth, introduce el ID y el secreto del cliente y autoriza el acceso desde el propio asset en el navegador.
+5. **Hoja.** Crea una hoja en Google Drive y copia su ID, la parte de la URL entre `/d/` y `/edit`.
+6. **Configuración.** En **Project Settings > HarryTools > Dialogue**, sección Google Sheets, asigna el asset de servicio y el ID. Se guardan en `ProjectSettings`, fuera de `Resources` y de las builds.
+7. **Test connection.** Comprueba el acceso a la hoja y muestra el resultado. Con una clave de API avisa de que solo se puede bajar.
+8. **Primera subida.** Con **Push all**, o **Push** en la barra de la ventana del graph para un solo diálogo. Cada diálogo crea su pestaña.
+
+### Qué se sincroniza
+
+- Cada diálogo tiene su pestaña, que se crea si no existe y se sigue usando aunque se renombre el diálogo. Se titula con el nombre del diálogo y los seis primeros caracteres de su ID, porque Google exige títulos únicos. Los personajes van en la pestaña `Characters`.
+- Las columnas son la clave, su comentario y, por cada idioma, el texto y una columna `<código> Status`. Se rehacen al añadir idiomas.
+- Se lanza desde **Window > HarryTools > Dialogue > Push all / Pull all** y los botones equivalentes de Settings (también para los personajes), y desde **Push** y **Pull** de la barra del graph para el diálogo abierto. Cada diálogo se sincroniza entero o no se toca. "Todos" sigue con el resto si uno falla y al final da un resumen.
+
+### Reglas de la bajada y la subida
+
+- **Subir baja siempre primero.** Si la bajada falla, no se sube nada. Después regenera comentarios y orden y sube clave, comentarios, el texto de todos los idiomas y las marcas.
+- **Bajar** solo actualiza los idiomas que no son el de origen y nunca toca la columna de origen ni el texto escrito en el graph.
+- Una traducción local solo se sustituye si la hoja cambió desde la última sincronización. **Si la misma traducción cambió en los dos sitios desde entonces, gana la hoja** y se cuenta y avisa como conflicto.
+- **Una celda vacía nunca borra una traducción local.**
+- Las filas desconocidas (de nodos borrados, añadidas a mano o con la clave editada) se ignoran y se cuentan. Bajar no crea ni renombra claves ni borra entradas locales que no estén en la hoja.
+- Si hay filas desconocidas o conflictos, se avisa en consola y en el resumen.
+- Con **clave de API** solo se puede bajar: subir y crear pestañas necesitan OAuth y fallan antes de enviar nada.
+- Las columnas se localizan por el **título de su cabecera**, así que no hay que renombrarlas. Un idioma cuya cabecera falta se salta, y si falta la de la clave no se baja nada.
+- Los errores (sin conexión, sin permisos, hoja inexistente) salen en un diálogo y en consola.
+
+### Trabajar con quien traduce
+
+- Quien traduce edita solo las columnas de texto de su idioma. La clave y los comentarios no se tocan, y la columna de origen no se baja nunca.
+- La columna `<código> Status` marca con **Outdated** y el texto de origen anterior las traducciones desactualizadas. Para darla por revisada, quien traduce **borra el contenido de esa celda, pero conserva su nota de celda**, y se baja. Si el original cambió después de la última subida, la marca no se quita.
+- Las notas para quien traduce o revisa van en **notas de celda** de Google Sheets, no en las columnas de comentario, que son de la herramienta y se reescriben al subir.
 
 ## Settings
 
@@ -340,12 +422,13 @@ Sin ningún idioma en el proyecto, el campo de texto muestra un aviso y no escri
 | **Default Lifetime / Default Advance** | Vida y avance de las líneas sin contenedor que no los sobrescriben. |
 | **Initial Selection** | Respuesta seleccionada al abrir una decisión: `DefaultOrFirst` (por defecto) o `None`. |
 | **History Enabled / History Max / History Clear** | Historial (ver arriba). |
-| **Tables Folder** | Carpeta donde se crean las colecciones de los diálogos. |
+| **Tables Folder** | Carpeta donde se crean las colecciones de los diálogos y la de personajes. |
 | **Source Locale Code** | Idioma en el que se escriben los diálogos. Vacío usa el del proyecto. |
+| **Service Provider / Spreadsheet ID** | Credenciales de Google y hoja de destino (solo editor, ver Google Sheets). |
+| **Test connection, Push all, Pull all, Push characters, Pull characters** | Comprobación y sincronización con la hoja. |
 
 ## Límites de este bloque
 
-- Localización mínima: sin comentarios de contexto para traductores, sin orden de las entradas por recorrido, sin borrado automático de entradas al quitar nodos, sin avisos de textos sin traducir y sin integración con Google Sheets (bloque 3). Las notas para traducción se guardan en el diálogo pero aún no salen a la tabla.
 - Sin voz por línea con el paquete `audio`; la vida `ByVoice` se comporta como `ByTextLength` (bloque 4).
 - Sin Sample con prefabs de interfaz (bloque 4).
 - La estructura del graph no se edita en Play.
