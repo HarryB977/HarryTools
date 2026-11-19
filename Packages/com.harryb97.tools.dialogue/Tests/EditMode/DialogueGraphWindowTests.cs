@@ -1117,6 +1117,34 @@ namespace HarryTools.Dialogue.Tests {
         }
 
         [Test]
+        public void Panel_OutdatedMark_ShowsPreviousSource_ClearsOnWrite() {
+            DialogueAsset _asset = NewSample("PanelOutdated");
+            LineNode _line = FirstLine(_asset);
+            LocaleIdentifier _other = new LocaleIdentifier(OtherCode);
+            DialogueTables.SetSourceText(_asset, _line.Text, _line.Id, "Hello");
+            window = DialogueGraphWindow.Open(_asset);
+            window.View.SelectAndFrame(_line.Id);
+            window.Panel.TranslationField(_line.Id, OtherCode).value = "Hola";
+            Assert.AreEqual(0, OutdatedMarks(), "up to date");
+
+            DialogueTables.SetSourceText(_asset, _line.Text, _line.Id, "Hello there");
+            window.Panel.Show(_asset, _line.Id);
+            TextField _field = window.Panel.TranslationField(_line.Id, OtherCode);
+            Assert.AreEqual(TranslationState.Outdated, DialogueTranslations.State(DialogueTables.Linked(_asset), _line.Id, _other));
+            Assert.IsTrue(_field.ClassListContains("dialogue-panel__translation--outdated"));
+            Assert.AreEqual(1, OutdatedMarks(), "the mark and the review buttons are shown");
+            Assert.IsNotNull(window.Panel.Query<Label>().Where(_l => _l.text == "Previous source: Hello").First());
+
+            _field.value = "Hola ahi";
+            Assert.IsFalse(_field.ClassListContains("dialogue-panel__translation--outdated"), "writing the translation clears the mark at once");
+            Assert.AreEqual(0, OutdatedMarks());
+        }
+
+        private int OutdatedMarks() {
+            return window.Panel.Query<Label>(className: "dialogue-panel__outdated-mark").ToList().Count(_l => _l.parent.resolvedStyle.display != DisplayStyle.None && _l.parent.style.display != DisplayStyle.None);
+        }
+
+        [Test]
         public void Panel_TranslationField_ReadsExternalEditOnFocus() {
             DialogueAsset _asset = NewSample("PanelExternalEdit");
             LineNode _line = FirstLine(_asset);

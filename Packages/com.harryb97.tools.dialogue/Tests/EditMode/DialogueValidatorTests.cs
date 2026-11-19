@@ -328,6 +328,40 @@ namespace HarryTools.Dialogue.Tests {
             Assert.IsTrue(Has(_found, _line.Id, "pause", DialogueIssueSeverity.Warning), "a tag the translation lacks");
         }
 
+        [Test]
+        public void Validator_Option_TextAndLockedReason_OneIssuePerOwner() {
+            DialogueAsset _asset = Clean("OptionTranslations", out LineNode _line);
+            ChoiceNode _choice = _asset.AddNode<ChoiceNode>();
+            ChoiceOption _option = new ChoiceOption();
+            _choice.Options.Add(_option);
+            _asset.EnsureIds();
+            _line.Next.Target = _choice.Id;
+            string _textKey = _option.Id + DialogueTables.KeySuffix(typeof(ChoiceOption), "text");
+            string _lockedKey = _option.Id + DialogueTables.KeySuffix(typeof(ChoiceOption), "lockedReason");
+            DialogueTables.SetSourceText(_asset, _option.Text, _textKey, "Yes");
+            DialogueTables.SetSourceText(_asset, _option.LockedReason, _lockedKey, "Not yet");
+
+            List<DialogueIssue> _found = Run(_asset);
+            Assert.AreEqual(1, Count(_found, _choice.Id, "Untranslated in: "), "text and locked reason share one issue");
+            Assert.IsTrue(Has(_found, _choice.Id, "Option: Untranslated in: ", DialogueIssueSeverity.Info));
+
+            // Only the locked reason stays untranslated
+            DialogueTables.SetText(_asset, _option.Text, _textKey, new LocaleIdentifier(OtherCode), "Si");
+            Assert.AreEqual(1, Count(Run(_asset), _choice.Id, "Untranslated in: "), "the locked reason alone is still reported");
+
+            DialogueTables.SetText(_asset, _option.LockedReason, _lockedKey, new LocaleIdentifier(OtherCode), "Aun no");
+            Assert.AreEqual(0, Count(Run(_asset), _choice.Id, "Untranslated"));
+
+            DialogueTables.SetSourceText(_asset, _option.Text, _textKey, "Yes!");
+            DialogueTables.SetSourceText(_asset, _option.LockedReason, _lockedKey, "Not yet!");
+            _found = Run(_asset);
+            Assert.AreEqual(1, Count(_found, _choice.Id, "Outdated in: "), "both outdated texts share one issue");
+            Assert.IsTrue(Has(_found, _choice.Id, "Outdated in: ", DialogueIssueSeverity.Warning));
+
+            DialogueTables.SetSourceText(_asset, _option.Text, _textKey, "Yes");
+            Assert.AreEqual(1, Count(Run(_asset), _choice.Id, "Outdated in: "), "the locked reason alone is still reported");
+        }
+
         private static int Count(List<DialogueIssue> _issues, string _nodeId, string _fragment) {
             int _count = 0;
             for (int _i = 0; _i < _issues.Count; _i++) {

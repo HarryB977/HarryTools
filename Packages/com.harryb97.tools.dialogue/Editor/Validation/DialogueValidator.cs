@@ -56,7 +56,7 @@ namespace HarryTools.Dialogue.Editor {
                         case LineNode _line:
                             if (_line.Character == null) CheckCharacter(_serialized ?? (_serialized = new SerializedObject(_asset)), _i, _line, _into);
                             CheckText(_line.Text, _line.Id, "Line", true, _line.Events != null ? (Func<string, bool>)_line.Events.Contains : null, _into);
-                            CheckTranslations(_collection, _line.Text, _line.Id + DialogueTables.KeySuffix(typeof(LineNode), "text"), _line.Id, "", _into);
+                            CheckLineTranslations(_collection, _line, _into);
                             break;
                         case ChoiceNode _choice:
                             CheckChoice(_choice, _ambient, _into);
@@ -213,8 +213,8 @@ namespace HarryTools.Dialogue.Editor {
             }
         }
 
-        /// <summary> Reports the locales where the text has no translation, where it is outdated, and where its tags or events differ from the source. One issue of each kind per text </summary>
-        private static void CheckTranslations(StringTableCollection _collection, LocalizedString _text, string _key, string _nodeId, string _prefix, List<DialogueIssue> _into) {
+        /// <summary> Adds the locales where the text has no translation or an outdated one to the lists, and reports where its tags or events differ from the source </summary>
+        private static void CheckTranslations(StringTableCollection _collection, LocalizedString _text, string _key, string _nodeId, string _prefix, List<string> _untranslated, List<string> _outdated, List<DialogueIssue> _into) {
             Locale _source = DialogueTables.SourceLocale();
             if (_collection == null || _source == null || _text == null || _text.IsEmpty) return;
 
@@ -222,22 +222,21 @@ namespace HarryTools.Dialogue.Editor {
             if (string.IsNullOrWhiteSpace(_sourceText)) return;
 
             IReadOnlyList<Locale> _locales = LocalizationEditorSettings.GetLocales();
-            List<string> _untranslated = new List<string>();
-            List<string> _outdated = new List<string>();
             Dictionary<string, string> _textByLocale = new Dictionary<string, string>();
             _textByLocale[_source.Identifier.Code] = _sourceText;
             for (int _i = 0; _i < _locales.Count; _i++) {
                 if (_locales[_i] == null || _locales[_i].Identifier == _source.Identifier) continue;
                 LocaleIdentifier _identifier = _locales[_i].Identifier;
                 switch (DialogueTranslations.State(_collection, _key, _identifier)) {
-                    case TranslationState.Untranslated: _untranslated.Add(_identifier.Code); continue;
-                    case TranslationState.Outdated: _outdated.Add(_identifier.Code); break;
+                    case TranslationState.Untranslated:
+                        if (!_untranslated.Contains(_identifier.Code)) _untranslated.Add(_identifier.Code);
+                        continue;
+                    case TranslationState.Outdated:
+                        if (!_outdated.Contains(_identifier.Code)) _outdated.Add(_identifier.Code);
+                        break;
                 }
                 _textByLocale[_identifier.Code] = DialogueTranslations.TextOf(_collection, _key, _identifier);
             }
-
-            if (_untranslated.Count > 0) Add(_into, DialogueIssueSeverity.Info, _nodeId, _prefix + "Untranslated in: " + string.Join(", ", _untranslated));
-            if (_outdated.Count > 0) Add(_into, DialogueIssueSeverity.Warning, _nodeId, _prefix + "Outdated in: " + string.Join(", ", _outdated));
 
             // The source text's own problems are reported by CheckText
             List<LocaleIssue> _differences = new List<LocaleIssue>();
@@ -248,13 +247,29 @@ namespace HarryTools.Dialogue.Editor {
             }
         }
 
+        private static void CheckLineTranslations(StringTableCollection _collection, LineNode _line, List<DialogueIssue> _into) {
+            List<string> _untranslated = new List<string>();
+            List<string> _outdated = new List<string>();
+            CheckTranslations(_collection, _line.Text, _line.Id + DialogueTables.KeySuffix(typeof(LineNode), "text"), _line.Id, "", _untranslated, _outdated, _into);
+            AddStates(_line.Id, "", _untranslated, _outdated, _into);
+        }
+
+        /// <summary> One issue per option covering its text and its locked reason </summary>
         private static void CheckOptionTranslations(StringTableCollection _collection, ChoiceNode _choice, List<DialogueIssue> _into) {
             for (int _i = 0; _i < _choice.Options.Count; _i++) {
                 ChoiceOption _option = _choice.Options[_i];
                 if (_option == null) continue;
-                CheckTranslations(_collection, _option.Text, _option.Id + DialogueTables.KeySuffix(typeof(ChoiceOption), "text"), _choice.Id, "Option: ", _into);
-                CheckTranslations(_collection, _option.LockedReason, _option.Id + DialogueTables.KeySuffix(typeof(ChoiceOption), "lockedReason"), _choice.Id, "Locked reason: ", _into);
+                List<string> _untranslated = new List<string>();
+                List<string> _outdated = new List<string>();
+                CheckTranslations(_collection, _option.Text, _option.Id + DialogueTables.KeySuffix(typeof(ChoiceOption), "text"), _choice.Id, "Option: ", _untranslated, _outdated, _into);
+                CheckTranslations(_collection, _option.LockedReason, _option.Id + DialogueTables.KeySuffix(typeof(ChoiceOption), "lockedReason"), _choice.Id, "Locked reason: ", _untranslated, _outdated, _into);
+                AddStates(_choice.Id, "Option: ", _untranslated, _outdated, _into);
             }
+        }
+
+        private static void AddStates(string _nodeId, string _prefix, List<string> _untranslated, List<string> _outdated, List<DialogueIssue> _into) {
+            if (_untranslated.Count > 0) Add(_into, DialogueIssueSeverity.Info, _nodeId, _prefix + "Untranslated in: " + string.Join(", ", _untranslated));
+            if (_outdated.Count > 0) Add(_into, DialogueIssueSeverity.Warning, _nodeId, _prefix + "Outdated in: " + string.Join(", ", _outdated));
         }
         #endregion
     }

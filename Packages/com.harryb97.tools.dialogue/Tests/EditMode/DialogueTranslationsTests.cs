@@ -209,6 +209,35 @@ namespace HarryTools.Dialogue.Tests {
         }
 
         [Test]
+        public void SetText_WriteAndStamp_UndoneInOneStep() {
+            LineNode _line = NewLine(out DialogueAsset _asset, "Hello");
+            StringTableCollection _collection = DialogueTables.Linked(_asset);
+            Undo.IncrementCurrentGroup();
+
+            DialogueTables.SetText(_asset, _line.Text, _line.Id, Other, "Hola");
+            Assert.AreEqual("Hello", DialogueTranslations.PreviousSource(_collection, _line.Id, Other));
+
+            Undo.PerformUndo();
+            Assert.AreEqual(TranslationState.Untranslated, DialogueTranslations.State(_collection, _line.Id, Other));
+            Assert.IsNull(DialogueTranslations.PreviousSource(_collection, _line.Id, Other), "the stamp went with the text");
+        }
+
+        [Test]
+        public void MarkReviewed_AllLocales_UndoRestoresOutdated() {
+            LineNode _line = NewLine(out DialogueAsset _asset, "Hello");
+            DialogueTables.SetText(_asset, _line.Text, _line.Id, Other, "Hola");
+            DialogueTables.SetSourceText(_asset, _line.Text, _line.Id, "Changed");
+            StringTableCollection _collection = DialogueTables.Linked(_asset);
+            Undo.IncrementCurrentGroup();
+
+            DialogueTranslations.MarkReviewed(_collection, _line.Id);
+            Assert.AreEqual(TranslationState.UpToDate, DialogueTranslations.State(_collection, _line.Id, Other));
+
+            Undo.PerformUndo();
+            Assert.AreEqual(TranslationState.Outdated, DialogueTranslations.State(_collection, _line.Id, Other));
+        }
+
+        [Test]
         public void LegacyTranslation_NoSnapshot_UpToDate() {
             LineNode _line = NewLine(out DialogueAsset _asset, "Hello");
             StringTableCollection _collection = DialogueTables.Linked(_asset);

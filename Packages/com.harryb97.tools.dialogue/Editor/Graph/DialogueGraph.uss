@@ -242,7 +242,8 @@
     -unity-text-align: upper-left;
 }
 
-.dialogue-panel__translation--outdated > .unity-label {
+.dialogue-panel__translation--outdated > .unity-label,
+.dialogue-panel__outdated > .dialogue-panel__outdated-mark {
     color: rgb(230, 170, 60);
 }
 

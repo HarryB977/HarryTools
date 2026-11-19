@@ -280,20 +280,23 @@ namespace HarryTools.Dialogue.Tests {
             Assert.IsNull(_other.GetTable(new LocaleIdentifier(OtherCode)), "only the given collections get tables");
         }
 
+        /// <summary> A project locale cannot be removed here without touching project assets, so this checks what the removal leaves behind: a table of a locale the project does not have survives every operation that maintains the collection </summary>
         [Test]
         public void LocaleRemoved_KeepsTable() {
             DialogueAsset _asset = NewAsset("CleanLocaleRemoved");
             StringTableCollection _collection = DialogueTables.EnsureCollection(_asset);
+            LocaleIdentifier _gone = new LocaleIdentifier("zz");
+            Assert.IsNull(LocalizationEditorSettings.GetLocale("zz"), "not a project locale");
+            _collection.AddNewTable(_gone);
 
-            // The watcher must not listen to locale removals at all
-            FieldInfo _field = typeof(LocalizationEditorEvents).GetField("LocaleRemoved", BindingFlags.Instance | BindingFlags.NonPublic);
-            Assert.IsNotNull(_field);
-            Delegate _handlers = _field.GetValue(LocalizationEditorSettings.EditorEvents) as Delegate;
-            if (_handlers != null) {
-                foreach (Delegate _handler in _handlers.GetInvocationList()) Assert.AreNotEqual(typeof(DialogueLocaleWatcher), _handler.Method.DeclaringType);
-            }
+            DialogueTables.EnsureLocaleTables(_collection);
+            DialogueTables.EnsureCollection(_asset);
+            DialogueTables.CleanOrphans(_asset);
+
+            Assert.IsNotNull(_collection.GetTable(_gone));
             Assert.IsNotNull(_collection.GetTable(new LocaleIdentifier(OtherCode)));
         }
+
         #endregion
     }
 }
