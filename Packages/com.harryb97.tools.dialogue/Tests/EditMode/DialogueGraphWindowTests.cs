@@ -22,7 +22,6 @@ namespace HarryTools.Dialogue.Tests {
         private const string TempFolder = "Assets/__DialogueTests__";
         private const string AssetsFolder = TempFolder + "/GraphWindow";
         private const string TablesFolder = TempFolder + "/GraphWindowTables";
-        private const string LocalesFolder = TempFolder + "/GraphWindowLocales";
         private const string SourceCode = "en";
         private const string OtherCode = "es";
         private const string Ellipsis = "…";
@@ -30,8 +29,6 @@ namespace HarryTools.Dialogue.Tests {
         // Pixels a port connector may sit inside the node's border
         private const float MaxPortInset = 4f;
 
-        private readonly List<Locale> addedLocales = new List<Locale>();
-        private LocalizationSettings createdSettings;
         private DialogueSettings settings;
         private DialogueGraphWindow window;
         private bool runsStarted;
@@ -42,36 +39,11 @@ namespace HarryTools.Dialogue.Tests {
         [OneTimeSetUp]
         public void OneTimeSetUp() {
             EnsureFolder(TempFolder);
-
-            // Reuse the project's localization setup; add only what is missing and undo it afterwards
-            if (LocalizationEditorSettings.ActiveLocalizationSettings == null) {
-                createdSettings = ScriptableObject.CreateInstance<LocalizationSettings>();
-                AssetDatabase.CreateAsset(createdSettings, TempFolder + "/GraphWindowLocalization.asset");
-                LocalizationEditorSettings.ActiveLocalizationSettings = createdSettings;
-            }
-            EnsureLocale(SourceCode);
-            EnsureLocale(OtherCode);
-        }
-
-        private void EnsureLocale(string _code) {
-            if (LocalizationEditorSettings.GetLocale(_code) != null) return;
-            EnsureFolder(LocalesFolder);
-            Locale _locale = Locale.CreateLocale(_code);
-            AssetDatabase.CreateAsset(_locale, LocalesFolder + "/" + _code + ".asset");
-            DialogueLocaleWatcher.AddLocaleForTests(_locale);
-            addedLocales.Add(_locale);
+            TestLocales.RequireOrIgnore(SourceCode, OtherCode);
         }
 
         [OneTimeTearDown]
         public void OneTimeTearDown() {
-            for (int _i = 0; _i < addedLocales.Count; _i++) {
-                if (addedLocales[_i] != null) LocalizationEditorSettings.RemoveLocale(addedLocales[_i]);
-            }
-            addedLocales.Clear();
-            if (createdSettings != null) LocalizationEditorSettings.ActiveLocalizationSettings = null;
-            createdSettings = null;
-
-            if (AssetDatabase.IsValidFolder(LocalesFolder)) AssetDatabase.DeleteAsset(LocalesFolder);
             if (AssetDatabase.IsValidFolder(TempFolder) && AssetDatabase.FindAssets("", new[] { TempFolder }).Length == 0) AssetDatabase.DeleteAsset(TempFolder);
         }
 

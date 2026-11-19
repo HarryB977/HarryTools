@@ -102,22 +102,23 @@ namespace HarryTools.Dialogue.Editor {
             return true;
         }
 
-        /// <summary> Copies the name of every locale from the entry the character points to into its own entry of the characters collection and points the character there. The original entry is left as it is. Nothing when the name is already there or the character has none </summary>
-        internal static void MoveToOwnCollection(DialogueCharacter _character) {
+        /// <summary> Copies the name of every locale from the entry the character points to into its own entry of the characters collection and points the character there. The original entry is left as it is. Nothing when the name is already there or the character has none. True when the name was moved </summary>
+        internal static bool MoveToOwnCollection(DialogueCharacter _character) {
             string _id = EnsureId(_character);
-            if (string.IsNullOrEmpty(_id) || _character.DisplayName == null || _character.DisplayName.IsEmpty || IsOwnCollection(_character)) return;
+            if (string.IsNullOrEmpty(_id) || _character.DisplayName == null || _character.DisplayName.IsEmpty || IsOwnCollection(_character)) return false;
 
             StringTableCollection _from = LocalizationEditorSettings.GetStringTableCollection(_character.DisplayName.TableReference);
             SharedTableData.SharedTableEntry _fromEntry = _from != null && _from.SharedData != null ? _from.SharedData.GetEntryFromReference(_character.DisplayName.TableEntryReference) : null;
-            if (_fromEntry == null) return;
+            if (_fromEntry == null) return false;
             StringTableCollection _own = EnsureCollection();
-            if (_own == null) return;
+            if (_own == null) return false;
 
             Undo.RecordObject(_own.SharedData, MoveUndoName);
             SharedTableData.SharedTableEntry _entry = _own.SharedData.GetEntry(_id) ?? _own.SharedData.AddKey(_id);
             EditorUtility.SetDirty(_own.SharedData);
             DialogueTables.CopyValues(_from, _fromEntry.Id, _own, _entry.Id, true);
             PointTo(_character, _own.SharedData.TableCollectionNameGuid, _entry.Id, MoveUndoName);
+            return true;
         }
 
         /// <summary> The context comment of the character entry: its type and the dialogues that use it as a speaker </summary>

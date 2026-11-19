@@ -44,9 +44,10 @@ namespace HarryTools.Dialogue.Editor {
             return _asset.name + " (" + (_id.Length > TabIdLength ? _id.Substring(0, TabIdLength) : _id) + ")";
         }
 
-        /// <summary> Takes the sheet edits of the dialogue's translations, then puts its table entries in script order </summary>
+        /// <summary> Takes the sheet edits of the dialogue's translations, then puts its table entries in script order. A dialogue without a collection has nothing to pull, so nothing is created for it </summary>
         public SyncResult Pull(DialogueAsset _asset) {
             if (_asset == null) return SyncResult.Failed("", "There is no dialogue to pull.");
+            if (DialogueTables.Linked(_asset) == null) return SyncResult.Done(_asset.name, 0, 0);
             return Sync(_asset.name, () => DialogueTables.EnsureCollection(_asset), TabTitle(_asset), () => DialogueTableLayout.Refresh(_asset), false);
         }
 
@@ -130,58 +131,55 @@ namespace HarryTools.Dialogue.Editor {
         private SyncResult Sync(string _name, Func<StringTableCollection> _getCollection, string _title, Func<bool> _refresh, bool _push) {
             if (_push && gateway.IsReadOnly) return SyncResult.Failed(_name, SheetConnection.ReadOnlyMessage);
 
-            // Set once the pull and the reorder are done: a failure before that pushed nothing
+            // Set once the pull worked, and right before the push is sent: a failure before that pushed nothing
+            bool _pulled = false;
             bool _pushing = false;
             try {
                 StringTableCollection _collection = _getCollection();
                 if (_collection == null) return SyncResult.Failed(_name, "There is no table to sync: the project has no locales.");
 
                 int _sheetId = ResolveTab(_collection, _title);
-                int _unknownRows = 0;
+                SheetPullCapture _capture = null;
                 int _conflicts = 0;
                 // Without a tab, a read-only access has nothing to pull
                 if (_sheetId >= 0) {
-                    string _error = PullInto(_sheetId, _collection, out _unknownRows, out _conflicts);
-                    if (_error != null) return SyncResult.Failed(_name, _push ? NothingPushed(_error) : _error);
+                    string _error = PullInto(_sheetId, _collection, out _capture, out _conflicts);
+                    if (_error != null) return SyncResult.Failed(_name, _push ? NothingPushed(_error, false) : _error);
                 }
+                _pulled = true;
+                int _unknownRows = _capture != null ? _capture.UnknownRows : 0;
                 _refresh();
 
                 if (_push) {
+                    List<SheetColumn> _columns = DialogueSheetColumns.ForPush(_collection, _capture);
+                    // The rows the pull could not match go back below the others, so nothing typed in them is lost
+                    SheetGrid _tail = _capture != null ? _capture.Tail(_collection, _columns) : null;
                     _pushing = true;
-                    List<SheetColumn> _columns = DialogueSheetColumns.ForPush(_collection);
-                    gateway.Push(_sheetId, _collection, _columns);
+                    gateway.Push(_sheetId, _collection, _columns, _tail);
                     // Only now did the texts reach the sheet
                     DialogueSheetColumns.CommitPush(_columns);
                 }
-                SaveTables(_collection);
+                DialogueTables.SaveTables(_collection);
 
                 SyncResult _result = SyncResult.Done(_name, _unknownRows, _conflicts);
                 if (_unknownRows > 0 || _conflicts > 0) Debug.LogWarning((_push ? "Pushed " : "Pulled ") + _name + ". " + _result.Counts());
                 return _result;
             } catch (Exception _exception) {
                 string _message = Describe(_exception);
-                return SyncResult.Failed(_name, _push && !_pushing ? NothingPushed(_message) : _message);
+                return SyncResult.Failed(_name, _push && !_pushing ? NothingPushed(_message, _pulled) : _message);
             }
         }
 
-        private static string NothingPushed(string _reason) {
-            return "The pull failed, so nothing was pushed. " + _reason;
+        private static string NothingPushed(string _reason, bool _pulled) {
+            return (_pulled ? "The pull worked but the push could not be prepared, so nothing was pushed. " : "The pull failed, so nothing was pushed. ") + _reason;
         }
 
-        /// <summary> Writes the shared data and the tables of the collection to disk when they changed, as the pull of the Localization package does. The collection asset itself is left to the next project save: importing it makes Localization recreate any missing locale of its tables </summary>
-        private static void SaveTables(StringTableCollection _collection) {
-            if (_collection.SharedData != null) AssetDatabase.SaveAssetIfDirty(_collection.SharedData);
-            IReadOnlyList<StringTable> _tables = _collection.StringTables;
-            for (int _i = 0; _i < _tables.Count; _i++) {
-                if (_tables[_i] != null) AssetDatabase.SaveAssetIfDirty(_tables[_i]);
-            }
-        }
-
-        /// <summary> The tab of the collection: the recorded one while the spreadsheet still has it, else a tab with the title, else a new one. The result is recorded. -1 when there is none and the access can only read </summary>
+        /// <summary> The tab of the collection: the one recorded for this spreadsheet while it still has it, else a tab with the title, else a new one. The result is recorded. -1 when there is none and the access can only read </summary>
         private int ResolveTab(StringTableCollection _collection, string _title) {
             string _guid = _collection.SharedData.TableCollectionNameGuid.ToString("N");
+            string _spreadsheet = gateway.SpreadsheetId;
             IReadOnlyList<(int Id, string Title)> _sheets = gateway.GetSheets();
-            bool _recorded = tabs.TryGetTab(_guid, out int _sheetId);
+            bool _recorded = tabs.TryGetTab(_spreadsheet, _guid, out int _sheetId);
 
             if (_recorded && Has(_sheets, _sheetId)) return _sheetId;
 
@@ -194,7 +192,7 @@ namespace HarryTools.Dialogue.Editor {
             }
             if (_found < 0 && gateway.IsReadOnly) return -1;
             _sheetId = _found >= 0 ? _found : gateway.AddSheet(_title);
-            tabs.SetTab(_guid, _sheetId);
+            tabs.SetTab(_spreadsheet, _guid, _sheetId);
             tabs.Save();
             return _sheetId;
         }
@@ -206,9 +204,9 @@ namespace HarryTools.Dialogue.Editor {
             return false;
         }
 
-        /// <summary> Reads the tab and gives each row to the pull columns, every cell taken from the column where its header is. An empty tab has nothing to pull. Returns why the pull cannot run, or null </summary>
-        private string PullInto(int _sheetId, StringTableCollection _collection, out int _unknownRows, out int _conflicts) {
-            _unknownRows = 0;
+        /// <summary> Reads the tab and gives each row to the pull columns, every cell taken from the column where its header is. The capture keeps the row of each matched entry and the rows that matched none: a key the collection lacks, a repeated key after its first row, or a row with content in a managed column but no key. An empty tab has nothing to pull and no capture. Returns why the pull cannot run, or null </summary>
+        private string PullInto(int _sheetId, StringTableCollection _collection, out SheetPullCapture _capture, out int _conflicts) {
+            _capture = null;
             _conflicts = 0;
 
             SheetGrid _grid = gateway.Read(_sheetId);
@@ -221,6 +219,8 @@ namespace HarryTools.Dialogue.Editor {
             List<SheetColumn> _columns = DialogueSheetColumns.ForPull(_collection, _headers, out string _error);
             if (_columns == null) return _error;
             DialogueKeyColumn _key = (DialogueKeyColumn)_columns[0];
+            SheetPullCapture _read = new SheetPullCapture(_grid, _headers, _key.ColumnIndex);
+            List<int> _managed = ManagedColumns(_collection, _read);
 
             for (int _i = 0; _i < _columns.Count; _i++) _columns[_i].PullBegin(_collection);
             try {
@@ -228,11 +228,18 @@ namespace HarryTools.Dialogue.Editor {
                 for (int _row = 1; _row < _grid.RowCount; _row++) {
                     string _keyValue = _grid.Value(_row, _key.ColumnIndex);
                     string _keyNote = _grid.Note(_row, _key.ColumnIndex);
-                    if (DialogueSheetColumns.IsBlank(_keyValue) && string.IsNullOrEmpty(_keyNote)) continue;
+                    if (DialogueSheetColumns.IsBlank(_keyValue) && string.IsNullOrEmpty(_keyNote)) {
+                        if (HasContent(_grid, _row, _managed)) _read.AddUnknown(_row);
+                        continue;
+                    }
 
                     SharedTableData.SharedTableEntry _entry = _key.PullKey(_keyValue, _keyNote);
                     // A repeated key keeps the first row
-                    if (_entry == null || !_pulled.Add(_entry.Id)) continue;
+                    if (_entry == null || !_pulled.Add(_entry.Id)) {
+                        _read.AddUnknown(_row);
+                        continue;
+                    }
+                    _read.AddKnown(_entry.Id, _row);
 
                     for (int _i = 1; _i < _columns.Count; _i++) {
                         int _column = _columns[_i].ColumnIndex;
@@ -243,12 +250,30 @@ namespace HarryTools.Dialogue.Editor {
                 for (int _i = 0; _i < _columns.Count; _i++) _columns[_i].PullEnd();
             }
 
-            _unknownRows = _key.UnknownRows;
+            _capture = _read;
             for (int _i = 0; _i < _columns.Count; _i++) {
                 if (_columns[_i] is DialogueTranslationColumn _translation) _conflicts += _translation.Conflicts;
             }
             LocalizationEditorSettings.EditorEvents.RaiseCollectionModified(this, _collection);
             return null;
+        }
+
+        /// <summary> The positions in the tab that was read of the columns a push writes </summary>
+        private static List<int> ManagedColumns(StringTableCollection _collection, SheetPullCapture _read) {
+            List<int> _managed = new List<int>();
+            List<SheetColumn> _columns = DialogueSheetColumns.ForPush(_collection);
+            for (int _i = 0; _i < _columns.Count; _i++) {
+                int _index = _read.ColumnOf(_collection, _columns[_i]);
+                if (_index >= 0) _managed.Add(_index);
+            }
+            return _managed;
+        }
+
+        private static bool HasContent(SheetGrid _grid, int _row, List<int> _columns) {
+            for (int _i = 0; _i < _columns.Count; _i++) {
+                if (!DialogueSheetColumns.IsBlank(_grid.Value(_row, _columns[_i])) || !string.IsNullOrEmpty(_grid.Note(_row, _columns[_i]))) return true;
+            }
+            return false;
         }
         #endregion
     }
@@ -266,7 +291,7 @@ namespace HarryTools.Dialogue.Editor {
         /// <summary> True when the sync worked </summary>
         public bool Succeeded => Error == null;
 
-        /// <summary> Sheet rows whose key matched no entry, so they were ignored </summary>
+        /// <summary> Sheet rows that matched no entry, so they were not imported. A push keeps them below the others </summary>
         public int UnknownRows { get; }
 
         /// <summary> Translations changed both locally and in the sheet since their last sync, which took the sheet text </summary>
@@ -300,7 +325,7 @@ namespace HarryTools.Dialogue.Editor {
 
         /// <summary> Unknown rows and conflicts, in words </summary>
         internal static string CountsText(int _unknownRows, int _conflicts) {
-            return _unknownRows + (_unknownRows == 1 ? " unknown row ignored, " : " unknown rows ignored, ")
+            return _unknownRows + (_unknownRows == 1 ? " unknown row kept in the sheet and not imported, " : " unknown rows kept in the sheet and not imported, ")
                 + _conflicts + (_conflicts == 1 ? " conflict where the sheet text replaced a local edit." : " conflicts where the sheet text replaced a local edit.");
         }
         #endregion

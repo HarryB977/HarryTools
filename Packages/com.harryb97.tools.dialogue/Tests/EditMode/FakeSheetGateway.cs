@@ -29,6 +29,9 @@ namespace HarryTools.Dialogue.Tests {
         /// <summary> Reports an access that can only read, as an API key does </summary>
         public bool IsReadOnly { get; set; }
 
+        /// <summary> The spreadsheet this fake stands for </summary>
+        public string SpreadsheetId { get; set; } = "fake-spreadsheet";
+
         /// <summary> Calls to AddSheet or Push, made or refused </summary>
         public int WriteAttempts { get; private set; }
 
@@ -58,7 +61,7 @@ namespace HarryTools.Dialogue.Tests {
             return _new.Id;
         }
 
-        public void Push(int _sheetId, StringTableCollection _collection, IList<SheetColumn> _columns) {
+        public void Push(int _sheetId, StringTableCollection _collection, IList<SheetColumn> _columns, SheetGrid _tail) {
             WriteAttempts++;
             if (IsReadOnly) throw new InvalidOperationException(SheetConnection.ReadOnlyMessage);
             Tab _tab = Get(_sheetId);
@@ -96,6 +99,11 @@ namespace HarryTools.Dialogue.Tests {
                 }
             }
             foreach (SheetColumn _column in _columns) _column.PushEnd();
+            // The tail goes in the same request, right below the entries, value and note
+            int _tailRows = _tail != null ? _tail.RowCount : 0;
+            for (int _r = 0; _r < _tailRows; _r++) {
+                foreach (SheetColumn _column in _columns) _grid.Set(_row + _r, _column.ColumnIndex, _tail.Value(_r, _column.ColumnIndex), _tail.Note(_r, _column.ColumnIndex));
+            }
 
             if (FailPushes) throw new InvalidOperationException("The push was rejected.");
             PushCalls++;
@@ -136,6 +144,18 @@ namespace HarryTools.Dialogue.Tests {
         public string Cell(string _title, string _key, string _header) {
             SheetGrid _grid = Grid(_title);
             return _grid.Value(RowOf(_grid, _key), ColumnOf(_grid, _header));
+        }
+
+        /// <summary> The note in the row of the key, in the column with the header </summary>
+        public string Note(string _title, string _key, string _header) {
+            SheetGrid _grid = Grid(_title);
+            return _grid.Note(RowOf(_grid, _key), ColumnOf(_grid, _header));
+        }
+
+        /// <summary> Writes the note in the row of the key, in the column with the header, keeping the value, as a translator would </summary>
+        public void SetNote(string _title, string _key, string _header, string _note) {
+            SheetGrid _grid = Grid(_title);
+            _grid.SetNote(RowOf(_grid, _key), ColumnOf(_grid, _header), _note);
         }
 
         /// <summary> Writes the value in the row of the key, in the column with the header, as a translator would </summary>
@@ -195,16 +215,16 @@ namespace HarryTools.Dialogue.Tests {
 
     /// <summary> In-memory record of the tabs, so tests never write the project's sheet settings </summary>
     internal sealed class FakeSheetTabs : IDialogueSheetTabs {
-        private readonly Dictionary<string, int> tabs = new Dictionary<string, int>();
+        private readonly Dictionary<(string, string), int> tabs = new Dictionary<(string, string), int>();
 
         public int SaveCalls { get; private set; }
 
-        public bool TryGetTab(string _collectionGuid, out int _sheetId) {
-            return tabs.TryGetValue(_collectionGuid ?? "", out _sheetId);
+        public bool TryGetTab(string _spreadsheetId, string _collectionGuid, out int _sheetId) {
+            return tabs.TryGetValue((_spreadsheetId ?? "", _collectionGuid ?? ""), out _sheetId);
         }
 
-        public void SetTab(string _collectionGuid, int _sheetId) {
-            tabs[_collectionGuid] = _sheetId;
+        public void SetTab(string _spreadsheetId, string _collectionGuid, int _sheetId) {
+            tabs[(_spreadsheetId ?? "", _collectionGuid ?? "")] = _sheetId;
         }
 
         public void Save() {

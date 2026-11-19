@@ -10,24 +10,24 @@ namespace HarryTools.Dialogue.Editor {
     internal static class DialogueSheetColumns {
         // ==================== METHODS ====================
         #region Methods
-        /// <summary> Every column, from A onwards </summary>
-        internal static List<SheetColumn> ForPush(StringTableCollection _collection) {
+        /// <summary> Every column, from A onwards. Given what the pull before the push read, the key and translation cells keep their notes on the row of their key </summary>
+        internal static List<SheetColumn> ForPush(StringTableCollection _collection, SheetPullCapture _capture = null) {
             List<SheetColumn> _columns = new List<SheetColumn>();
             if (_collection == null) return _columns;
 
             LocaleIdentifier? _source = DialogueTables.SourceLocale()?.Identifier;
-            _columns.Add(new DialogueKeyColumn());
+            _columns.Add(new DialogueKeyColumn { Capture = _capture });
             _columns.Add(new KeyCommentColumn());
             if (_source.HasValue) _columns.Add(new LocaleColumn { LocaleIdentifier = _source.Value });
             foreach (LocaleIdentifier _locale in TranslationLocales(_collection, _source)) {
-                _columns.Add(new DialogueTranslationColumn { LocaleIdentifier = _locale });
+                _columns.Add(new DialogueTranslationColumn { LocaleIdentifier = _locale, Capture = _capture });
                 _columns.Add(new DialogueStatusColumn { LocaleIdentifier = _locale });
             }
             for (int _i = 0; _i < _columns.Count; _i++) _columns[_i].ColumnIndex = _i;
             return _columns;
         }
 
-        /// <summary> The columns read back from the sheet, placed where the header row has their titles: the key, then the translation and status columns of each locale that is not the source locale. The key comment and source columns are left out, so a pull never writes them. Locales without their header are skipped. Null, with the reason, when the sheet has no key header </summary>
+        /// <summary> The columns read back from the sheet, placed where the header row has their titles: the key, then the translation and status columns of each locale that is not the source locale. A translation header is found by the locale code in its trailing parentheses, so the language name before it may differ. The key comment and source columns are left out, so a pull never writes them. Locales without their header are skipped. Null, with the reason, when the sheet has no key header </summary>
         internal static List<SheetColumn> ForPull(StringTableCollection _collection, IList<string> _headers, out string _error) {
             _error = null;
             if (_collection == null) {
@@ -66,6 +66,22 @@ namespace HarryTools.Dialogue.Editor {
             return _collection.SharedData.GetEntry(_keyEntry.Id) == _keyEntry;
         }
 
+        /// <summary> The position in the header row of the title the column pushes. Locale columns match by the locale code in the trailing parentheses of the title, ignoring case; the others match the whole title, ignoring case and surrounding spaces. -1 when the row lacks it </summary>
+        internal static int HeaderIndex(StringTableCollection _collection, SheetColumn _column, IList<string> _headers) {
+            if (_column == null || _headers == null) return -1;
+            _column.PushHeader(_collection, out string _title, out _);
+            string _code = _column is DialogueTranslationColumn _translation ? _translation.LocaleIdentifier.Code
+                : _column is LocaleColumn _locale ? _locale.LocaleIdentifier.Code : null;
+
+            for (int _i = 0; _i < _headers.Count; _i++) {
+                string _header = _headers[_i]?.Trim();
+                if (string.IsNullOrEmpty(_header)) continue;
+                bool _match = _code != null ? string.Equals(TrailingCode(_header), _code, StringComparison.OrdinalIgnoreCase) : string.Equals(_header, _title, StringComparison.OrdinalIgnoreCase);
+                if (_match) return _i;
+            }
+            return -1;
+        }
+
         /// <summary> True when a cell holds no text, or only whitespace </summary>
         internal static bool IsBlank(string _cell) {
             return string.IsNullOrWhiteSpace(_cell);
@@ -87,17 +103,19 @@ namespace HarryTools.Dialogue.Editor {
             }
         }
 
-        /// <summary> Gives the column the position of its pushed header title in the header row. False when the row lacks it </summary>
+        /// <summary> Gives the column the position of its header in the header row. False when the row lacks it </summary>
         private static bool Place(StringTableCollection _collection, SheetColumn _column, IList<string> _headers) {
-            if (_headers == null) return false;
-            _column.PushHeader(_collection, out string _title, out _);
-            for (int _i = 0; _i < _headers.Count; _i++) {
-                if (_headers[_i] != null && string.Equals(_headers[_i].Trim(), _title, StringComparison.OrdinalIgnoreCase)) {
-                    _column.ColumnIndex = _i;
-                    return true;
-                }
-            }
-            return false;
+            int _index = HeaderIndex(_collection, _column, _headers);
+            if (_index < 0) return false;
+            _column.ColumnIndex = _index;
+            return true;
+        }
+
+        /// <summary> The text inside the parentheses that end the header. Null when it does not end with them </summary>
+        private static string TrailingCode(string _header) {
+            if (!_header.EndsWith(")")) return null;
+            int _open = _header.LastIndexOf('(');
+            return _open >= 0 ? _header.Substring(_open + 1, _header.Length - _open - 2).Trim() : null;
         }
         #endregion
     }

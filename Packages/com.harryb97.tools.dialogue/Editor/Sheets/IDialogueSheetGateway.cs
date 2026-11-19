@@ -8,14 +8,17 @@ namespace HarryTools.Dialogue.Editor {
         /// <summary> True when the access can only read, as with an API key: adding tabs and pushing are refused without a request </summary>
         bool IsReadOnly { get; }
 
+        /// <summary> The ID of the spreadsheet the gateway reaches. Tab IDs are only valid inside it </summary>
+        string SpreadsheetId { get; }
+
         /// <summary> The ID and title of every tab of the spreadsheet </summary>
         IReadOnlyList<(int Id, string Title)> GetSheets();
 
         /// <summary> Adds a tab with the title and returns its ID </summary>
         int AddSheet(string _title);
 
-        /// <summary> Writes the header and one row per entry of the collection to the tab, in the given columns only. In those columns, the rows below the written ones are cleared; other columns of the tab are kept </summary>
-        void Push(int _sheetId, StringTableCollection _collection, IList<SheetColumn> _columns);
+        /// <summary> Writes the header and one row per entry of the collection to the tab, in the given columns only, then the rows of the tail right below them, value and note, in one request. Each tail cell sits at the position of its column. In those columns, the rows below are cleared; other columns of the tab are kept </summary>
+        void Push(int _sheetId, StringTableCollection _collection, IList<SheetColumn> _columns, SheetGrid _tail);
 
         /// <summary> Every cell of the tab, header row included, with its value and note </summary>
         SheetGrid Read(int _sheetId);

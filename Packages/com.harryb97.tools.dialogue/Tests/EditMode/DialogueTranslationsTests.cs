@@ -18,15 +18,12 @@ namespace HarryTools.Dialogue.Tests {
         // ==================== VARIABLES ===================
         #region Private Variables
         private const string TempFolder = "Assets/__DialogueTests__";
-        private const string LocalesFolder = TempFolder + "/Locales";
         private const string AssetsFolder = TempFolder + "/TranslationDialogues";
         private const string TablesFolder = TempFolder + "/TranslationTables";
         private const string SourceCode = "en";
         private const string OtherCode = "es";
         private const int MaxWaitFrames = 200;
 
-        private readonly List<Locale> addedLocales = new List<Locale>();
-        private LocalizationSettings createdSettings;
         private DialogueSettings settings;
         #endregion
 
@@ -35,27 +32,11 @@ namespace HarryTools.Dialogue.Tests {
         [OneTimeSetUp]
         public void OneTimeSetUp() {
             EnsureFolder(TempFolder);
-
-            // Reuse the project's localization setup; add only what is missing and undo it afterwards
-            if (LocalizationEditorSettings.ActiveLocalizationSettings == null) {
-                createdSettings = ScriptableObject.CreateInstance<LocalizationSettings>();
-                AssetDatabase.CreateAsset(createdSettings, TempFolder + "/TranslationLocalizationSettings.asset");
-                LocalizationEditorSettings.ActiveLocalizationSettings = createdSettings;
-            }
-            EnsureLocale(SourceCode);
-            EnsureLocale(OtherCode);
+            TestLocales.RequireOrIgnore(SourceCode, OtherCode);
         }
 
         [OneTimeTearDown]
         public void OneTimeTearDown() {
-            for (int _i = 0; _i < addedLocales.Count; _i++) {
-                if (addedLocales[_i] != null) LocalizationEditorSettings.RemoveLocale(addedLocales[_i]);
-            }
-            addedLocales.Clear();
-
-            if (createdSettings != null) LocalizationEditorSettings.ActiveLocalizationSettings = null;
-            createdSettings = null;
-
             if (AssetDatabase.IsValidFolder(TempFolder)) AssetDatabase.DeleteAsset(TempFolder);
         }
 
@@ -77,16 +58,6 @@ namespace HarryTools.Dialogue.Tests {
             DeleteContents(TablesFolder);
             if (AssetDatabase.IsValidFolder(TablesFolder)) AssetDatabase.DeleteAsset(TablesFolder);
             if (AssetDatabase.IsValidFolder(AssetsFolder)) AssetDatabase.DeleteAsset(AssetsFolder);
-        }
-
-        private void EnsureLocale(string _code) {
-            if (LocalizationEditorSettings.GetLocale(_code) != null) return;
-
-            EnsureFolder(LocalesFolder);
-            Locale _locale = Locale.CreateLocale(_code);
-            AssetDatabase.CreateAsset(_locale, LocalesFolder + "/" + _code + ".asset");
-            DialogueLocaleWatcher.AddLocaleForTests(_locale);
-            addedLocales.Add(_locale);
         }
 
         private static void EnsureFolder(string _path) {
@@ -238,19 +209,71 @@ namespace HarryTools.Dialogue.Tests {
         }
 
         [Test]
-        public void LegacyTranslation_NoSnapshot_UpToDate() {
+        public void LegacyTranslation_NoSnapshot_OutdatedAfterSourceChange() {
             LineNode _line = NewLine(out DialogueAsset _asset, "Hello");
             StringTableCollection _collection = DialogueTables.Linked(_asset);
             // Written straight into the table, as before snapshots existed
             StringTable _table = Table(_collection, OtherCode);
             _table.AddEntry(_collection.SharedData.GetEntry(_line.Id).Id, "Hola");
-            DialogueTables.SetSourceText(_asset, _line.Text, _line.Id, "Changed");
-
             Assert.AreEqual(TranslationState.UpToDate, DialogueTranslations.State(_collection, _line.Id, Other));
+
+            // Writing the same text is no change
+            DialogueTables.SetSourceText(_asset, _line.Text, _line.Id, "Hello");
             Assert.IsNull(DialogueTranslations.PreviousSource(_collection, _line.Id, Other));
 
+            DialogueTables.SetSourceText(_asset, _line.Text, _line.Id, "Changed");
+
+            Assert.AreEqual(TranslationState.Outdated, DialogueTranslations.State(_collection, _line.Id, Other));
+            Assert.AreEqual("Hello", DialogueTranslations.PreviousSource(_collection, _line.Id, Other));
+
             DialogueTranslations.MarkReviewed(_collection, _line.Id, Other);
+            Assert.AreEqual(TranslationState.UpToDate, DialogueTranslations.State(_collection, _line.Id, Other));
             Assert.AreEqual("Changed", DialogueTranslations.PreviousSource(_collection, _line.Id, Other));
+        }
+
+        [Test]
+        public void LegacyTranslation_SourceChangeUndone_StampUndoneToo() {
+            LineNode _line = NewLine(out DialogueAsset _asset, "Hello");
+            StringTableCollection _collection = DialogueTables.Linked(_asset);
+            Table(_collection, OtherCode).AddEntry(_collection.SharedData.GetEntry(_line.Id).Id, "Hola");
+            Undo.IncrementCurrentGroup();
+
+            DialogueTables.SetSourceText(_asset, _line.Text, _line.Id, "Changed");
+            Undo.PerformUndo();
+
+            Assert.AreEqual("Hello", DialogueTranslations.SourceTextOf(_collection, _line.Id));
+            Assert.IsNull(DialogueTranslations.PreviousSource(_collection, _line.Id, Other));
+            Assert.AreEqual(TranslationState.UpToDate, DialogueTranslations.State(_collection, _line.Id, Other));
+        }
+
+        [UnityTest]
+        public IEnumerator Duplicate_KeepsOutdatedMarks_NotSheetRecord() {
+            LineNode _line = NewLine(out DialogueAsset _asset, "Hello");
+            DialogueTables.SetText(_asset, _line.Text, _line.Id, Other, "Hola");
+            DialogueTables.SetSourceText(_asset, _line.Text, _line.Id, "Changed");
+            StringTableCollection _collection = DialogueTables.Linked(_asset);
+            StringTable _table = Table(_collection, OtherCode);
+            _table.GetEntry(_collection.SharedData.GetEntry(_line.Id).Id).AddMetadata(new SheetSyncSnapshot { SyncedText = "Hola" });
+            Assert.AreEqual(TranslationState.Outdated, DialogueTranslations.State(_collection, _line.Id, Other));
+            TestAddressables.SaveOwn(_collection, _asset);
+
+            string _copyPath = AssetsFolder + "/TranslationsCopy.asset";
+            Assert.IsTrue(AssetDatabase.CopyAsset(AssetDatabase.GetAssetPath(_asset), _copyPath));
+            DialogueAsset _copy = AssetDatabase.LoadAssetAtPath<DialogueAsset>(_copyPath);
+            for (int _i = 0; _i < MaxWaitFrames && string.IsNullOrEmpty(_copy.TableCollectionGuid); _i++) yield return null;
+
+            LineNode _copyLine = (LineNode) _copy.Nodes[1];
+            StringTableCollection _copyCollection = DialogueTables.Linked(_copy);
+            Assert.IsNotNull(_copyCollection);
+            Assert.AreNotSame(_collection, _copyCollection);
+            Assert.AreEqual(TranslationState.Outdated, DialogueTranslations.State(_copyCollection, _copyLine.Id, Other));
+            Assert.AreEqual("Hello", DialogueTranslations.PreviousSource(_copyCollection, _copyLine.Id, Other));
+            StringTableEntry _copyEntry = Table(_copyCollection, OtherCode).GetEntry(_copyCollection.SharedData.GetEntry(_copyLine.Id).Id);
+            Assert.IsNull(_copyEntry.GetMetadata<SheetSyncSnapshot>(), "the copy has a tab of its own");
+
+            // Each copy tracks on its own
+            DialogueTranslations.MarkReviewed(_copyCollection, _copyLine.Id, Other);
+            Assert.AreEqual(TranslationState.Outdated, DialogueTranslations.State(_collection, _line.Id, Other));
         }
 
         [Test]

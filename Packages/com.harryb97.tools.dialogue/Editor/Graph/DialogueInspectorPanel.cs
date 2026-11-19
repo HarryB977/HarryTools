@@ -513,7 +513,8 @@ namespace HarryTools.Dialogue.Editor {
                 _field.RegisterCallback<FocusInEvent>(_ => _field.SetValueWithoutNotify(ReadTranslation(_target(), _identifier)));
 
                 _into.Add(_field);
-                Translation _translation = new Translation(_field, _target, _key, _identifier, CreateOutdatedBox(_field, _key, _identifier));
+                VisualElement _outdated = CreateOutdatedBox(_key, _identifier, out Label _previousSource);
+                Translation _translation = new Translation(_field, _target, _key, _identifier, _outdated, _previousSource);
                 _into.Add(_translation.Outdated);
                 translations[TranslationKey(_key, _identifier.Code)] = _translation;
                 _group.Add(_translation);
@@ -530,13 +531,14 @@ namespace HarryTools.Dialogue.Editor {
         }
 
         /// <summary> The note under a translation that is older than its source text: what the source said before, and the button that accepts the translation as it is </summary>
-        private VisualElement CreateOutdatedBox(TextField _field, string _key, LocaleIdentifier _locale) {
+        private VisualElement CreateOutdatedBox(string _key, LocaleIdentifier _locale, out Label _previousSource) {
             VisualElement _box = new VisualElement();
             _box.AddToClassList(OutdatedClass);
             Label _mark = new Label(OutdatedLabel);
             _mark.AddToClassList(OutdatedMarkClass);
             _box.Add(_mark);
-            _box.Add(new Label());
+            _previousSource = new Label();
+            _box.Add(_previousSource);
             _box.Add(new Button(() => MarkReviewed(_key, _locale)) { text = DialogueTranslations.MarkReviewedLabel });
             _box.style.display = DisplayStyle.None;
             return _box;
@@ -562,7 +564,7 @@ namespace HarryTools.Dialogue.Editor {
                 _other.Outdated.style.display = _outdated ? DisplayStyle.Flex : DisplayStyle.None;
                 if (_outdated) {
                     string _previous = DialogueTranslations.PreviousSource(_collection, _other.Key, _other.Locale);
-                    _other.Outdated.Query<Label>().ToList()[1].text = DialogueTranslations.PreviousSourcePrefix + (string.IsNullOrEmpty(_previous) ? "(empty)" : _previous);
+                    _other.PreviousSource.text = DialogueTranslations.PreviousSourcePrefix + (string.IsNullOrEmpty(_previous) ? "(empty)" : _previous);
                 }
             }
             if (_translation.MarkAll != null) _translation.MarkAll.style.display = _any ? DisplayStyle.Flex : DisplayStyle.None;
@@ -614,14 +616,16 @@ namespace HarryTools.Dialogue.Editor {
             internal readonly string Key;
             internal readonly LocaleIdentifier Locale;
             internal readonly VisualElement Outdated;
+            internal readonly Label PreviousSource;
             internal Button MarkAll;
 
-            internal Translation(TextField _field, Func<LocalizedString> _target, string _key, LocaleIdentifier _locale, VisualElement _outdated) {
+            internal Translation(TextField _field, Func<LocalizedString> _target, string _key, LocaleIdentifier _locale, VisualElement _outdated, Label _previousSource) {
                 Field = _field;
                 Target = _target;
                 Key = _key;
                 Locale = _locale;
                 Outdated = _outdated;
+                PreviousSource = _previousSource;
                 MarkAll = null;
             }
         }

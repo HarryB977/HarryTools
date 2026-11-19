@@ -15,13 +15,11 @@ namespace HarryTools.Dialogue.Tests {
         // ==================== VARIABLES ===================
         #region Private Variables
         private const string TempFolder = "Assets/__DialogueTests__";
-        private const string LocalesFolder = TempFolder + "/Locales";
         private const string AssetsFolder = TempFolder + "/Dialogues";
         private const string TablesFolder = TempFolder + "/Tables";
         private const string SourceCode = "en";
         private const string OtherCode = "es";
 
-        private readonly List<Locale> addedLocales = new List<Locale>();
         private DialogueSettings settings;
         #endregion
 
@@ -30,16 +28,11 @@ namespace HarryTools.Dialogue.Tests {
         [OneTimeSetUp]
         public void OneTimeSetUp() {
             EnsureFolder(TempFolder);
-            EnsureLocale(SourceCode);
-            EnsureLocale(OtherCode);
+            TestLocales.RequireOrIgnore(SourceCode, OtherCode);
         }
 
         [OneTimeTearDown]
         public void OneTimeTearDown() {
-            for (int _i = 0; _i < addedLocales.Count; _i++) {
-                if (addedLocales[_i] != null) LocalizationEditorSettings.RemoveLocale(addedLocales[_i]);
-            }
-            addedLocales.Clear();
             if (AssetDatabase.IsValidFolder(TempFolder)) AssetDatabase.DeleteAsset(TempFolder);
         }
 
@@ -60,16 +53,6 @@ namespace HarryTools.Dialogue.Tests {
             DeleteContents(TablesFolder);
             if (AssetDatabase.IsValidFolder(TablesFolder)) AssetDatabase.DeleteAsset(TablesFolder);
             if (AssetDatabase.IsValidFolder(AssetsFolder)) AssetDatabase.DeleteAsset(AssetsFolder);
-        }
-
-        private void EnsureLocale(string _code) {
-            if (LocalizationEditorSettings.GetLocale(_code) != null) return;
-
-            EnsureFolder(LocalesFolder);
-            Locale _locale = Locale.CreateLocale(_code);
-            AssetDatabase.CreateAsset(_locale, LocalesFolder + "/" + _code + ".asset");
-            DialogueLocaleWatcher.AddLocaleForTests(_locale);
-            addedLocales.Add(_locale);
         }
 
         /// <summary> Drops the table of the other locale from the collection, so the collection looks like one made before that locale was added </summary>
@@ -183,6 +166,24 @@ namespace HarryTools.Dialogue.Tests {
             Assert.AreEqual("Kept", TextOf(_collection, SourceCode, _line.Id));
             Assert.AreEqual("Guardado", TextOf(_collection, OtherCode, _line.Id));
             Assert.AreEqual(0, DialogueTables.CleanOrphans(_asset));
+        }
+
+        [Test]
+        public void CleanOrphans_KeepsEntryATextPointsTo() {
+            DialogueAsset _asset = NewAsset("CleanPointed");
+            LineNode _line = _asset.AddNode<LineNode>();
+            WriteBoth(_asset, _line.Text, _line.Id, "Kept", "Guardado");
+            StringTableCollection _collection = DialogueTables.EnsureCollection(_asset);
+            // The line points by id to an entry under another key, as an older layout could leave it
+            SharedTableData.SharedTableEntry _other = _collection.SharedData.AddKey("older-key");
+            Table(_collection, SourceCode).AddEntry(_other.Id, "Pointed");
+            _line.Text.TableEntryReference = _other.Id;
+            _collection.SharedData.AddKey("gone");
+
+            CollectionAssert.AreEquivalent(new[] { "gone" }, DialogueTables.Orphans(_asset));
+            Assert.AreEqual(1, DialogueTables.CleanOrphans(_asset));
+            Assert.IsNotNull(_collection.SharedData.GetEntry("older-key"));
+            Assert.AreEqual("Pointed", DialogueTables.GetSourceText(_line.Text));
         }
 
         [Test]

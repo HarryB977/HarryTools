@@ -102,22 +102,36 @@ namespace HarryTools.Dialogue.Editor {
             for (int _r = 0; _r < _recorded.Count; _r++) EditorUtility.SetDirty(_recorded[_r]);
         }
 
-        /// <summary> Removes the entries of the dialogue collection whose key belongs to no node or option of the dialogue. Returns how many were removed </summary>
+        /// <summary> Removes the entries of the dialogue collection whose key belongs to no node or option of the dialogue and that no text of the dialogue points to, with undo. Returns how many were removed </summary>
         internal static int CleanOrphans(DialogueAsset _asset) {
-            StringTableCollection _collection = _asset != null ? Linked(_asset) : null;
-            if (_collection == null) return 0;
-
-            HashSet<string> _owned = new HashSet<string>();
-            List<(LocalizedString Target, string Key)> _texts = Texts(_asset);
-            for (int _i = 0; _i < _texts.Count; _i++) _owned.Add(_texts[_i].Key);
-
-            List<string> _orphans = new List<string>();
-            IReadOnlyList<SharedTableData.SharedTableEntry> _entries = _collection.SharedData.Entries;
-            for (int _i = 0; _i < _entries.Count; _i++) {
-                if (!string.IsNullOrEmpty(_entries[_i].Key) && !_owned.Contains(_entries[_i].Key)) _orphans.Add(_entries[_i].Key);
-            }
+            List<string> _orphans = Orphans(_asset);
             RemoveEntries(_asset, _orphans);
             return _orphans.Count;
+        }
+
+        /// <summary> The keys of the dialogue collection that belong to no node or option of the dialogue and that no text of the dialogue points to </summary>
+        internal static List<string> Orphans(DialogueAsset _asset) {
+            List<string> _orphans = new List<string>();
+            StringTableCollection _collection = _asset != null ? Linked(_asset) : null;
+            if (_collection == null) return _orphans;
+
+            HashSet<string> _owned = new HashSet<string>();
+            HashSet<long> _pointed = new HashSet<long>();
+            Guid _guid = _collection.SharedData.TableCollectionNameGuid;
+            List<(LocalizedString Target, string Key)> _texts = Texts(_asset);
+            for (int _i = 0; _i < _texts.Count; _i++) {
+                _owned.Add(_texts[_i].Key);
+                LocalizedString _target = _texts[_i].Target;
+                if (_target == null || _target.IsEmpty || _target.TableReference.ReferenceType != TableReference.Type.Guid || _target.TableReference.TableCollectionNameGuid != _guid) continue;
+                SharedTableData.SharedTableEntry _entry = _collection.SharedData.GetEntryFromReference(_target.TableEntryReference);
+                if (_entry != null) _pointed.Add(_entry.Id);
+            }
+
+            IReadOnlyList<SharedTableData.SharedTableEntry> _entries = _collection.SharedData.Entries;
+            for (int _i = 0; _i < _entries.Count; _i++) {
+                if (!string.IsNullOrEmpty(_entries[_i].Key) && !_owned.Contains(_entries[_i].Key) && !_pointed.Contains(_entries[_i].Id)) _orphans.Add(_entries[_i].Key);
+            }
+            return _orphans;
         }
 
         /// <summary> The table keys of the texts of a node: its line, or the texts of its options </summary>
@@ -197,10 +211,14 @@ namespace HarryTools.Dialogue.Editor {
 
         // ==================== INTERNAL ====================
         #region Internal
-        /// <summary> Adds the key when missing and writes the text to the source locale table, with undo. False when there is no source locale </summary>
+        /// <summary> Adds the key when missing and writes the text to the source locale table, with undo. When the text changes, the translations of the key that have no snapshot yet are stamped first, so they become outdated. False when there is no source locale </summary>
         internal static bool WriteSourceText(DialogueAsset _asset, string _key, string _text, out Guid _collectionGuid, out long _keyId) {
             Locale _source = SourceLocale();
-            if (_source != null) return WriteText(_asset, _key, _source.Identifier, _text, out _collectionGuid, out _keyId);
+            if (_source != null) {
+                StringTableCollection _linked = _asset != null && !string.IsNullOrEmpty(_key) ? Linked(_asset) : null;
+                if (_linked != null && DialogueTranslations.SourceTextOf(_linked, _key) != (_text ?? "")) DialogueTranslations.StampUnstamped(_linked, _key);
+                return WriteText(_asset, _key, _source.Identifier, _text, out _collectionGuid, out _keyId);
+            }
             _collectionGuid = Guid.Empty;
             _keyId = 0;
             return false;
@@ -247,18 +265,30 @@ namespace HarryTools.Dialogue.Editor {
             CopyValues(_from, _fromEntry.Id, _own, _entry.Id, true);
         }
 
-        /// <summary> Writes the value of every locale of an entry into the entry of another collection, adding the tables it lacks </summary>
+        /// <summary> Writes the value of every locale of an entry into the entry of another collection, adding the tables it lacks. The source text each translation was written against comes along; the sheet sync record does not, since the copy has a tab of its own </summary>
         internal static void CopyValues(StringTableCollection _from, long _fromId, StringTableCollection _to, long _toId, bool _recordUndo) {
             IReadOnlyList<StringTable> _tables = _from.StringTables;
             for (int _t = 0; _t < _tables.Count; _t++) {
-                string _value = _tables[_t] != null ? _tables[_t].GetEntry(_fromId)?.Value : null;
+                StringTableEntry _fromEntry = _tables[_t] != null ? _tables[_t].GetEntry(_fromId) : null;
+                string _value = _fromEntry?.Value;
                 if (_value == null) continue;
                 StringTable _destination = _to.GetTable(_tables[_t].LocaleIdentifier) as StringTable;
                 if (_destination == null) _destination = _to.AddNewTable(_tables[_t].LocaleIdentifier) as StringTable;
                 if (_destination == null) continue;
                 if (_recordUndo) Undo.RecordObject(_destination, UndoName);
-                _destination.AddEntry(_toId, _value);
+                StringTableEntry _entry = _destination.AddEntry(_toId, _value);
+                CopySnapshot(_fromEntry, _entry);
                 EditorUtility.SetDirty(_destination);
+            }
+        }
+
+        /// <summary> Writes the shared data and the tables of the collection to disk when they changed, and nothing else of the project. The collection asset itself is left to the next project save: importing it makes Localization recreate any missing locale of its tables </summary>
+        internal static void SaveTables(StringTableCollection _collection) {
+            if (_collection == null) return;
+            if (_collection.SharedData != null) AssetDatabase.SaveAssetIfDirty(_collection.SharedData);
+            IReadOnlyList<StringTable> _tables = _collection.StringTables;
+            for (int _i = 0; _i < _tables.Count; _i++) {
+                if (_tables[_i] != null) AssetDatabase.SaveAssetIfDirty(_tables[_i]);
             }
         }
 
@@ -292,7 +322,8 @@ namespace HarryTools.Dialogue.Editor {
             if (!_changed) return;
             EditorUtility.SetDirty(_own.SharedData);
             EditorUtility.SetDirty(_asset);
-            AssetDatabase.SaveAssets();
+            AssetDatabase.SaveAssetIfDirty(_asset);
+            SaveTables(_own);
         }
 
         /// <summary> The text of an entry in the table of the given locale. Null when the collection, entry or table is missing </summary>
@@ -338,10 +369,7 @@ namespace HarryTools.Dialogue.Editor {
             _localizedString.FindPropertyRelative("m_TableEntryReference.m_KeyId").longValue = _keyId;
             _localizedString.FindPropertyRelative("m_TableEntryReference.m_Key").stringValue = string.Empty;
         }
-        #endregion
 
-        // ==================== PRIVATE ====================
-        #region Private Methods
         /// <summary> The collection linked to the dialogue. Null when it has none, without creating it </summary>
         internal static StringTableCollection Linked(DialogueAsset _asset) {
             if (string.IsNullOrEmpty(_asset.TableCollectionGuid) || !Guid.TryParse(_asset.TableCollectionGuid, out Guid _guid)) return null;
@@ -377,6 +405,20 @@ namespace HarryTools.Dialogue.Editor {
                 }
             }
             return _texts;
+        }
+        #endregion
+
+        // ==================== PRIVATE ====================
+        #region Private Methods
+        private static void CopySnapshot(StringTableEntry _from, StringTableEntry _to) {
+            SourceSnapshot _snapshot = _from.GetMetadata<SourceSnapshot>();
+            SourceSnapshot _existing = _to.GetMetadata<SourceSnapshot>();
+            if (_snapshot == null) {
+                if (_existing != null) _to.RemoveMetadata(_existing);
+                return;
+            }
+            if (_existing != null) _existing.SourceText = _snapshot.SourceText;
+            else _to.AddMetadata(new SourceSnapshot { SourceText = _snapshot.SourceText });
         }
 
         private static string UniqueName(string _assetName) {

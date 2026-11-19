@@ -15,11 +15,8 @@ namespace HarryTools.Dialogue.Tests {
         private const string TempFolder = "Assets/__DialogueTests__";
         private const string AssetsFolder = TempFolder + "/NodeFinder";
         private const string TablesFolder = TempFolder + "/NodeFinderTables";
-        private const string LocalesFolder = TempFolder + "/NodeFinderLocales";
         private const string SourceCode = "en";
 
-        private readonly List<Locale> addedLocales = new List<Locale>();
-        private LocalizationSettings createdSettings;
         private DialogueSettings settings;
         private DialogueCharacter character;
         #endregion
@@ -29,30 +26,11 @@ namespace HarryTools.Dialogue.Tests {
         [OneTimeSetUp]
         public void OneTimeSetUp() {
             EnsureFolder(TempFolder);
-            if (LocalizationEditorSettings.ActiveLocalizationSettings == null) {
-                createdSettings = ScriptableObject.CreateInstance<LocalizationSettings>();
-                AssetDatabase.CreateAsset(createdSettings, TempFolder + "/NodeFinderLocalization.asset");
-                LocalizationEditorSettings.ActiveLocalizationSettings = createdSettings;
-            }
-            if (LocalizationEditorSettings.GetLocale(SourceCode) == null) {
-                EnsureFolder(LocalesFolder);
-                Locale _locale = Locale.CreateLocale(SourceCode);
-                AssetDatabase.CreateAsset(_locale, LocalesFolder + "/" + SourceCode + ".asset");
-                DialogueLocaleWatcher.AddLocaleForTests(_locale);
-                addedLocales.Add(_locale);
-            }
+            TestLocales.RequireOrIgnore(SourceCode);
         }
 
         [OneTimeTearDown]
         public void OneTimeTearDown() {
-            for (int _i = 0; _i < addedLocales.Count; _i++) {
-                if (addedLocales[_i] != null) LocalizationEditorSettings.RemoveLocale(addedLocales[_i]);
-            }
-            addedLocales.Clear();
-            if (createdSettings != null) LocalizationEditorSettings.ActiveLocalizationSettings = null;
-            createdSettings = null;
-
-            if (AssetDatabase.IsValidFolder(LocalesFolder)) AssetDatabase.DeleteAsset(LocalesFolder);
             if (AssetDatabase.IsValidFolder(TempFolder) && AssetDatabase.FindAssets("", new[] { TempFolder }).Length == 0) AssetDatabase.DeleteAsset(TempFolder);
         }
 

@@ -5,12 +5,16 @@ using Google.Apis.Sheets.v4.Data;
 using UnityEditor.Localization;
 using UnityEditor.Localization.Plugins.Google;
 using UnityEditor.Localization.Plugins.Google.Columns;
+using UnityEngine.Localization.Metadata;
+using UnityEngine.Localization.Tables;
 
 namespace HarryTools.Dialogue.Editor {
     /// <summary> Reaches the spreadsheet through the Google Sheets extension of the Localization package. Nothing is sent while the provider or the spreadsheet ID is missing </summary>
     internal sealed class GoogleSheetGateway : IDialogueSheetGateway {
         // ==================== VARIABLES ===================
         #region Private Variables
+        private const string TailFields = "userEnteredValue,note";
+        private const string RowCountField = "gridProperties.rowCount";
         private const string ReadFields = "sheets.properties.sheetId,sheets.data.startRow,sheets.data.startColumn,sheets.data.rowData.values.formattedValue,sheets.data.rowData.values.note";
 
         private readonly SheetsServiceProvider provider;
@@ -28,11 +32,15 @@ namespace HarryTools.Dialogue.Editor {
         // ==================== METHODS ====================
         #region Methods
         /// <summary> True with an API key, which can only read public spreadsheets </summary>
-        public bool IsReadOnly => provider != null && provider.Authentication != AuthenticationType.OAuth;
+        public bool IsReadOnly => provider != null && provider.Authentication == AuthenticationType.APIKey;
+
+        /// <inheritdoc/>
+        public string SpreadsheetId => spreadsheetId ?? "";
 
         /// <summary> Why the provider and spreadsheet ID cannot be used, or null when both are set </summary>
         internal static string ConfigurationError(SheetsServiceProvider _provider, string _spreadsheetId) {
             if (_provider == null) return "Set a Sheets Service Provider in Project Settings > HarryTools > Dialogue first.";
+            if (_provider.Authentication == AuthenticationType.None) return "The Sheets Service Provider has no credentials. Choose OAuth or an API key in it first.";
             if (string.IsNullOrWhiteSpace(_spreadsheetId)) return "Set the spreadsheet ID in Project Settings > HarryTools > Dialogue first.";
             return null;
         }
@@ -51,10 +59,17 @@ namespace HarryTools.Dialogue.Editor {
             return _google.AddSheet(_title, provider.NewSheetProperties ?? new NewSheetProperties());
         }
 
-        /// <inheritdoc/>
-        public void Push(int _sheetId, StringTableCollection _collection, IList<SheetColumn> _columns) {
-            GoogleSheets _google = Connect();
+        /// <summary> Pushes through the extension. The tail requests are added to the same batch, after the extension's own, so the tail rows are written in the same request that clears the rows below the entries </summary>
+        public void Push(int _sheetId, StringTableCollection _collection, IList<SheetColumn> _columns, SheetGrid _tail) {
+            Connect();
             if (IsReadOnly) throw new InvalidOperationException(SheetConnection.ReadOnlyMessage);
+
+            TailedSheets _google = new TailedSheets(provider) { SpreadSheetId = spreadsheetId };
+            if (_tail != null && _tail.RowCount > 0) {
+                // The extension grows the tab to one row per entry plus the header; the tail may need more
+                int _rows = Math.Max(_google.GetRowCount(_sheetId), _collection.SharedData.Entries.Count + 1);
+                _google.Tail = TailRequests(_sheetId, _columns, _tail, 1 + PushedRows(_collection), _rows);
+            }
             _google.PushStringTableCollection(_sheetId, _collection, _columns);
         }
 
@@ -118,6 +133,49 @@ namespace HarryTools.Dialogue.Editor {
                 return SheetConnection.Failed("Connection failed: " + DialogueSheetSync.Describe(_exception));
             }
         }
+
+        /// <summary> The requests that write the tail from the given row down, one per column, value and note, growing the tab first when it has fewer rows </summary>
+        internal static List<Request> TailRequests(int _sheetId, IList<SheetColumn> _columns, SheetGrid _tail, int _firstRow, int _rowCount) {
+            List<Request> _requests = new List<Request>();
+            if (_tail == null || _tail.RowCount == 0 || _columns == null) return _requests;
+
+            int _end = _firstRow + _tail.RowCount;
+            if (_end > _rowCount) {
+                _requests.Add(new Request {
+                    UpdateSheetProperties = new UpdateSheetPropertiesRequest {
+                        Properties = new SheetProperties { SheetId = _sheetId, GridProperties = new GridProperties { RowCount = _end } },
+                        Fields = RowCountField
+                    }
+                });
+            }
+            for (int _c = 0; _c < _columns.Count; _c++) {
+                int _column = _columns[_c].ColumnIndex;
+                List<RowData> _rows = new List<RowData>();
+                for (int _r = 0; _r < _tail.RowCount; _r++) {
+                    _rows.Add(new RowData {
+                        Values = new List<CellData> { new CellData { UserEnteredValue = new ExtendedValue { StringValue = _tail.Value(_r, _column) }, Note = _tail.Note(_r, _column) } }
+                    });
+                }
+                _requests.Add(new Request {
+                    UpdateCells = new UpdateCellsRequest {
+                        Range = new GridRange { SheetId = _sheetId, StartColumnIndex = _column, EndColumnIndex = _column + 1, StartRowIndex = _firstRow, EndRowIndex = _end },
+                        Rows = _rows,
+                        Fields = TailFields
+                    }
+                });
+            }
+            return _requests;
+        }
+
+        /// <summary> The rows the extension writes for the collection: one per entry that is not excluded from export </summary>
+        internal static int PushedRows(StringTableCollection _collection) {
+            int _count = 0;
+            IReadOnlyList<SharedTableData.SharedTableEntry> _entries = _collection.SharedData.Entries;
+            for (int _i = 0; _i < _entries.Count; _i++) {
+                if (!_entries[_i].Metadata.HasMetadata<ExcludeEntryFromExport>()) _count++;
+            }
+            return _count;
+        }
         #endregion
 
         // ==================== PRIVATE ====================
@@ -126,6 +184,24 @@ namespace HarryTools.Dialogue.Editor {
             string _error = ConfigurationError(provider, spreadsheetId);
             if (_error != null) throw new InvalidOperationException(_error);
             return new GoogleSheets(provider) { SpreadSheetId = spreadsheetId };
+        }
+        #endregion
+
+        // ==================== TYPES ====================
+        #region Types
+        /// <summary> The extension's connection, with extra requests sent in the same batch as its own </summary>
+        private sealed class TailedSheets : GoogleSheets {
+            /// <summary> Requests added after the extension's own. Null adds none </summary>
+            public IList<Request> Tail;
+
+            public TailedSheets(IGoogleSheetsService _provider) : base(_provider) { }
+
+            protected override BatchUpdateSpreadsheetResponse SendBatchUpdateRequest(string _spreadsheetId, IList<Request> _requests) {
+                if (Tail == null || Tail.Count == 0) return base.SendBatchUpdateRequest(_spreadsheetId, _requests);
+                List<Request> _all = new List<Request>(_requests);
+                _all.AddRange(Tail);
+                return base.SendBatchUpdateRequest(_spreadsheetId, _all);
+            }
         }
         #endregion
     }

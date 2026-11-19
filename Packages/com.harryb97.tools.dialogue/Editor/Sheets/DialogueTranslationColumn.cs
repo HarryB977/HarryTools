@@ -13,6 +13,7 @@ namespace HarryTools.Dialogue.Editor {
         private const string PullUndoName = "Pull Translation";
 
         private StringTable pushTable;
+        private int noteColumn = -1;
         private readonly List<(long Id, string Text)> pushed = new List<(long, string)>();
         private StringTableCollection pullCollection;
         private StringTable pullTable;
@@ -25,8 +26,11 @@ namespace HarryTools.Dialogue.Editor {
         /// <summary> Translations of the last pull that had changed both locally and in the sheet since their last sync, and took the sheet text. A translation cleared locally counts too. Reset when a pull begins </summary>
         public int Conflicts { get; private set; }
 
-        /// <inheritdoc/>
-        public override PushFields PushFields => PushFields.Value;
+        /// <summary> What the pull before the push read. Its cell notes are pushed back on the row of their key. Null pushes no notes </summary>
+        public SheetPullCapture Capture { get; set; }
+
+        /// <summary> The value holds the translation; the note holds the cell note the pull before the push read for the key, so it moves with its row </summary>
+        public override PushFields PushFields => PushFields.ValueAndNote;
         #endregion
 
         // ==================== PUSH ====================
@@ -35,6 +39,7 @@ namespace HarryTools.Dialogue.Editor {
         public override void PushBegin(StringTableCollection _collection) {
             pushTable = null;
             pushed.Clear();
+            noteColumn = Capture != null ? Capture.ColumnOf(_collection, this) : -1;
             if (_collection == null) return;
             IReadOnlyList<StringTable> _tables = _collection.StringTables;
             for (int _i = 0; _i < _tables.Count; _i++) {
@@ -51,11 +56,11 @@ namespace HarryTools.Dialogue.Editor {
             _headerNote = null;
         }
 
-        /// <summary> The local translation. It is only recorded as synced by <see cref="CommitPush"/>, once the push succeeded </summary>
+        /// <summary> The local translation, and the cell note read for the key. The translation is only recorded as synced by <see cref="CommitPush"/>, once the push succeeded </summary>
         public override void PushCellData(SharedTableData.SharedTableEntry _keyEntry, IList<StringTableEntry> _tableEntries, out string _value, out string _note) {
             StringTableEntry _entry = pushTable != null && _keyEntry != null ? pushTable.GetEntry(_keyEntry.Id) : null;
             _value = _entry?.Value;
-            _note = null;
+            _note = _keyEntry != null ? Capture?.Note(_keyEntry.Id, noteColumn) : null;
             if (_entry != null) pushed.Add((_keyEntry.Id, _value));
         }
 

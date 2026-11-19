@@ -96,9 +96,11 @@ namespace HarryTools.Dialogue.Editor {
             pendingForks.Clear();
             for (int _i = 0; _i < _guids.Length; _i++) {
                 DialogueCharacter _character = AssetDatabase.LoadAssetAtPath<DialogueCharacter>(AssetDatabase.GUIDToAssetPath(_guids[_i]));
-                if (_character != null) DialogueCharacterTables.MoveToOwnCollection(_character);
+                // Only what was moved is written: the character and the characters collection
+                if (_character == null || !DialogueCharacterTables.MoveToOwnCollection(_character)) continue;
+                AssetDatabase.SaveAssetIfDirty(_character);
+                DialogueTables.SaveTables(DialogueCharacterTables.Find());
             }
-            AssetDatabase.SaveAssets();
         }
 
         // An update callback rather than delayCall, which does not run while the Editor is in the background

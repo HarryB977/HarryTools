@@ -8,11 +8,6 @@ namespace HarryTools.Dialogue.Editor {
     /// <summary> Creates the empty table of a newly added locale in every dialogue collection and in the characters collection. Removing a locale leaves its tables untouched </summary>
     [InitializeOnLoad]
     internal static class DialogueLocaleWatcher {
-        // ==================== VARIABLES ===================
-        #region Private Variables
-        private static bool suspended;
-        #endregion
-
         // ==================== UNITY ====================
         #region Unity
         static DialogueLocaleWatcher() {
@@ -49,22 +44,11 @@ namespace HarryTools.Dialogue.Editor {
         internal static StringTableCollection CharactersCollection() {
             return LocalizationEditorSettings.GetStringTableCollection(DialogueCharacterTables.CollectionName);
         }
-
-        /// <summary> Adds the locale to the project without creating its tables in the project collections </summary>
-        internal static void AddLocaleForTests(Locale _locale) {
-            suspended = true;
-            try {
-                LocalizationEditorSettings.AddLocale(_locale);
-            } finally {
-                suspended = false;
-            }
-        }
         #endregion
 
         // ==================== PRIVATE ====================
         #region Private Methods
         private static void OnLocaleAdded(Locale _locale) {
-            if (suspended) return;
             AddLocaleTables(_locale, Targets(DialogueTables.ProjectDialogues(), CharactersCollection()));
         }
         #endregion

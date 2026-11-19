@@ -15,14 +15,11 @@ namespace HarryTools.Dialogue.Tests {
         // ==================== VARIABLES ===================
         #region Private Variables
         private const string TempFolder = "Assets/__DialogueTests__";
-        private const string LocalesFolder = TempFolder + "/Locales";
         private const string AssetsFolder = TempFolder + "/Layout";
         private const string TablesFolder = TempFolder + "/LayoutTables";
         private const string SourceCode = "en";
         private const string OtherCode = "es";
 
-        private readonly List<Locale> addedLocales = new List<Locale>();
-        private LocalizationSettings createdSettings;
         private DialogueSettings settings;
         #endregion
 
@@ -31,25 +28,11 @@ namespace HarryTools.Dialogue.Tests {
         [OneTimeSetUp]
         public void OneTimeSetUp() {
             EnsureFolder(TempFolder);
-            if (LocalizationEditorSettings.ActiveLocalizationSettings == null) {
-                createdSettings = ScriptableObject.CreateInstance<LocalizationSettings>();
-                AssetDatabase.CreateAsset(createdSettings, TempFolder + "/LayoutLocalizationSettings.asset");
-                LocalizationEditorSettings.ActiveLocalizationSettings = createdSettings;
-            }
-            EnsureLocale(SourceCode);
-            EnsureLocale(OtherCode);
+            TestLocales.RequireOrIgnore(SourceCode, OtherCode);
         }
 
         [OneTimeTearDown]
         public void OneTimeTearDown() {
-            for (int _i = 0; _i < addedLocales.Count; _i++) {
-                if (addedLocales[_i] != null) LocalizationEditorSettings.RemoveLocale(addedLocales[_i]);
-            }
-            addedLocales.Clear();
-
-            if (createdSettings != null) LocalizationEditorSettings.ActiveLocalizationSettings = null;
-            createdSettings = null;
-
             if (AssetDatabase.IsValidFolder(TempFolder)) AssetDatabase.DeleteAsset(TempFolder);
         }
 
@@ -70,16 +53,6 @@ namespace HarryTools.Dialogue.Tests {
             DeleteContents(TablesFolder);
             if (AssetDatabase.IsValidFolder(TablesFolder)) AssetDatabase.DeleteAsset(TablesFolder);
             if (AssetDatabase.IsValidFolder(AssetsFolder)) AssetDatabase.DeleteAsset(AssetsFolder);
-        }
-
-        private void EnsureLocale(string _code) {
-            if (LocalizationEditorSettings.GetLocale(_code) != null) return;
-
-            EnsureFolder(LocalesFolder);
-            Locale _locale = Locale.CreateLocale(_code);
-            AssetDatabase.CreateAsset(_locale, LocalesFolder + "/" + _code + ".asset");
-            DialogueLocaleWatcher.AddLocaleForTests(_locale);
-            addedLocales.Add(_locale);
         }
 
         private static void EnsureFolder(string _path) {
@@ -240,7 +213,7 @@ namespace HarryTools.Dialogue.Tests {
             _asset.Start.Next.Target = _line.Id;
             DialogueTableLayout.Refresh(_asset);
             SharedTableData _shared = DialogueTables.EnsureCollection(_asset).SharedData;
-            AssetDatabase.SaveAssets();
+            TestAddressables.SaveOwn(DialogueTables.Linked(_asset), _asset);
             Assert.IsFalse(EditorUtility.IsDirty(_shared));
 
             DialogueTableLayout.Refresh(_asset);
@@ -265,7 +238,7 @@ namespace HarryTools.Dialogue.Tests {
             Assert.AreEqual(_returned.Length, new HashSet<string>(_returned).Count);
             Assert.AreEqual("Line\nDialogue: SaveHook\nAfter: start", CommentOf(_asset, LineKey(_line)));
 
-            AssetDatabase.SaveAssets();
+            TestAddressables.SaveOwn(DialogueTables.Linked(_asset), _asset);
             Assert.IsFalse(EditorUtility.IsDirty(_shared));
         }
 

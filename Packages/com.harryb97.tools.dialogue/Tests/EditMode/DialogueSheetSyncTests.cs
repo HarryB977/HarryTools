@@ -21,7 +21,6 @@ namespace HarryTools.Dialogue.Tests {
         // ==================== VARIABLES ===================
         #region Private Variables
         private const string TempFolder = "Assets/__DialogueTests__";
-        private const string LocalesFolder = TempFolder + "/Locales";
         private const string AssetsFolder = TempFolder + "/SyncDialogues";
         private const string TablesFolder = TempFolder + "/SyncTables";
         private const string SourceCode = "en";
@@ -32,8 +31,6 @@ namespace HarryTools.Dialogue.Tests {
         private static readonly LocaleIdentifier Source = new LocaleIdentifier(SourceCode);
         private static readonly LocaleIdentifier Other = new LocaleIdentifier(OtherCode);
 
-        private readonly List<Locale> addedLocales = new List<Locale>();
-        private LocalizationSettings createdSettings;
         private DialogueSettings settings;
         private FakeSheetGateway gateway;
         private FakeSheetTabs tabs;
@@ -47,25 +44,11 @@ namespace HarryTools.Dialogue.Tests {
         [OneTimeSetUp]
         public void OneTimeSetUp() {
             EnsureFolder(TempFolder);
-            if (LocalizationEditorSettings.ActiveLocalizationSettings == null) {
-                createdSettings = ScriptableObject.CreateInstance<LocalizationSettings>();
-                AssetDatabase.CreateAsset(createdSettings, TempFolder + "/SyncLocalizationSettings.asset");
-                LocalizationEditorSettings.ActiveLocalizationSettings = createdSettings;
-            }
-            EnsureLocale(SourceCode);
-            EnsureLocale(OtherCode);
+            TestLocales.RequireOrIgnore(SourceCode, OtherCode);
         }
 
         [OneTimeTearDown]
         public void OneTimeTearDown() {
-            for (int _i = 0; _i < addedLocales.Count; _i++) {
-                if (addedLocales[_i] != null) LocalizationEditorSettings.RemoveLocale(addedLocales[_i]);
-            }
-            addedLocales.Clear();
-
-            if (createdSettings != null) LocalizationEditorSettings.ActiveLocalizationSettings = null;
-            createdSettings = null;
-
             if (AssetDatabase.IsValidFolder(TempFolder)) AssetDatabase.DeleteAsset(TempFolder);
         }
 
@@ -97,16 +80,6 @@ namespace HarryTools.Dialogue.Tests {
 
             Assert.AreEqual(sheetsSettingsExisted, File.Exists(SheetsSettingsPath), "The project's sheet settings are never written");
             if (sheetsSettingsExisted) Assert.AreEqual(sheetsSettingsWriteTime, File.GetLastWriteTimeUtc(SheetsSettingsPath));
-        }
-
-        private void EnsureLocale(string _code) {
-            if (LocalizationEditorSettings.GetLocale(_code) != null) return;
-
-            EnsureFolder(LocalesFolder);
-            Locale _locale = Locale.CreateLocale(_code);
-            AssetDatabase.CreateAsset(_locale, LocalesFolder + "/" + _code + ".asset");
-            DialogueLocaleWatcher.AddLocaleForTests(_locale);
-            addedLocales.Add(_locale);
         }
 
         private static void EnsureFolder(string _path) {
@@ -188,7 +161,7 @@ namespace HarryTools.Dialogue.Tests {
 
             Assert.AreEqual(1, gateway.AddSheetCalls);
             Assert.AreEqual(1, gateway.SheetCount);
-            Assert.IsTrue(tabs.TryGetTab(Guid(DialogueTables.Linked(_asset)), out int _sheetId));
+            Assert.IsTrue(tabs.TryGetTab(gateway.SpreadsheetId, Guid(DialogueTables.Linked(_asset)), out int _sheetId));
             Assert.AreEqual(gateway.IdOf(_title), _sheetId);
             Assert.AreEqual(0, _sheetId, "The first tab has ID 0, which is still a recorded tab");
             Assert.GreaterOrEqual(tabs.SaveCalls, 1);
@@ -213,13 +186,13 @@ namespace HarryTools.Dialogue.Tests {
         public void Push_RenamedDialogue_SameTab() {
             DialogueAsset _asset = NewDialogue("BeforeRename", out _, "Hello");
             AssertDone(sync.Push(_asset));
-            Assert.IsTrue(tabs.TryGetTab(Guid(DialogueTables.Linked(_asset)), out int _before));
+            Assert.IsTrue(tabs.TryGetTab(gateway.SpreadsheetId, Guid(DialogueTables.Linked(_asset)), out int _before));
 
             Assert.AreEqual("", AssetDatabase.RenameAsset(AssetDatabase.GetAssetPath(_asset), "AfterRename"));
             Assert.AreEqual("AfterRename", _asset.name);
             AssertDone(sync.Push(_asset));
 
-            Assert.IsTrue(tabs.TryGetTab(Guid(DialogueTables.Linked(_asset)), out int _after));
+            Assert.IsTrue(tabs.TryGetTab(gateway.SpreadsheetId, Guid(DialogueTables.Linked(_asset)), out int _after));
             Assert.AreEqual(_before, _after);
             Assert.AreEqual(1, gateway.AddSheetCalls);
             Assert.AreEqual(2, gateway.PushCalls);
@@ -251,11 +224,11 @@ namespace HarryTools.Dialogue.Tests {
             gateway.AddRow(_title, "ghost_a", Other.ToString(), "Fantasma");
             gateway.AddRow(_title, "ghost_b", Other.ToString(), "Otro");
             gateway.AddRow(_title, _lines[0].Id, Other.ToString(), "Duplicada");
-            LogAssert.Expect(LogType.Warning, new Regex("2 unknown rows ignored"));
+            LogAssert.Expect(LogType.Warning, new Regex("3 unknown rows kept in the sheet and not imported"));
             SyncResult _result = sync.Pull(_asset);
 
             AssertDone(_result);
-            Assert.AreEqual(2, _result.UnknownRows);
+            Assert.AreEqual(3, _result.UnknownRows, "A repeated key counts from its second row on");
             CollectionAssert.AreEqual(_keys, Keys(_collection), "No key was added, removed or renamed");
             Assert.IsNull(_collection.SharedData.GetEntry("ghost_a"));
             Assert.IsTrue(string.IsNullOrEmpty(Text(_asset, _lines[0], Other)), "A repeated key keeps its first row");
@@ -411,7 +384,7 @@ namespace HarryTools.Dialogue.Tests {
             string _text = _summary.Describe();
             StringAssert.Contains("Pushed 3 of 4", _text);
             StringAssert.Contains("AllB: failed", _text);
-            StringAssert.Contains("0 unknown rows ignored, 0 conflicts", _text);
+            StringAssert.Contains("0 unknown rows kept in the sheet and not imported, 0 conflicts", _text);
         }
 
         [Test]
@@ -423,7 +396,7 @@ namespace HarryTools.Dialogue.Tests {
             Assert.AreNotEqual(DialogueCharacterTables.CollectionName, _collection.TableCollectionName, "Tests use their own characters collection");
 
             AssertDone(sync.PushCharacters());
-            Assert.IsTrue(tabs.TryGetTab(Guid(_collection), out int _sheetId));
+            Assert.IsTrue(tabs.TryGetTab(gateway.SpreadsheetId, Guid(_collection), out int _sheetId));
             Assert.AreEqual(gateway.IdOf("Characters"), _sheetId);
             Assert.AreEqual("Ada ES", gateway.Cell("Characters", _character.CharacterId, Other.ToString()));
 
@@ -535,7 +508,7 @@ namespace HarryTools.Dialogue.Tests {
             AssertDone(sync.Pull(_asset));
             Assert.AreEqual(0, gateway.WriteAttempts, "No tab is created");
             Assert.AreEqual(0, gateway.ReadCalls);
-            Assert.IsFalse(tabs.TryGetTab(Guid(DialogueTables.Linked(_asset)), out _));
+            Assert.IsFalse(tabs.TryGetTab(gateway.SpreadsheetId, Guid(DialogueTables.Linked(_asset)), out _));
         }
 
         [Test]
@@ -563,7 +536,7 @@ namespace HarryTools.Dialogue.Tests {
                 Assert.AreEqual(SheetConnection.ReadOnlyMessage, _add.Message);
                 DialogueAsset _asset = NewDialogue("ApiKeyGateway", out _, "Hello");
                 StringTableCollection _collection = DialogueTables.Linked(_asset);
-                InvalidOperationException _push = Assert.Throws<InvalidOperationException>(() => _google.Push(0, _collection, DialogueSheetColumns.ForPush(_collection)));
+                InvalidOperationException _push = Assert.Throws<InvalidOperationException>(() => _google.Push(0, _collection, DialogueSheetColumns.ForPush(_collection), null));
                 Assert.AreEqual(SheetConnection.ReadOnlyMessage, _push.Message);
 
                 StringAssert.StartsWith("Connected with an API key: pull only.", SheetConnection.Reached(3, true).Message);
@@ -600,6 +573,213 @@ namespace HarryTools.Dialogue.Tests {
             Assert.AreEqual("Hola hoja", Text(_asset, _lines[0], Other));
             Assert.IsFalse(EditorUtility.IsDirty(_collection.GetTable(Other)));
             Assert.IsFalse(EditorUtility.IsDirty(_collection.SharedData));
+        }
+
+        [Test]
+        public void Push_Reordered_NotesStayOnTheirKey() {
+            DialogueAsset _asset = NewDialogue("NotesReorder", out List<LineNode> _lines, "One", "Two", "Three");
+            for (int _i = 0; _i < _lines.Count; _i++) Translate(_asset, _lines[_i], "Uno " + _i);
+            AssertDone(sync.Push(_asset));
+            string _title = DialogueSheetSync.TabTitle(_asset);
+            string _other = Other.ToString();
+            int _firstRow = FakeSheetGateway.RowOf(gateway.Grid(_title), _lines[0].Id);
+
+            gateway.SetNote(_title, _lines[0].Id, _other, "Note on one");
+            gateway.SetNote(_title, _lines[2].Id, _other, "Note on three");
+            gateway.SetNote(_title, _lines[1].Id, KeyHeader, "Key note on two");
+
+            // Start now leads to the last line, which moves to the top
+            _asset.Start.Next.Target = _lines[2].Id;
+            EditorUtility.SetDirty(_asset);
+            AssertDone(sync.Push(_asset));
+
+            Assert.AreEqual(_firstRow, FakeSheetGateway.RowOf(gateway.Grid(_title), _lines[2].Id), "the rows were reordered");
+            Assert.AreEqual("Note on one", gateway.Note(_title, _lines[0].Id, _other));
+            Assert.AreEqual("Note on three", gateway.Note(_title, _lines[2].Id, _other));
+            Assert.AreEqual("Key note on two", gateway.Note(_title, _lines[1].Id, KeyHeader));
+            Assert.IsNull(gateway.Note(_title, _lines[1].Id, _other));
+            Assert.AreEqual("Uno 2", gateway.Cell(_title, _lines[2].Id, _other));
+        }
+
+        [Test]
+        public void Push_LocaleColumnInserted_NotesStayOnTheirLocale() {
+            DialogueAsset _asset = NewDialogue("NotesLocale", out List<LineNode> _lines, "Hello");
+            Translate(_asset, _lines[0], "Hola");
+            AssertDone(sync.Push(_asset));
+            string _title = DialogueSheetSync.TabTitle(_asset);
+            StringTableCollection _collection = DialogueTables.Linked(_asset);
+            gateway.SetNote(_title, _lines[0].Id, Other.ToString(), "Note on es");
+            int _oldColumn = FakeSheetGateway.ColumnOf(gateway.Grid(_title), Other.ToString());
+
+            // The new locale's table goes before es, so its column takes the old es position
+            LocaleIdentifier _extra = new LocaleIdentifier("zz");
+            TestAddressables.AddForeignTable(_collection, _extra);
+            StringTable _otherTable = _collection.GetTable(Other) as StringTable;
+            _collection.RemoveTable(_otherTable);
+            _collection.AddTable(_otherTable);
+            AssertDone(sync.Push(_asset));
+
+            SheetGrid _grid = gateway.Grid(_title);
+            Assert.AreEqual(_oldColumn, FakeSheetGateway.ColumnOf(_grid, _extra.ToString()));
+            Assert.AreEqual("Note on es", gateway.Note(_title, _lines[0].Id, Other.ToString()));
+            Assert.IsNull(gateway.Note(_title, _lines[0].Id, _extra.ToString()));
+        }
+
+        [Test]
+        public void Push_UnknownRows_KeptBelowWithValuesAndNotes() {
+            DialogueAsset _asset = NewDialogue("UnknownKept", out List<LineNode> _lines, "Hello", "Bye");
+            Translate(_asset, _lines[0], "Hola");
+            AssertDone(sync.Push(_asset));
+            string _title = DialogueSheetSync.TabTitle(_asset);
+            string _other = Other.ToString();
+
+            gateway.AddRow(_title, "ghost", _other, "Fantasma");
+            gateway.SetNote(_title, "ghost", _other, "Ghost note");
+            gateway.SetNote(_title, "ghost", KeyHeader, "Ghost key note");
+            gateway.AddRow(_title, _lines[0].Id, _other, "Duplicada");
+            SheetGrid _grid = gateway.Grid(_title);
+            int _keyless = _grid.RowCount;
+            _grid.Set(_keyless, FakeSheetGateway.ColumnOf(_grid, _other), "Sin clave", "Keyless note");
+
+            // A reorder rewrites every row of the entries
+            _asset.Start.Next.Target = _lines[1].Id;
+            EditorUtility.SetDirty(_asset);
+            LogAssert.Expect(LogType.Warning, new Regex("3 unknown rows kept in the sheet and not imported"));
+            SyncResult _result = sync.Push(_asset);
+            AssertDone(_result);
+            Assert.AreEqual(3, _result.UnknownRows);
+
+            _grid = gateway.Grid(_title);
+            int _key = FakeSheetGateway.ColumnOf(_grid, KeyHeader);
+            int _column = FakeSheetGateway.ColumnOf(_grid, _other);
+            Assert.AreEqual(1 + 2 + 3, _grid.RowCount, "two entries, then the three unknown rows");
+            Assert.AreEqual(_lines[1].Id, _grid.Value(1, _key));
+            Assert.AreEqual(_lines[0].Id, _grid.Value(2, _key));
+            Assert.AreEqual("Hola", _grid.Value(2, _column));
+            Assert.AreEqual("ghost", _grid.Value(3, _key));
+            Assert.AreEqual("Ghost key note", _grid.Note(3, _key));
+            Assert.AreEqual("Fantasma", _grid.Value(3, _column));
+            Assert.AreEqual("Ghost note", _grid.Note(3, _column));
+            Assert.AreEqual(_lines[0].Id, _grid.Value(4, _key));
+            Assert.AreEqual("Duplicada", _grid.Value(4, _column));
+            Assert.IsTrue(DialogueSheetColumns.IsBlank(_grid.Value(5, _key)));
+            Assert.AreEqual("Sin clave", _grid.Value(5, _column));
+            Assert.AreEqual("Keyless note", _grid.Note(5, _column));
+            Assert.AreEqual("Hola", Text(_asset, _lines[0], Other), "nothing of the unknown rows was imported");
+
+            // Pushing again keeps them in place
+            LogAssert.Expect(LogType.Warning, new Regex("3 unknown rows kept"));
+            AssertDone(sync.Push(_asset));
+            Assert.AreEqual(6, gateway.Grid(_title).RowCount);
+            Assert.AreEqual("Fantasma", gateway.Grid(_title).Value(3, _column));
+        }
+
+        [Test]
+        public void Tabs_OtherSpreadsheet_RecordedIdNotUsed() {
+            DialogueAsset _asset = NewDialogue("TwoSheets", out List<LineNode> _lines, "Hello");
+            Translate(_asset, _lines[0], "Hola");
+            AssertDone(sync.Push(_asset));
+            string _title = DialogueSheetSync.TabTitle(_asset);
+            Assert.IsTrue(tabs.TryGetTab(gateway.SpreadsheetId, Guid(DialogueTables.Linked(_asset)), out int _first));
+            Assert.AreEqual(0, _first);
+
+            // Another spreadsheet whose first tab has the same ID
+            FakeSheetGateway _otherSheet = new FakeSheetGateway { SpreadsheetId = "other-spreadsheet" };
+            Assert.AreEqual(0, _otherSheet.AddSheet("Unrelated"));
+            _otherSheet.Grid("Unrelated").Set(0, 0, "Kept", null);
+            DialogueSheetSync _otherSync = new DialogueSheetSync(_otherSheet, tabs);
+            AssertDone(_otherSync.Push(_asset));
+
+            CollectionAssert.AreEqual(new[] { "Kept" }, _otherSheet.Grid("Unrelated").Headers(), "the unrelated tab is untouched");
+            Assert.AreEqual("Hola", _otherSheet.Cell(_title, _lines[0].Id, Other.ToString()));
+            Assert.IsTrue(tabs.TryGetTab("other-spreadsheet", Guid(DialogueTables.Linked(_asset)), out int _second));
+            Assert.AreEqual(_otherSheet.IdOf(_title), _second);
+            Assert.IsTrue(tabs.TryGetTab(gateway.SpreadsheetId, Guid(DialogueTables.Linked(_asset)), out int _again));
+            Assert.AreEqual(_first, _again, "the first spreadsheet keeps its record");
+        }
+
+        [Test]
+        public void Pull_TranslationHeaderOtherLanguageName_MatchedByCode() {
+            DialogueAsset _asset = NewDialogue("HeaderCode", out List<LineNode> _lines, "Hello");
+            Translate(_asset, _lines[0], "Hola");
+            AssertDone(sync.Push(_asset));
+            string _title = DialogueSheetSync.TabTitle(_asset);
+            SheetGrid _grid = gateway.Grid(_title);
+            int _column = FakeSheetGateway.ColumnOf(_grid, Other.ToString());
+            int _width = _grid.Headers().Count;
+
+            // The language name differs, as culture data can between machines; the code in parentheses decides
+            const string Renamed = "Espanol ( ES )";
+            _grid.Set(0, _column, Renamed, null);
+            gateway.SetCell(_title, _lines[0].Id, Renamed, "Hola hoja");
+            AssertDone(sync.Pull(_asset));
+            Assert.AreEqual("Hola hoja", Text(_asset, _lines[0], Other));
+
+            AssertDone(sync.Push(_asset));
+            _grid = gateway.Grid(_title);
+            Assert.AreEqual(Other.ToString(), _grid.Value(0, _column), "the push writes its own header text");
+            Assert.AreEqual(_width, _grid.Headers().Count);
+            Assert.AreEqual("Hola hoja", gateway.Cell(_title, _lines[0].Id, Other.ToString()));
+        }
+
+        [Test]
+        public void Pull_NoCollection_CreatesNothing() {
+            DialogueAsset _asset = NewDialogue("NoText", out _);
+            Assert.IsNull(DialogueTables.Linked(_asset));
+
+            AssertDone(sync.Pull(_asset));
+            SyncSummary _summary = sync.PullAll(new[] { _asset });
+
+            Assert.AreEqual(0, _summary.Failures);
+            Assert.IsNull(DialogueTables.Linked(_asset), "no collection was created");
+            Assert.AreEqual(0, gateway.SheetCount, "no tab was created");
+            Assert.AreEqual(0, gateway.ReadCalls);
+        }
+
+        [Test]
+        public void Gateway_TailRequests_BelowPushedRows() {
+            DialogueAsset _asset = NewDialogue("TailRequests", out _, "Hello");
+            StringTableCollection _collection = DialogueTables.Linked(_asset);
+            List<UnityEditor.Localization.Plugins.Google.Columns.SheetColumn> _columns = DialogueSheetColumns.ForPush(_collection);
+            SheetGrid _tail = new SheetGrid();
+            _tail.Set(0, 0, "ghost", "Key note");
+            _tail.Set(1, _columns.Count - 1, "Outdated", null);
+
+            List<Google.Apis.Sheets.v4.Data.Request> _requests = GoogleSheetGateway.TailRequests(7, _columns, _tail, 2, 3);
+            Assert.AreEqual(1 + _columns.Count, _requests.Count);
+            Assert.AreEqual(4, _requests[0].UpdateSheetProperties.Properties.GridProperties.RowCount, "the tab grows to fit the tail");
+            Google.Apis.Sheets.v4.Data.UpdateCellsRequest _key = _requests[1].UpdateCells;
+            Assert.AreEqual(7, _key.Range.SheetId);
+            Assert.AreEqual(0, _key.Range.StartColumnIndex);
+            Assert.AreEqual(1, _key.Range.EndColumnIndex);
+            Assert.AreEqual(2, _key.Range.StartRowIndex);
+            Assert.AreEqual(4, _key.Range.EndRowIndex);
+            Assert.AreEqual("userEnteredValue,note", _key.Fields);
+            Assert.AreEqual("ghost", _key.Rows[0].Values[0].UserEnteredValue.StringValue);
+            Assert.AreEqual("Key note", _key.Rows[0].Values[0].Note);
+            Assert.AreEqual("Outdated", _requests[_columns.Count].UpdateCells.Rows[1].Values[0].UserEnteredValue.StringValue);
+
+            Assert.AreEqual(_columns.Count, GoogleSheetGateway.TailRequests(7, _columns, _tail, 2, 10).Count, "no resize when the tab is tall enough");
+            Assert.IsEmpty(GoogleSheetGateway.TailRequests(7, _columns, new SheetGrid(), 2, 3));
+            Assert.AreEqual(1, GoogleSheetGateway.PushedRows(_collection));
+        }
+
+        [Test]
+        public void Gateway_NoCredentials_ConfigurationError() {
+            SheetsServiceProvider _provider = ScriptableObject.CreateInstance<SheetsServiceProvider>();
+            try {
+                Assert.AreEqual(AuthenticationType.None, _provider.Authentication);
+                GoogleSheetGateway _google = new GoogleSheetGateway(_provider, "not-a-real-spreadsheet");
+                Assert.IsFalse(_google.IsReadOnly);
+
+                SheetConnection _test = _google.Test();
+                Assert.IsFalse(_test.Connected);
+                StringAssert.Contains("no credentials", _test.Message);
+                InvalidOperationException _sheets = Assert.Throws<InvalidOperationException>(() => _google.GetSheets());
+                StringAssert.Contains("no credentials", _sheets.Message);
+            } finally {
+                Object.DestroyImmediate(_provider);
+            }
         }
 
         [Test]

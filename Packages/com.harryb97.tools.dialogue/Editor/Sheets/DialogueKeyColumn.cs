@@ -15,16 +15,19 @@ namespace HarryTools.Dialogue.Editor {
         /// <summary> Rows of the last pull whose key matched no entry of the collection. Reset when a pull begins </summary>
         public int UnknownRows { get; private set; }
 
-        /// <inheritdoc/>
-        public override PushFields PushFields => PushFields.Value;
+        /// <summary> What the pull before the push read. Its key cell notes are pushed back on the row of their key. Null pushes no notes </summary>
+        public SheetPullCapture Capture { get; set; }
+
+        /// <summary> The value holds the key; the note holds the cell note the pull before the push read for the key, so it moves with its row </summary>
+        public override PushFields PushFields => PushFields.ValueAndNote;
         #endregion
 
         // ==================== PUSH ====================
         #region Push
-        /// <inheritdoc/>
+        /// <summary> The key, and the note its cell had </summary>
         public override void PushCellData(SharedTableData.SharedTableEntry _keyEntry, IList<StringTableEntry> _tableEntries, out string _value, out string _note) {
             _value = _keyEntry.Key;
-            _note = null;
+            _note = Capture?.Note(_keyEntry.Id, Capture.KeyColumn);
         }
         #endregion
 

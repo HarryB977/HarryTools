@@ -73,6 +73,13 @@ namespace HarryTools.Dialogue.Editor {
         }
 
         private static void CleanOrphans(DialogueAsset _asset) {
+            int _count = DialogueTables.Orphans(_asset).Count;
+            if (_count == 0) {
+                Debug.Log("Dialogue " + _asset.name + ": no orphan table entries.", _asset);
+                return;
+            }
+            string _message = "Remove " + _count + (_count == 1 ? " entry" : " entries") + " that no node or option of " + _asset.name + " uses, from every table of its collection? Undo restores them.";
+            if (!EditorUtility.DisplayDialog("Clean orphan entries", _message, "Remove", "Cancel")) return;
             int _removed = DialogueTables.CleanOrphans(_asset);
             Debug.Log("Dialogue " + _asset.name + ": removed " + _removed + " orphan table entries.", _asset);
         }
