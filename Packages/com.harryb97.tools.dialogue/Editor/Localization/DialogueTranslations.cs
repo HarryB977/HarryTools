@@ -47,6 +47,13 @@ namespace HarryTools.Dialogue.Editor {
             return EntryOf(_collection, _key, _locale, out _)?.Value ?? "";
         }
 
+        /// <summary> The text of the key in the source locale table. Empty when there is none </summary>
+        internal static string SourceTextOf(StringTableCollection _collection, string _key) {
+            Locale _source = DialogueTables.SourceLocale();
+            if (_source == null) return "";
+            return EntryOf(_collection, _key, _source.Identifier, out _)?.Value ?? "";
+        }
+
         /// <summary> Stores the current source text on the entry of the locale, with undo. Nothing when the entry does not exist </summary>
         internal static void Stamp(StringTableCollection _collection, string _key, LocaleIdentifier _locale) {
             Stamp(_collection, _key, _locale, StampUndoName);
@@ -104,13 +111,6 @@ namespace HarryTools.Dialogue.Editor {
             if (_shared == null) return null;
             _table = _collection.GetTable(_locale) as StringTable;
             return _table != null ? _table.GetEntry(_shared.Id) : null;
-        }
-
-        /// <summary> The text of the key in the source locale table. Empty when there is none </summary>
-        private static string SourceTextOf(StringTableCollection _collection, string _key) {
-            Locale _source = DialogueTables.SourceLocale();
-            if (_source == null) return "";
-            return EntryOf(_collection, _key, _source.Identifier, out _)?.Value ?? "";
         }
         #endregion
     }

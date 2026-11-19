@@ -1,8 +1,11 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using HarryTools.DomainReload;
 using UnityEditor;
+using UnityEditor.Localization.Plugins.Google;
 using UnityEngine;
+using Object = UnityEngine.Object;
 
 namespace HarryTools.Dialogue.Editor {
     /// <summary> Finds, or creates on demand, the project's <see cref="DialogueSettings"/> asset </summary>
@@ -54,8 +57,11 @@ namespace HarryTools.Dialogue.Editor {
         // ==================== VARIABLES ===================
         #region Private Variables
         private const string SettingsPath = "Project/HarryTools/Dialogue";
+        private const string SheetsUndoName = "Edit Dialogue Sheets Settings";
 
         private static UnityEditor.Editor cachedEditor;
+        private static string connectionMessage;
+        private static MessageType connectionMessageType;
         #endregion
 
         // ==================== PROVIDER ====================
@@ -64,7 +70,7 @@ namespace HarryTools.Dialogue.Editor {
         private static SettingsProvider Create() {
             return new SettingsProvider(SettingsPath, SettingsScope.Project) {
                 label = "Dialogue",
-                keywords = new HashSet<string> { "dialogue", "conversation", "line", "choice", "history", "localization" },
+                keywords = new HashSet<string> { "dialogue", "conversation", "line", "choice", "history", "localization", "google", "sheets" },
                 guiHandler = _ => Draw(),
                 deactivateHandler = () => {
                     if (cachedEditor != null) Object.DestroyImmediate(cachedEditor);
@@ -90,6 +96,53 @@ namespace HarryTools.Dialogue.Editor {
             DialogueSettings _settings = DialogueSettingsLocator.GetOrCreate();
             UnityEditor.Editor.CreateCachedEditor(_settings, null, ref cachedEditor);
             cachedEditor.OnInspectorGUI();
+
+            EditorGUILayout.Space();
+            DrawSheets();
+        }
+
+        private static void DrawSheets() {
+            DialogueSheetsSettings _sheets = DialogueSheetsSettings.instance;
+            EditorGUILayout.LabelField("Google Sheets", EditorStyles.boldLabel);
+
+            EditorGUI.BeginChangeCheck();
+            SheetsServiceProvider _provider = (SheetsServiceProvider)EditorGUILayout.ObjectField(
+                new GUIContent("Service Provider", "Asset with the Google credentials. Keep it outside Resources so it never reaches a build"),
+                _sheets.Provider, typeof(SheetsServiceProvider), false);
+            string _spreadsheetId = EditorGUILayout.TextField(new GUIContent("Spreadsheet ID", "The ID in the spreadsheet URL, between /d/ and /edit"), _sheets.SpreadsheetId);
+            if (EditorGUI.EndChangeCheck()) {
+                Undo.RecordObject(_sheets, SheetsUndoName);
+                _sheets.Provider = _provider;
+                _sheets.SpreadsheetId = _spreadsheetId == null ? null : _spreadsheetId.Trim();
+                EditorUtility.SetDirty(_sheets);
+                _sheets.Save();
+                connectionMessage = null;
+            }
+
+            if (_sheets.Provider != null && AssetDatabase.GetAssetPath(_sheets.Provider).Contains("/Resources/")) {
+                EditorGUILayout.HelpBox("The service provider is inside a Resources folder, so its credentials would be included in builds.", MessageType.Warning);
+            }
+
+            if (GUILayout.Button("Test connection")) {
+                connectionMessage = TestConnection(_sheets, out connectionMessageType);
+            }
+            if (!string.IsNullOrEmpty(connectionMessage)) EditorGUILayout.HelpBox(connectionMessage, connectionMessageType);
+        }
+
+        /// <summary> Reads the tab list of the spreadsheet and describes the outcome </summary>
+        private static string TestConnection(DialogueSheetsSettings _sheets, out MessageType _type) {
+            _type = MessageType.Error;
+            if (_sheets.Provider == null) return "Set a Sheets Service Provider first.";
+            if (string.IsNullOrEmpty(_sheets.SpreadsheetId)) return "Set the spreadsheet ID first.";
+
+            try {
+                GoogleSheets _google = new GoogleSheets(_sheets.Provider) { SpreadSheetId = _sheets.SpreadsheetId };
+                int _tabs = _google.GetSheets().Count;
+                _type = MessageType.Info;
+                return "Connected. The spreadsheet has " + _tabs + (_tabs == 1 ? " tab." : " tabs.");
+            } catch (Exception _exception) {
+                return "Connection failed: " + _exception.Message;
+            }
         }
         #endregion
     }
