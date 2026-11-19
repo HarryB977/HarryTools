@@ -3,7 +3,7 @@ using HarryTools.DomainReload;
 using UnityEditor;
 
 namespace HarryTools.Dialogue.Editor {
-    /// <summary> Keeps <see cref="DialogueAsset.AssetId"/> equal to the AssetDatabase GUID: a duplicated asset gets a new one, a renamed or moved asset keeps its own. A duplicate also gets its own ids and string table collection </summary>
+    /// <summary> Keeps <see cref="DialogueAsset.AssetId"/> equal to the AssetDatabase GUID: a duplicated asset gets a new one, a renamed or moved asset keeps its own. A duplicate also gets its own ids and string table collection. Characters get the same stable id </summary>
     internal class DialogueAssetIdPostprocessor : AssetPostprocessor {
         // ==================== VARIABLES ===================
         #region Private Variables
@@ -17,7 +17,12 @@ namespace HarryTools.Dialogue.Editor {
             for (int _i = 0; _i < _imported.Length; _i++) {
                 if (!_imported[_i].EndsWith(".asset")) continue;
                 DialogueAsset _asset = AssetDatabase.LoadAssetAtPath<DialogueAsset>(_imported[_i]);
-                if (_asset != null) Sync(_asset, _imported[_i]);
+                if (_asset != null) {
+                    Sync(_asset, _imported[_i]);
+                    continue;
+                }
+                DialogueCharacter _character = AssetDatabase.LoadAssetAtPath<DialogueCharacter>(_imported[_i]);
+                if (_character != null) Sync(_character, _imported[_i]);
             }
         }
 
@@ -38,6 +43,17 @@ namespace HarryTools.Dialogue.Editor {
 
             // Creating the collection is an asset operation, which waits until the import has finished
             if (_duplicate) ScheduleTexts(_guid);
+            return true;
+        }
+
+        /// <summary> Writes the GUID of the asset at the given path into the character id when they differ. A character whose old id belongs to another existing character is a duplicate and gets the new one; characters that had no id get theirs here too </summary>
+        internal static bool Sync(DialogueCharacter _character, string _path) {
+            string _guid = AssetDatabase.AssetPathToGUID(_path);
+            if (string.IsNullOrEmpty(_guid) || _character.CharacterId == _guid) return false;
+
+            _character.CharacterId = _guid;
+            EditorUtility.SetDirty(_character);
+            AssetDatabase.SaveAssetIfDirty(_character);
             return true;
         }
         #endregion

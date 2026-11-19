@@ -10,7 +10,6 @@ namespace HarryTools.Dialogue.Editor {
     internal static class DialogueLocaleWatcher {
         // ==================== VARIABLES ===================
         #region Private Variables
-        private const string CharactersCollectionName = "DialogueCharacters";
         private static bool suspended;
         #endregion
 
@@ -48,7 +47,7 @@ namespace HarryTools.Dialogue.Editor {
 
         /// <summary> The characters collection of the project. Null when it does not exist </summary>
         internal static StringTableCollection CharactersCollection() {
-            return LocalizationEditorSettings.GetStringTableCollection(CharactersCollectionName);
+            return LocalizationEditorSettings.GetStringTableCollection(DialogueCharacterTables.CollectionName);
         }
 
         /// <summary> Adds the locale to the project without creating its tables in the project collections </summary>

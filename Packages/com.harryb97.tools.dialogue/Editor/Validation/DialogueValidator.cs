@@ -70,6 +70,7 @@ namespace HarryTools.Dialogue.Editor {
             } finally {
                 _serialized?.Dispose();
             }
+            CheckSpeakerNames(_asset, _into);
         }
 
         /// <summary> The outputs of the node that are in use. A jump that continues in its target has an output only on the data, not on the canvas </summary>
@@ -264,6 +265,28 @@ namespace HarryTools.Dialogue.Editor {
                 CheckTranslations(_collection, _option.Text, _option.Id + DialogueTables.KeySuffix(typeof(ChoiceOption), "text"), _choice.Id, "Option: ", _untranslated, _outdated, _into);
                 CheckTranslations(_collection, _option.LockedReason, _option.Id + DialogueTables.KeySuffix(typeof(ChoiceOption), "lockedReason"), _choice.Id, "Locked reason: ", _untranslated, _outdated, _into);
                 AddStates(_choice.Id, "Option: ", _untranslated, _outdated, _into);
+            }
+        }
+
+        /// <summary> One info per speaker, at its first line, listing the locales where its name has no text. Speakers without a source name are skipped </summary>
+        private static void CheckSpeakerNames(DialogueAsset _asset, List<DialogueIssue> _into) {
+            Locale _source = DialogueTables.SourceLocale();
+            if (_source == null) return;
+
+            HashSet<DialogueCharacter> _checked = new HashSet<DialogueCharacter>();
+            IReadOnlyList<Locale> _locales = LocalizationEditorSettings.GetLocales();
+            for (int _i = 0; _i < _asset.NodeList.Count; _i++) {
+                LineNode _line = _asset.NodeList[_i] as LineNode;
+                DialogueCharacter _character = _line?.Character;
+                if (_character == null || !_checked.Add(_character) || string.IsNullOrWhiteSpace(DialogueTables.GetSourceText(_character.DisplayName))) continue;
+
+                List<string> _missing = new List<string>();
+                for (int _l = 0; _l < _locales.Count; _l++) {
+                    if (_locales[_l] == null || _locales[_l].Identifier == _source.Identifier) continue;
+                    string _name = DialogueTables.GetText(_character.DisplayName.TableReference, _character.DisplayName.TableEntryReference, _locales[_l].Identifier);
+                    if (string.IsNullOrWhiteSpace(_name)) _missing.Add(_locales[_l].Identifier.Code);
+                }
+                if (_missing.Count > 0) Add(_into, DialogueIssueSeverity.Info, _line.Id, "Speaker name untranslated in: " + string.Join(", ", _missing));
             }
         }
 

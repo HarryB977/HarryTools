@@ -231,12 +231,12 @@ namespace HarryTools.Dialogue.Tests {
 
         [Test]
         public void LocaleAdded_CharactersCollectionGetsTable() {
-            if (DialogueLocaleWatcher.CharactersCollection() != null) Assert.Ignore("A characters collection already exists in the project.");
+            // A test-only collection handed to the handler, so the result does not depend on the project's own characters collection
             EnsureFolder(TablesFolder);
-            StringTableCollection _characters = LocalizationEditorSettings.CreateStringTableCollection("DialogueCharacters", TablesFolder);
+            StringTableCollection _characters = LocalizationEditorSettings.CreateStringTableCollection("CleanupCharacters", TablesFolder);
             DropOtherTable(_characters);
 
-            DialogueLocaleWatcher.AddLocaleTables(LocalizationEditorSettings.GetLocale(OtherCode), DialogueLocaleWatcher.Targets(null, DialogueLocaleWatcher.CharactersCollection()));
+            DialogueLocaleWatcher.AddLocaleTables(LocalizationEditorSettings.GetLocale(OtherCode), DialogueLocaleWatcher.Targets(null, _characters));
 
             Assert.IsNotNull(_characters.GetTable(new LocaleIdentifier(OtherCode)));
         }

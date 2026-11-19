@@ -8,8 +8,15 @@ namespace HarryTools.Dialogue {
     public sealed class DialogueCharacter : ScriptableObject {
         [SerializeField] private LocalizedString displayName = new LocalizedString();
         [SerializeField] private TypingVoice typingVoice;
+        [SerializeField, HideInInspector] private string characterId;
 
         public LocalizedString DisplayName => displayName;
         public TypingVoice TypingVoice => typingVoice;
+
+        /// <summary> Stable id of the character, the key of its name in the characters string table. Written by the editor on import; empty on an instance created in code </summary>
+        public string CharacterId {
+            get => characterId;
+            internal set => characterId = value;
+        }
     }
 }

@@ -248,7 +248,7 @@ namespace HarryTools.Dialogue.Editor {
         }
 
         /// <summary> Writes the value of every locale of an entry into the entry of another collection, adding the tables it lacks </summary>
-        private static void CopyValues(StringTableCollection _from, long _fromId, StringTableCollection _to, long _toId, bool _recordUndo) {
+        internal static void CopyValues(StringTableCollection _from, long _fromId, StringTableCollection _to, long _toId, bool _recordUndo) {
             IReadOnlyList<StringTable> _tables = _from.StringTables;
             for (int _t = 0; _t < _tables.Count; _t++) {
                 string _value = _tables[_t] != null ? _tables[_t].GetEntry(_fromId)?.Value : null;

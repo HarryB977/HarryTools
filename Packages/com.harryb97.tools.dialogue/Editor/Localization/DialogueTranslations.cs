@@ -47,6 +47,18 @@ namespace HarryTools.Dialogue.Editor {
             Stamp(_collection, _key, _locale, StampUndoName);
         }
 
+        /// <summary> Stamps every translation of the key that has no snapshot yet with the current source text, with undo. Called before the source text changes, so those translations become outdated instead of staying unmarked. Translations that already have a snapshot keep it </summary>
+        internal static void StampUnstamped(StringTableCollection _collection, string _key) {
+            if (_collection == null) return;
+            LocaleIdentifier? _source = DialogueTables.SourceLocale()?.Identifier;
+            IReadOnlyList<StringTable> _tables = _collection.StringTables;
+            for (int _i = 0; _i < _tables.Count; _i++) {
+                if (_tables[_i] == null || (_source.HasValue && _tables[_i].LocaleIdentifier == _source.Value)) continue;
+                StringTableEntry _entry = EntryOf(_collection, _key, _tables[_i].LocaleIdentifier, out _);
+                if (_entry != null && _entry.GetMetadata<SourceSnapshot>() == null) Stamp(_collection, _key, _tables[_i].LocaleIdentifier, StampUndoName);
+            }
+        }
+
         /// <summary> Accepts the translation as matching the current source text, with undo </summary>
         internal static void MarkReviewed(StringTableCollection _collection, string _key, LocaleIdentifier _locale) {
             Stamp(_collection, _key, _locale, ReviewUndoName);
